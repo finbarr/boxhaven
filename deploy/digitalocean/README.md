@@ -142,6 +142,7 @@ make ensure-uptime
 BOXHAVEN_ALERT_EMAILS=<ops-email> make ensure-alerts
 BOXHAVEN_TRUSTED_SSH_CIDRS=<trusted-cidrs> make ensure-firewalls
 make audit-digitalocean
+BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> make prune-snapshots
 ```
 
 After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or

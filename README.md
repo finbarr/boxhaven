@@ -95,8 +95,9 @@ Environment overrides:
 Production backends should gate signup with `BOXHAVEN_SIGNUP_MODE=invite` or
 `disabled`, set machine quotas and rate limits, expose `/metrics` to monitoring,
 pass `make production-check` locally, create provider uptime checks and alerts,
-restrict SSH ingress with `make ensure-firewalls`, and run
-`make audit-digitalocean` against hosted deployments. See
+restrict SSH ingress with `make ensure-firewalls`, prune old non-active remote
+snapshots after smoke, and run `make audit-digitalocean` against hosted
+deployments. See
 [backend/README.md](backend/README.md), [docs/operations.md](docs/operations.md), and
 [deploy/digitalocean/README.md](deploy/digitalocean/README.md).
 

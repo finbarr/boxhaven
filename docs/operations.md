@@ -173,6 +173,19 @@ monitoring alert-policy presence, uptime checks for app/API health URLs, active
 BoxHaven snapshot presence, and old non-active BoxHaven snapshots that should be
 reviewed for cleanup.
 
+Prune old non-active BoxHaven snapshots after the active image has passed a
+production smoke:
+
+```bash
+DIGITALOCEAN_ACCESS_TOKEN=... \
+BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> \
+make prune-snapshots
+```
+
+The snapshot prune command is dry-run by default. Set
+`BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1` only after reviewing the listed snapshot
+IDs.
+
 Create missing app/API uptime checks with:
 
 ```bash
