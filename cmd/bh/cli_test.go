@@ -43,7 +43,7 @@ func TestSaveAndLoadGlobalConfig(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.Remote.BackendURL = "https://api.example.com"
 	cfg.Remote.Token = "test-token"
-	cfg.Remote.SSHUser = "root"
+	cfg.Remote.SSHUser = "ubuntu"
 	cfg.Remote.Setup = []string{"make setup"}
 
 	if err := saveGlobalConfig(cfg); err != nil {
@@ -135,17 +135,17 @@ func TestLocalRemoteAuthFilesSelectsAgentLoginFiles(t *testing.T) {
 	mustWriteFile(t, filepath.Join(home, ".claude.json"), `{"oauth":"claude"}`)
 	mustWriteFile(t, filepath.Join(home, ".codex", "history.jsonl"), "do not copy\n")
 
-	files := localRemoteAuthFiles()
+	files := localRemoteAuthFiles(remoteDefaultSSHUser)
 	targets := map[string]string{}
 	for _, file := range files {
 		targets[file.Target] = file.Data
 	}
-	for _, want := range []string{"/root/.codex/auth.json", "/root/.codex/config.toml", "/root/.claude.json"} {
+	for _, want := range []string{"/home/boxhaven/.codex/auth.json", "/home/boxhaven/.codex/config.toml", "/home/boxhaven/.claude.json"} {
 		if targets[want] == "" {
 			t.Fatalf("auth files missing %s: %#v", want, targets)
 		}
 	}
-	if _, ok := targets["/root/.codex/history.jsonl"]; ok {
+	if _, ok := targets["/home/boxhaven/.codex/history.jsonl"]; ok {
 		t.Fatalf("auth files unexpectedly included history: %#v", targets)
 	}
 }

@@ -26,7 +26,7 @@ func defaultConfig() Config {
 	return Config{
 		Remote: RemoteConfig{
 			BackendURL: defaultRemoteBackendURL,
-			SSHUser:    "root",
+			SSHUser:    remoteDefaultSSHUser,
 		},
 	}
 }

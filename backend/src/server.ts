@@ -8,7 +8,7 @@ import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { StateStore } from "./state.js";
-import { CreateMachineRequest, MachineProvider, MachineProviderInfo, RemoteMachine, defaultProjectPath } from "./types.js";
+import { CreateMachineRequest, MachineProvider, MachineProviderInfo, RemoteMachine, defaultProjectPath, defaultSSHUser } from "./types.js";
 
 export type BackendOptions = {
   auth: BackendAuth;
@@ -286,7 +286,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       ...signed,
       host: normalized.public_ipv4,
       port: 22,
-      ssh_user: normalized.ssh_user || "root",
+      ssh_user: normalized.ssh_user || defaultSSHUser,
     };
   });
 
@@ -453,7 +453,7 @@ async function createMachine(
     source_path: body.source_path,
     repo_url: body.repo_url,
     branch: body.branch,
-    ssh_user: provisioned.machine.ssh_user || body.ssh_user || "root",
+    ssh_user: provisioned.machine.ssh_user || body.ssh_user || defaultSSHUser,
     agent_token_hash: hashAgentToken(agentToken),
     ssh_principal: sshPrincipal,
   });
@@ -478,7 +478,7 @@ async function listAccountMachines(options: BackendOptions, auth: AuthContext): 
 async function syncProviderMachines(options: BackendOptions, auth: AuthContext): Promise<void> {
   const discovered = await options.provider.listMachines({
     provider_name_suffix: providerUserHash(auth.userID),
-    ssh_user: "root",
+    ssh_user: defaultSSHUser,
   });
   const known = await options.store.listMachinesForUser(auth.userID);
   for (const item of discovered) {
@@ -513,7 +513,7 @@ function normalizeCreateRequest(body: CreateMachineRequest | undefined, provider
     provider: input.provider?.trim().toLowerCase() || providerName,
     provider_name: input.provider_name?.trim(),
     tier: input.tier?.trim().toLowerCase(),
-    ssh_user: input.ssh_user?.trim() || "root",
+    ssh_user: input.ssh_user?.trim() || defaultSSHUser,
     source_path: input.source_path?.trim(),
     repo_url: input.repo_url?.trim(),
     branch: input.branch?.trim(),
@@ -547,7 +547,7 @@ function normalizeMachine(options: BackendOptions, machine: RemoteMachine): Remo
     provider: machine.provider || options.provider.name,
     provider_label: machine.provider_label || options.provider.label || options.provider.name,
     project_path: machine.project_path || defaultProjectPath,
-    ssh_user: machine.ssh_user || "root",
+    ssh_user: machine.ssh_user || defaultSSHUser,
     ssh_principal: machine.ssh_principal || sshPrincipalForMachine(machine),
     ...(previewHostname ? { preview_hostname: previewHostname, preview_url: `https://${previewHostname}` } : {}),
     created_at: machine.created_at || now,
@@ -641,11 +641,12 @@ async function ensureMachineSSHCertificateTrust(
 ): Promise<void> {
   const normalized = normalizeMachine(options, machine);
   const principal = normalized.ssh_principal || sshPrincipalForMachine(normalized);
-  const user = safeLinuxUser(normalized.ssh_user || "root");
+  const user = safeLinuxUser(normalized.ssh_user || defaultSSHUser);
   const caPublicKey = await options.sshCA.publicKey();
   const principalPath = `/etc/ssh/auth_principals/${user}`;
   const command = [
     "if command -v cloud-init >/dev/null 2>&1; then cloud-init status --wait >/dev/null 2>&1 || true; fi",
+    ensureSudoUserCommand(user),
     "install -d -m 0755 /run/sshd /etc/ssh/auth_principals /etc/ssh/sshd_config.d",
     `printf '%s\\n' ${shellQuote(caPublicKey)} > /etc/ssh/boxhaven_user_ca_keys`,
     "chmod 0644 /etc/ssh/boxhaven_user_ca_keys",
@@ -661,12 +662,26 @@ async function ensureMachineSSHCertificateTrust(
 
   await callAgentRPC(agent, "run_setup", {
     ...machineRuntimePayload(normalized),
+    run_as_root: true,
     commands: [command],
   }, timeoutMs);
 }
 
 function safeLinuxUser(value: string): string {
-  return /^[a-z_][a-z0-9_-]*[$]?$/i.test(value) ? value : "root";
+  return /^[a-z_][a-z0-9_-]*[$]?$/i.test(value) ? value : defaultSSHUser;
+}
+
+function ensureSudoUserCommand(user: string): string {
+  if (user === "root") return "true";
+  return [
+    `if ! id -u ${shellQuote(user)} >/dev/null 2>&1; then useradd -m -s /bin/bash ${shellQuote(user)}; fi`,
+    `usermod -aG sudo ${shellQuote(user)} || true`,
+    `if getent group docker >/dev/null 2>&1; then usermod -aG docker ${shellQuote(user)} || true; fi`,
+    `printf '%s\\n' ${shellQuote(`${user} ALL=(ALL) NOPASSWD:ALL`)} > /etc/sudoers.d/${shellQuote(user)}`,
+    `chmod 0440 /etc/sudoers.d/${shellQuote(user)}`,
+    `install -d -o ${shellQuote(user)} -g ${shellQuote(user)} -m 0755 /home/${shellQuote(user)}`,
+    `install -d -o ${shellQuote(user)} -g ${shellQuote(user)} -m 0755 ${shellQuote(defaultProjectPath)}`,
+  ].join(" && ");
 }
 
 function shellQuote(value: string): string {
@@ -719,6 +734,7 @@ function machineRuntimePayload(machine: RemoteMachine): Record<string, unknown> 
   const projectPath = normalizeAbsoluteRemotePath(machine.project_path || defaultProjectPath) || defaultProjectPath;
   return {
     name: machine.name,
+    ssh_user: machine.ssh_user || defaultSSHUser,
     project_path: projectPath,
     preview_url: machine.preview_url || "",
     preview_hostname: machine.preview_hostname || "",

@@ -211,11 +211,12 @@ The remote image also includes a GitHub HTTPS credential helper. When the CLI
 detects a GitHub project, it writes GitHub auth over direct SSH to
 `/run/boxhaven/session.env` on the VM. `GH_TOKEN` or `GITHUB_TOKEN` are used when
 set; otherwise the CLI falls back to the local GitHub CLI via `gh auth token`.
-The machine agent sources that root-only tmpfs file before setup commands,
-direct commands, and tmux session launches. The backend does not persist those
-GitHub tokens.
+The machine agent sources that tmpfs file before setup commands, direct
+commands, and tmux session launches. The file is readable only by the remote SSH
+user and root. The backend does not persist those GitHub tokens.
 
 The CLI also forwards selected local Codex and Claude login/config files over
 direct SSH when a remote session is created, connected, run, or synced up. Those
-files are written into the remote home so users do not need to repeat agent login
-flows on every new VM. The backend does not receive or store these files.
+files are written into the remote SSH user's home so users do not need to repeat
+agent login flows on every new VM. The backend does not receive or store these
+files.

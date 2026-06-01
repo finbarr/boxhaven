@@ -71,3 +71,4 @@ export type BackendState = {
 
 export const stateVersion = 3;
 export const defaultProjectPath = "/opt/boxhaven/project";
+export const defaultSSHUser = "boxhaven";

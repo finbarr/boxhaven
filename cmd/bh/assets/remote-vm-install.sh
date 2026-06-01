@@ -193,6 +193,10 @@ install_boxhaven_user() {
   if ! id -u boxhaven >/dev/null 2>&1; then
     useradd -m -s /bin/bash boxhaven
   fi
+  usermod -aG sudo boxhaven || true
+  if getent group docker >/dev/null 2>&1; then
+    usermod -aG docker boxhaven || true
+  fi
   echo "boxhaven ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/boxhaven
   chmod 0440 /etc/sudoers.d/boxhaven
 }
@@ -303,8 +307,14 @@ export BOXHAVEN_PROJECT_PATH="$workdir"
 export BOXHAVEN_CONTEXT_FILE="${BOXHAVEN_CONTEXT_FILE:-/run/boxhaven/context.json}"
 export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-${home_dir}/.npm-global}"
 
-mkdir -p "$workdir" "$home_dir/.npm-global" /run/boxhaven
-ln -sfn "$workdir" /workspace
+runtime_dir="$(dirname "$BOXHAVEN_CONTEXT_FILE")"
+if [ ! -d "$runtime_dir" ] || [ ! -w "$runtime_dir" ]; then
+  sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0700 "$runtime_dir" >/dev/null 2>&1 || true
+fi
+mkdir -p "$workdir" "$home_dir/.npm-global"
+if [ ! -e /workspace ] || [ -L /workspace ]; then
+  sudo ln -sfn "$workdir" /workspace >/dev/null 2>&1 || true
+fi
 git config --global --get-all safe.directory | grep -Fx "$workdir" >/dev/null 2>&1 || \
   git config --global --add safe.directory "$workdir" >/dev/null 2>&1 || true
 docker network create boxhaven-net >/dev/null 2>&1 || true
@@ -418,6 +428,7 @@ const token = process.env.BOXHAVEN_AGENT_TOKEN || "";
 const heartbeatInterval = Number(process.env.BOXHAVEN_AGENT_HEARTBEAT_INTERVAL || 30_000);
 const heartbeatTimeout = Math.max(heartbeatInterval * 2, 10_000);
 const defaultProjectPath = "/opt/boxhaven/project";
+const defaultSSHUser = "boxhaven";
 const remoteSessionName = "boxhaven";
 const remoteSessionScript = "/usr/local/bin/boxhaven-remote-session";
 const boxhavenContextFile = "/run/boxhaven/context.json";
@@ -542,18 +553,21 @@ async function handleRPC(message) {
 async function runSetup(payload) {
   const commands = normalizeStringArray(payload.commands);
   if (commands.length === 0) return { skipped: true };
-  const workPath = remoteWorkPath(payload);
-  const script = `set -euo pipefail
+  const script = payload.run_as_root === true
+    ? `set -euo pipefail
+${commands.join("\n")}
+`
+    : `set -euo pipefail
 ${remoteCommandPrefix(payload)}
 ${commands.join("\n")}
 `;
-  const result = await runProcess("bash", ["-lc", script], { maxBuffer: 1024 * 1024 });
+  const result = await runProcessForPayload(payload, "bash", ["-lc", script], { maxBuffer: 1024 * 1024 });
   return { stdout: result.stdout, stderr: result.stderr };
 }
 
 async function prepareSession(payload) {
   const attach = payload.attach === true;
-  const exists = await tmuxSessionExists();
+  const exists = await tmuxSessionExists(payload);
   if (exists) {
     if (!attach) {
       const error = new Error(`remote session ${remoteSessionName} is already running; run bh connect ${payload.name || ""} from a terminal to attach`);
@@ -570,7 +584,7 @@ async function prepareSession(payload) {
   const command = normalizeRemoteCommand(payload.command);
   const workPath = remoteWorkPath(payload);
   const sessionCommand = `${remoteCommandPrefix(payload)}exec ${shellJoin(command)}`;
-  await runProcess("tmux", ["new-session", "-d", "-s", remoteSessionName, "-c", workPath, sessionCommand]);
+  await runProcessForPayload(payload, "tmux", ["new-session", "-d", "-s", remoteSessionName, "-c", workPath, sessionCommand]);
   return {
     status: attach ? "started" : "started_detached",
     attach_command: attach ? tmuxAttachCommand() : "",
@@ -582,8 +596,8 @@ function directCommand(payload) {
   return { command: `${remoteCommandPrefix(payload)}exec ${shellJoin(normalizeRemoteCommand(payload.command))}` };
 }
 
-async function tmuxSessionExists() {
-  const result = await runProcess("tmux", ["has-session", "-t", remoteSessionName], { reject: false });
+async function tmuxSessionExists(payload) {
+  const result = await runProcessForPayload(payload, "tmux", ["has-session", "-t", remoteSessionName], { reject: false });
   if (result.code === 0) return true;
   if (result.code === 1) return false;
   const error = new Error(result.stderr || `tmux has-session failed with exit ${result.code}`);
@@ -622,6 +636,22 @@ function remoteCommandPrefix(payload) {
 
 function remoteWorkPath(payload) {
   return cleanAbsolutePath(payload.project_path) || defaultProjectPath;
+}
+
+function runProcessForPayload(payload, command, args, options = {}) {
+  if (payload.run_as_root === true) {
+    return runProcess(command, args, options);
+  }
+  const user = remoteUser(payload);
+  if (user === "root") {
+    return runProcess(command, args, options);
+  }
+  return runProcess("sudo", ["-H", "-u", user, command, ...args], options);
+}
+
+function remoteUser(payload) {
+  const user = String(payload.ssh_user || defaultSSHUser).trim();
+  return /^[a-z_][a-z0-9_-]*[$]?$/i.test(user) ? user : defaultSSHUser;
 }
 
 function cleanAbsolutePath(value) {
@@ -763,7 +793,8 @@ install_boxhaven_agent
 write_profile
 
 step "marking remote runtime ready"
-mkdir -p "$(dirname "$ready_marker")" /opt/boxhaven/project
-chmod 755 /opt /opt/boxhaven /opt/boxhaven/project
+mkdir -p "$(dirname "$ready_marker")" /opt/boxhaven
+install -d -o boxhaven -g boxhaven -m 0755 /opt/boxhaven/project
+chmod 755 /opt /opt/boxhaven
 date -u +%Y-%m-%dT%H:%M:%SZ > "$ready_marker"
 step "complete"
