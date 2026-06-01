@@ -6,7 +6,9 @@ This file is the working agreement for changes in this repository.
 
 1. Make the requested code or docs change directly.
 2. Verify it thoroughly.
-3. Commit the change before finishing.
+3. Commit and push each independently verified piece of work before moving to
+   the next one. Keep commits small enough that they can be reviewed or reverted
+   on their own.
 
 When behavior, commands, defaults, docs, backend contracts, deployment scripts,
 or VM runtime behavior change, update the matching user-facing surfaces:
@@ -19,6 +21,9 @@ or VM runtime behavior change, update the matching user-facing surfaces:
 Do not stop at unit tests when behavior can be exercised for real. If full
 end-to-end verification is blocked by the environment, state exactly what was
 run, what was not run, and why.
+
+When creating production or browser smoke tests, keep them as reusable scripts
+checked into the repo instead of one-off local commands.
 
 ## Build Commands
 
