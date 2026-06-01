@@ -94,7 +94,8 @@ Environment overrides:
 
 Production backends should gate signup with `BOXHAVEN_SIGNUP_MODE=invite` or
 `disabled`, set machine quotas and rate limits, expose `/metrics` to monitoring,
-pass `make production-check` locally, validate `.env.production` with
+protect `/metrics` with `BOXHAVEN_METRICS_BEARER_TOKEN`, pass
+`make production-check` locally, validate `.env.production` with
 `make validate-production-env` and `make validate-production-compose`, create
 provider uptime checks and alerts, restrict SSH ingress with
 `make ensure-firewalls`, prune old non-active remote snapshots after smoke, and

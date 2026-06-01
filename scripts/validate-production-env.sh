@@ -145,6 +145,7 @@ required_vars=(
   BETTER_AUTH_TRUSTED_ORIGINS
   BOXHAVEN_BACKEND_CORS_ORIGINS
   BETTER_AUTH_SECRET
+  BOXHAVEN_METRICS_BEARER_TOKEN
   BOXHAVEN_SIGNUP_MODE
   DIGITALOCEAN_ACCESS_TOKEN
 )
@@ -156,6 +157,7 @@ done
 placeholder_vars=(
   ACME_EMAIL
   BETTER_AUTH_SECRET
+  BOXHAVEN_METRICS_BEARER_TOKEN
   BOXHAVEN_SIGNUP_INVITE_CODES
   DIGITALOCEAN_ACCESS_TOKEN
 )
@@ -192,6 +194,11 @@ esac
 auth_secret="${BETTER_AUTH_SECRET:-}"
 if [ "${#auth_secret}" -lt 32 ]; then
   fail "BETTER_AUTH_SECRET must be at least 32 characters"
+fi
+
+metrics_token="${BOXHAVEN_METRICS_BEARER_TOKEN:-}"
+if [ "${#metrics_token}" -lt 24 ]; then
+  fail "BOXHAVEN_METRICS_BEARER_TOKEN must be at least 24 characters"
 fi
 
 if [ "${BOXHAVEN_APP_URL:-}" = "${BOXHAVEN_API_URL:-}" ]; then

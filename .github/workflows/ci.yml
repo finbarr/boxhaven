@@ -148,6 +148,7 @@ jobs:
           BETTER_AUTH_TRUSTED_ORIGINS=https://app.boxhaven.dev,https://api.boxhaven.dev
           BOXHAVEN_BACKEND_CORS_ORIGINS=https://app.boxhaven.dev,https://api.boxhaven.dev
           BETTER_AUTH_SECRET=0123456789abcdef0123456789abcdef
+          BOXHAVEN_METRICS_BEARER_TOKEN=metrics-token-0123456789abcdef
           BOXHAVEN_SIGNUP_MODE=invite
           BOXHAVEN_SIGNUP_INVITE_CODES=invite-code-1
           DIGITALOCEAN_ACCESS_TOKEN=dop_v1_live_token_shape

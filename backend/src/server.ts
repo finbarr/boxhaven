@@ -24,6 +24,7 @@ export type BackendOptions = {
   previewBaseDomain?: string;
   previewTargetPort?: number;
   previewProxyTimeoutMs?: number;
+  metricsBearerToken?: string;
   machineReadyTimeoutMs?: number;
   signupPolicy?: SignupPolicy;
   limits?: BackendLimits;
@@ -139,7 +140,10 @@ export function createBackend(options: BackendOptions): FastifyInstance {
 
   app.get("/healthz", async () => "ok\n");
 
-  app.get("/metrics", async (_request, reply) => {
+  app.get("/metrics", async (request, reply) => {
+    if (!authorizeMetrics(options, request.headers)) {
+      return reply.code(401).send({ id: "unauthorized", message: "missing or invalid metrics bearer token" });
+    }
     reply.header("content-type", "text/plain; version=0.0.4");
     return renderMetrics(options, agents);
   });
@@ -652,6 +656,13 @@ function positiveInteger(value: number | undefined): number {
   return Number.isFinite(value) && Number(value) > 0 ? Math.floor(Number(value)) : 0;
 }
 
+function authorizeMetrics(options: BackendOptions, headers: Record<string, string | string[] | undefined>): boolean {
+  const expected = options.metricsBearerToken?.trim();
+  if (!expected) return true;
+  const actual = bearerToken(headers);
+  return constantTimeStringEqual(actual, expected);
+}
+
 class RateLimiter {
   private readonly buckets = new Map<string, RateLimitBucket>();
 
@@ -881,6 +892,12 @@ export function hashAgentToken(token: string): string {
 function constantTimeEqual(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left, "hex");
   const rightBuffer = Buffer.from(right, "hex");
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function constantTimeStringEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 

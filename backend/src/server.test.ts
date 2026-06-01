@@ -416,6 +416,22 @@ test("backend exposes production metrics", async () => {
   assert.match(metrics.body, /boxhaven_machine_last_seen_seconds/);
 });
 
+test("backend can protect production metrics with a bearer token", async () => {
+  const { app } = await createTestBackend("protected-metrics@example.com", "password123", {
+    metricsBearerToken: "metrics-secret-token",
+  });
+
+  const missing = await app.inject({ method: "GET", url: "/metrics" });
+  assert.equal(missing.statusCode, 401);
+
+  const wrong = await app.inject({ method: "GET", url: "/metrics", headers: { authorization: "Bearer wrong" } });
+  assert.equal(wrong.statusCode, 401);
+
+  const ok = await app.inject({ method: "GET", url: "/metrics", headers: { authorization: "Bearer metrics-secret-token" } });
+  assert.equal(ok.statusCode, 200);
+  assert.match(ok.body, /boxhaven_machines/);
+});
+
 test("backend rate limits authentication requests by client", async () => {
   const { app } = await createTestBackend("limited-auth@example.com", "password123", {
     skipSignup: true,
@@ -682,6 +698,7 @@ async function createTestBackend(email = "user@example.com", password = "passwor
   signupPolicy?: Parameters<typeof createBackend>[0]["signupPolicy"];
   limits?: Parameters<typeof createBackend>[0]["limits"];
   rateLimits?: Parameters<typeof createBackend>[0]["rateLimits"];
+  metricsBearerToken?: string;
   skipSignup?: boolean;
 } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -708,6 +725,7 @@ async function createTestBackend(email = "user@example.com", password = "passwor
     signupPolicy: options.signupPolicy,
     limits: options.limits,
     rateLimits: options.rateLimits,
+    metricsBearerToken: options.metricsBearerToken,
   });
   const token = options.skipSignup ? "" : await signUp(app, email, password);
   return { app, provider, token };

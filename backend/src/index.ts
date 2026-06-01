@@ -51,6 +51,7 @@ const app = createBackend({
   previewBaseDomain: process.env.BOXHAVEN_PREVIEW_BASE_DOMAIN,
   previewTargetPort: Number(process.env.BOXHAVEN_PREVIEW_TARGET_PORT || 80),
   previewProxyTimeoutMs: positiveIntEnv(process.env.BOXHAVEN_PREVIEW_PROXY_TIMEOUT_SECONDS, 30) * 1000,
+  metricsBearerToken: process.env.BOXHAVEN_METRICS_BEARER_TOKEN,
   signupPolicy: {
     mode: signupMode(process.env.BOXHAVEN_SIGNUP_MODE),
     allowedEmailDomains: splitList(process.env.BOXHAVEN_SIGNUP_ALLOWED_DOMAINS),

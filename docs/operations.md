@@ -150,7 +150,7 @@ For the hosted DigitalOcean deployment:
 docker compose --env-file deploy/digitalocean/.env.production \
   -f deploy/digitalocean/docker-compose.yml ps
 curl -fsS https://api.boxhaven.dev/healthz
-curl -fsS https://api.boxhaven.dev/metrics
+curl -fsS -H "Authorization: Bearer $BOXHAVEN_METRICS_BEARER_TOKEN" https://api.boxhaven.dev/metrics
 curl -fsS https://app.boxhaven.dev/healthz
 sudo systemctl status boxhaven-backend-backup.timer --no-pager
 ```

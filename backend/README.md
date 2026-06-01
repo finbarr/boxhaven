@@ -81,6 +81,7 @@ Environment:
 - `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.boxhaven.dev`.
 - `BOXHAVEN_PREVIEW_TARGET_PORT`: machine port that preview hosts proxy to, default `80`.
 - `BOXHAVEN_PREVIEW_PROXY_TIMEOUT_SECONDS`: preview upstream timeout, default `30`.
+- `BOXHAVEN_METRICS_BEARER_TOKEN`: optional bearer token required for `GET /metrics`; production Compose requires this.
 - `BOXHAVEN_SIGNUP_MODE`: `open`, `invite`, or `disabled`; production Compose defaults to `invite`.
 - `BOXHAVEN_SIGNUP_ALLOWED_DOMAINS`: optional comma-separated email domains allowed to sign up.
 - `BOXHAVEN_SIGNUP_INVITE_CODES`: comma-separated invite codes required when signup mode is `invite`.
@@ -183,6 +184,8 @@ global.
 
 `GET /metrics` returns Prometheus text metrics for total machines, connected
 machine agents, pending bootstrap count, and per-machine last-seen timestamps.
+Set `BOXHAVEN_METRICS_BEARER_TOKEN` to require
+`Authorization: Bearer <token>` for this endpoint.
 The maintenance loop can destroy stale unbootstrapped machines and machines past
 the configured idle TTL; connected agents are never destroyed by the idle TTL.
 
