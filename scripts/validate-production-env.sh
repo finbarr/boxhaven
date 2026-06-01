@@ -47,17 +47,57 @@ done
   exit 2
 }
 
-set -a
-# shellcheck disable=SC1090
-. "$env_file"
-set +a
-
 failures=0
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
   failures=$((failures + 1))
 }
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+parse_env_file() {
+  local line key value line_no=0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line_no=$((line_no + 1))
+    line="${line%$'\r'}"
+    line="$(trim "$line")"
+    case "$line" in
+      ""|\#*) continue ;;
+    esac
+    case "$line" in
+      *=*) ;;
+      *)
+        fail "line ${line_no} is not KEY=value"
+        continue
+        ;;
+    esac
+    key="$(trim "${line%%=*}")"
+    value="$(trim "${line#*=}")"
+    if ! [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      fail "line ${line_no} has invalid variable name: ${key}"
+      continue
+    fi
+    case "$value" in
+      \"*\")
+        value="${value#\"}"
+        value="${value%\"}"
+        ;;
+      \'*\')
+        value="${value#\'}"
+        value="${value%\'}"
+        ;;
+    esac
+    printf -v "$key" '%s' "$value"
+  done < "$env_file"
+}
+
+parse_env_file
 
 require_value() {
   local key="$1"
@@ -71,6 +111,16 @@ reject_placeholder() {
   case "$value" in
     ""|replace-*|*replace-with*|*example*|dop_v1_example)
       fail "${key} still looks like a placeholder"
+      ;;
+  esac
+}
+
+reject_command_substitution() {
+  local key="$1"
+  local value="${!key:-}"
+  case "$value" in
+    *'$('*|*'`'*)
+      fail "${key} must be a literal value, not command substitution"
       ;;
   esac
 }
@@ -112,6 +162,10 @@ placeholder_vars=(
 
 for key in "${placeholder_vars[@]}"; do
   reject_placeholder "$key"
+done
+
+for key in "${required_vars[@]}" BOXHAVEN_SIGNUP_INVITE_CODES; do
+  reject_command_substitution "$key"
 done
 
 require_url BOXHAVEN_APP_URL

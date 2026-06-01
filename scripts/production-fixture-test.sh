@@ -50,6 +50,8 @@ backup_root="${tmpdir}/backups"
 data_root="${tmpdir}/data"
 good_env="${tmpdir}/good.env"
 bad_env="${tmpdir}/bad.env"
+malicious_env="${tmpdir}/malicious.env"
+malicious_marker="${tmpdir}/malicious-marker"
 release_dir="${tmpdir}/release"
 bad_release_dir="${tmpdir}/bad-release"
 mkdir -p "$audit_fixtures" "$prune_fixtures"
@@ -261,6 +263,31 @@ if scripts/validate-production-compose.sh --env-file "$bad_env" > "${tmpdir}/com
   exit 1
 fi
 assert_contains "${tmpdir}/compose-bad.err" "production env validation failed"
+
+cat > "$malicious_env" <<EOF_ENV
+ACME_EMAIL=ops@boxhaven.dev
+BOXHAVEN_APP_HOST=app.boxhaven.dev
+BOXHAVEN_API_HOST=api.boxhaven.dev
+BOXHAVEN_PREVIEW_BASE_DOMAIN=at.boxhaven.dev
+BOXHAVEN_APP_URL=https://app.boxhaven.dev
+BOXHAVEN_API_URL=https://api.boxhaven.dev
+BETTER_AUTH_URL=https://api.boxhaven.dev/v1/auth
+BETTER_AUTH_TRUSTED_ORIGINS=https://app.boxhaven.dev,https://api.boxhaven.dev
+BOXHAVEN_BACKEND_CORS_ORIGINS=https://app.boxhaven.dev,https://api.boxhaven.dev
+BETTER_AUTH_SECRET=\$(touch "$malicious_marker")
+BOXHAVEN_SIGNUP_MODE=invite
+BOXHAVEN_SIGNUP_INVITE_CODES=invite-code-1
+DIGITALOCEAN_ACCESS_TOKEN=dop_v1_live_token_shape
+EOF_ENV
+if scripts/validate-production-env.sh --env-file "$malicious_env" > "${tmpdir}/env-malicious.out" 2> "${tmpdir}/env-malicious.err"; then
+  printf 'malicious production env unexpectedly passed validation\n' >&2
+  exit 1
+fi
+if [ -e "$malicious_marker" ]; then
+  printf 'production env validator executed env file content\n' >&2
+  exit 1
+fi
+assert_contains "${tmpdir}/env-malicious.err" "BETTER_AUTH_SECRET must be a literal value"
 
 if BOXHAVEN_SMOKE_PRODUCTION=1 scripts/smoke-remote-lifecycle.sh > "${tmpdir}/smoke-preflight.out" 2> "${tmpdir}/smoke-preflight.err"; then
   printf 'production smoke unexpectedly passed without credentials\n' >&2
