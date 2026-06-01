@@ -52,7 +52,7 @@ func runCmd(args []string) error {
 	}
 
 	switch args[0] {
-	case "create", "run", "connect", "sync", "list", "status", "destroy":
+	case "create", "run", "connect", "sync", "list", "status", "rename", "destroy":
 		return runRemote(args, projectDir)
 	case "login":
 		return runLogin(args[1:])
@@ -81,6 +81,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  bh create <name> [--tier small|medium|large] [--no-sync]")
 	fmt.Fprintln(os.Stderr, "  bh list")
 	fmt.Fprintln(os.Stderr, "  bh destroy <name>")
+	fmt.Fprintln(os.Stderr, "  bh rename <old-name> <new-name>")
 	fmt.Fprintln(os.Stderr, "  bh connect <name>")
 	fmt.Fprintln(os.Stderr, "  bh run <name> <cmd...>")
 	fmt.Fprintln(os.Stderr, "  bh sync up <name>")

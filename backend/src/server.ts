@@ -78,6 +78,10 @@ type RemoteCommandRequest = {
   command?: string[];
 };
 
+type RenameMachineRequest = {
+  name?: string;
+};
+
 type SSHCertificateRequest = {
   public_key?: string;
   ttl_seconds?: number;
@@ -210,6 +214,46 @@ export function createBackend(options: BackendOptions): FastifyInstance {
         cli_run: `bh run ${machine.name}`,
       },
     };
+  });
+
+  app.patch<{ Params: { name: string }; Body: RenameMachineRequest }>("/v1/machines/:name", async (request, reply) => {
+    const auth = await requireAuth(options, request, reply);
+    if (!auth) return;
+    const fromName = normalizeMachineName(request.params.name);
+    const fromError = validateName(fromName);
+    if (fromError) return reply.code(400).send({ id: "bad_request", message: fromError });
+    const toName = normalizeMachineName(request.body?.name || "");
+    const toError = validateName(toName);
+    if (toError) return reply.code(400).send({ id: "bad_request", message: toError });
+
+    let existing = await options.store.getMachine(auth.userID, fromName);
+    if (!existing) {
+      await syncProviderMachines(options, auth);
+      existing = await options.store.getMachine(auth.userID, fromName);
+    }
+    if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+
+    if (fromName !== toName) {
+      const conflict = await options.store.getMachine(auth.userID, toName);
+      if (conflict) return reply.code(409).send(machineNameConflict(toName));
+    }
+
+    const oldAgentKey = agentMachineKey(existing);
+    const renamed = normalizeMachine(options, {
+      ...existing,
+      name: toName,
+      user_id: auth.userID,
+      updated_at: new Date().toISOString(),
+    });
+    await options.store.renameMachine(auth.userID, fromName, renamed);
+    const agent = agents.get(oldAgentKey);
+    if (agent) {
+      agents.delete(oldAgentKey);
+      agent.machine = renamed;
+      agent.machineKey = agentMachineKey(renamed);
+      agents.set(agent.machineKey, agent);
+    }
+    return { machine: publicMachine(renamed), status: "renamed" };
   });
 
   app.post<{ Params: { name: string }; Body: SSHCertificateRequest }>("/v1/machines/:name/ssh-cert", async (request, reply) => {
@@ -436,23 +480,36 @@ async function syncProviderMachines(options: BackendOptions, auth: AuthContext):
     provider_name_suffix: providerUserHash(auth.userID),
     ssh_user: "root",
   });
+  const known = await options.store.listMachinesForUser(auth.userID);
   for (const item of discovered) {
-    const existing = await options.store.getMachine(auth.userID, item.machine.name);
+    const existing = await options.store.getMachine(auth.userID, item.machine.name)
+      || known.find((machine) => providerMachineMatches(machine, item.machine));
+    const name = existing?.name || item.machine.name;
     const machine = normalizeMachine(options, {
       ...existing,
       ...item.machine,
-      name: item.machine.name,
+      name,
       user_id: auth.userID,
     });
     await options.store.putMachine(machine);
+    const index = known.findIndex((knownMachine) => knownMachine.name === machine.name);
+    if (index === -1) known.push(machine);
+    else known[index] = machine;
   }
+}
+
+function providerMachineMatches(left: RemoteMachine, right: RemoteMachine): boolean {
+  return !!(
+    (left.provider_id && right.provider_id && left.provider_id === right.provider_id)
+    || (left.provider_name && right.provider_name && left.provider_name === right.provider_name)
+  );
 }
 
 function normalizeCreateRequest(body: CreateMachineRequest | undefined, providerName: string): CreateMachineRequest {
   const input = body || { name: "" };
   return {
     ...input,
-    name: (input.name || "").trim().toLowerCase(),
+    name: normalizeMachineName(input.name || ""),
     provider: input.provider?.trim().toLowerCase() || providerName,
     provider_name: input.provider_name?.trim(),
     tier: input.tier?.trim().toLowerCase(),
@@ -461,6 +518,10 @@ function normalizeCreateRequest(body: CreateMachineRequest | undefined, provider
     repo_url: input.repo_url?.trim(),
     branch: input.branch?.trim(),
   };
+}
+
+function normalizeMachineName(name: string): string {
+  return name.trim().toLowerCase();
 }
 
 function normalizeWorkspaceRequest(body: RemoteSyncCompleteRequest | undefined, existing: RemoteMachine): Partial<RemoteMachine> {
@@ -1092,7 +1153,7 @@ function registerCors(app: FastifyInstance, origins: string[]): void {
   void app.register(cors, {
     credentials: true,
     allowedHeaders: ["authorization", "content-type"],
-    methods: ["GET", "POST", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     origin(origin, callback) {
       callback(null, !origin || allowed.has(origin));
     },

@@ -19,6 +19,7 @@ bh create work
 bh list
 bh run work codex
 bh connect work
+bh rename work client-a
 bh destroy work
 ```
 
@@ -30,7 +31,7 @@ commands run over direct SSH.
 
 ## What It Provides
 
-- Named remote boxes: create, list, inspect, connect, sync, run, and destroy.
+- Named remote boxes: create, list, inspect, connect, sync, run, rename, and destroy.
 - Project sync to `/opt/boxhaven/project` with explicit sync up/down commands.
 - A managed tmux session per box for long-running AI agent sessions.
 - Mouse-wheel scrolling through tmux history in interactive sessions.

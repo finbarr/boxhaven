@@ -65,7 +65,7 @@ func TestTopLevelHelpMentionsBHCommands(t *testing.T) {
 	output := captureStderr(t, func() {
 		printUsage()
 	})
-	for _, want := range []string{"bh create", "bh list", "bh destroy", "bh connect", "bh run"} {
+	for _, want := range []string{"bh create", "bh list", "bh destroy", "bh rename", "bh connect", "bh run"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("help output missing %q:\n%s", want, output)
 		}

@@ -64,6 +64,10 @@ type remoteBackendSyncCompleteRequest struct {
 	Branch      string `json:"branch,omitempty"`
 }
 
+type remoteBackendRenameRequest struct {
+	Name string `json:"name"`
+}
+
 type remoteBackendSetupRequest struct {
 	Commands []string `json:"commands,omitempty"`
 }
@@ -171,6 +175,25 @@ func completeRemoteBackendSync(cfg Config, machine remoteMachine) (remoteMachine
 		return machine, err
 	}
 	return mergeRemoteBackendMachine(machine, response.Machine), nil
+}
+
+func renameRemoteBackendMachine(cfg Config, fromName string, toName string) (remoteMachine, error) {
+	req := remoteBackendRenameRequest{Name: toName}
+	var response remoteBackendMachineResponse
+	if err := remoteBackendRequest(cfg, http.MethodPatch, "/v1/machines/"+url.PathEscape(fromName), req, &response); err != nil {
+		return remoteMachine{}, err
+	}
+	machine := response.Machine
+	if machine.Name == "" {
+		machine.Name = toName
+	}
+	if machine.SSHUser == "" {
+		machine.SSHUser = firstNonEmpty(cfg.Remote.SSHUser, "root")
+	}
+	if machine.ProjectPath == "" {
+		machine.ProjectPath = remoteProjectPath()
+	}
+	return machine, nil
 }
 
 func runRemoteBackendSetup(cfg Config, machine remoteMachine, commands []string) error {

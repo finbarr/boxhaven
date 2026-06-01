@@ -56,6 +56,15 @@ export class StateStore {
     });
   }
 
+  async renameMachine(userID: string, fromName: string, machine: RemoteMachine): Promise<void> {
+    if (!machine.user_id) throw new Error("machine user_id is required");
+    if (machine.user_id !== userID) throw new Error("machine user_id does not match rename owner");
+    await this.update((state) => {
+      delete state.machines[machineKey(userID, fromName)];
+      state.machines[machineKey(userID, machine.name)] = machine;
+    });
+  }
+
   async deleteMachine(userID: string, name: string): Promise<void> {
     await this.update((state) => {
       delete state.machines[machineKey(userID, name)];

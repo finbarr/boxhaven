@@ -323,6 +323,71 @@ test("backend rejects duplicate machine creates", async () => {
   assert.equal(provider.created.length, 1);
 });
 
+test("backend renames machine records without changing provider identity", async () => {
+  const { app, provider, token } = await createTestBackend();
+  const headers = { authorization: `Bearer ${token}` };
+
+  const created = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "foo" },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const original = created.json().machine;
+
+  const renamed = await app.inject({
+    method: "PATCH",
+    url: "/v1/machines/foo",
+    headers,
+    payload: { name: "bar" },
+  });
+  assert.equal(renamed.statusCode, 200, renamed.body);
+  assert.equal(renamed.json().machine.name, "bar");
+  assert.equal(renamed.json().machine.provider_name, original.provider_name);
+  assert.equal(renamed.json().machine.provider_id, original.provider_id);
+  assert.equal(renamed.json().machine.preview_hostname, original.preview_hostname);
+  assert.equal(renamed.json().machine.ssh_principal, original.ssh_principal);
+
+  const oldFetch = await app.inject({ method: "GET", url: "/v1/machines/foo", headers });
+  assert.equal(oldFetch.statusCode, 404, oldFetch.body);
+
+  const newFetch = await app.inject({ method: "GET", url: "/v1/machines/bar", headers });
+  assert.equal(newFetch.statusCode, 200, newFetch.body);
+  assert.equal(newFetch.json().machine.name, "bar");
+  assert.equal(newFetch.json().machine.provider_name, original.provider_name);
+
+  const listed = await app.inject({ method: "GET", url: "/v1/machines", headers });
+  assert.equal(listed.statusCode, 200, listed.body);
+  assert.deepEqual(listed.json().machines.map((machine: RemoteMachine) => machine.name), ["bar"]);
+
+  const duplicate = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "bar" },
+  });
+  assert.equal(duplicate.statusCode, 409, duplicate.body);
+  assert.equal(provider.created.length, 1);
+});
+
+test("backend rejects rename collisions", async () => {
+  const { app, token } = await createTestBackend();
+  const headers = { authorization: `Bearer ${token}` };
+
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "foo" } })).statusCode, 201);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "bar" } })).statusCode, 201);
+
+  const renamed = await app.inject({
+    method: "PATCH",
+    url: "/v1/machines/foo",
+    headers,
+    payload: { name: "bar" },
+  });
+  assert.equal(renamed.statusCode, 409, renamed.body);
+  assert.match(renamed.body, /remote machine bar already exists/);
+});
+
 test("backend rejects unknown machine tiers", async () => {
   const { app, token } = await createTestBackend();
   const response = await app.inject({
