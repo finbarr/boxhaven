@@ -102,6 +102,26 @@ now_epoch="$(date -u +%s)"
 snapshot_keep_seconds=$((snapshot_keep_days * 24 * 60 * 60))
 required_targets_json="$(printf '%s' "$required_uptime_targets" | csv_to_json_array)"
 required_alerts_json="$(printf '%s' "$required_alert_descriptions" | csv_to_json_array)"
+expected_alerts_json="$(jq -cn --argjson descriptions "$required_alerts_json" '[
+  {
+    description: $descriptions[0],
+    type: "v1/insights/droplet/cpu",
+    value: 80,
+    compare: "GreaterThan"
+  },
+  {
+    description: $descriptions[1],
+    type: "v1/insights/droplet/memory_utilization_percent",
+    value: 90,
+    compare: "GreaterThan"
+  },
+  {
+    description: $descriptions[2],
+    type: "v1/insights/droplet/disk_utilization_percent",
+    value: 85,
+    compare: "GreaterThan"
+  }
+]')"
 
 require_command curl
 require_command jq
@@ -158,16 +178,22 @@ if [ "$alert_count" -eq 0 ]; then
 else
   log "found ${alert_count} alert policies"
 fi
-missing_alerts="$(printf '%s' "$alerts_json" | jq -r --arg tag "$boxhaven_tag" --argjson required "$required_alerts_json" '
-  [(.policies // .alert_policies // .alerts // [])[]?
-    | select((.tags // []) | index($tag))
-    | .description
-  ] as $descriptions
-  | $required[]
-  | select(($descriptions | index(.)) | not)
+missing_alerts="$(printf '%s' "$alerts_json" | jq -r --arg tag "$boxhaven_tag" --argjson expected "$expected_alerts_json" '
+  def alert_matches($want):
+    .description == $want.description
+    and ((.tags // []) | index($tag))
+    and (.enabled != false)
+    and .type == $want.type
+    and (.value | tostring) == ($want.value | tostring)
+    and .compare == $want.compare;
+
+  (.policies // .alert_policies // .alerts // []) as $policies
+  | $expected[]
+  | select(any($policies[]?; alert_matches(.)) | not)
+  | .description
 ')"
 if [ -n "$missing_alerts" ]; then
-  fail "missing ${boxhaven_tag} monitoring alert policies: $(printf '%s' "$missing_alerts" | paste -sd, -)"
+  fail "missing or misconfigured ${boxhaven_tag} monitoring alert policies: $(printf '%s' "$missing_alerts" | paste -sd, -)"
 fi
 
 log "checking uptime checks"

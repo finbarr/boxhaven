@@ -238,10 +238,11 @@ JSON
 cat > "${audit_fixtures}/alert_policies.json" <<'JSON'
 {
   "policies": [
-    {"uuid":"ignored","description":"BoxHaven CPU above 80%","tags":["other"]},
-    {"uuid":"policy-1","description":"BoxHaven CPU above 80%","tags":["boxhaven"]},
-    {"uuid":"policy-2","description":"BoxHaven memory above 90%","tags":["boxhaven"]},
-    {"uuid":"policy-3","description":"BoxHaven disk above 85%","tags":["boxhaven"]}
+    {"uuid":"ignored","description":"BoxHaven CPU above 80%","tags":["other"],"type":"v1/insights/droplet/cpu","value":80,"compare":"GreaterThan","enabled":true},
+    {"uuid":"disabled","description":"BoxHaven memory above 90%","tags":["boxhaven"],"type":"v1/insights/droplet/memory_utilization_percent","value":90,"compare":"GreaterThan","enabled":false},
+    {"uuid":"policy-1","description":"BoxHaven CPU above 80%","tags":["boxhaven"],"type":"v1/insights/droplet/cpu","value":80,"compare":"GreaterThan","enabled":true},
+    {"uuid":"policy-2","description":"BoxHaven memory above 90%","tags":["boxhaven"],"type":"v1/insights/droplet/memory_utilization_percent","value":90,"compare":"GreaterThan","enabled":true},
+    {"uuid":"policy-3","description":"BoxHaven disk above 85%","tags":["boxhaven"],"type":"v1/insights/droplet/disk_utilization_percent","value":85,"compare":"GreaterThan","enabled":true}
   ]
 }
 JSON

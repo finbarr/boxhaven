@@ -195,9 +195,10 @@ make audit-digitalocean
 ```
 
 The audit is read-only. It checks tagged droplets, broad SSH firewall ingress,
-baseline CPU, memory, and disk alert policies targeting the BoxHaven tag, uptime
-checks for app/API health URLs, active BoxHaven snapshot presence, and old
-non-active BoxHaven snapshots that should be reviewed for cleanup.
+enabled baseline CPU, memory, and disk alert policies targeting the BoxHaven tag
+with the expected metric thresholds, uptime checks for app/API health URLs,
+active BoxHaven snapshot presence, and old non-active BoxHaven snapshots that
+should be reviewed for cleanup.
 
 Prune old non-active BoxHaven snapshots after the active image has passed a
 production smoke:
