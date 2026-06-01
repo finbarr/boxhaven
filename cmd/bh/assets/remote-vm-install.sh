@@ -227,6 +227,14 @@ EOF
   chmod +x /opt/boxhaven/bin/*
 }
 
+install_tmux_config() {
+  step "writing tmux config"
+  cat > /etc/tmux.conf <<'EOF'
+set -g mouse on
+set -g history-limit 100000
+EOF
+}
+
 install_git_credential_helper() {
   step "writing Git credential helper"
   cat > /opt/boxhaven/bin/git-credential-github-token <<'EOF'
@@ -565,7 +573,7 @@ async function tmuxSessionExists() {
 }
 
 function tmuxAttachCommand() {
-  return `tmux attach-session -t ${shellQuote(remoteSessionName)}`;
+  return `tmux set-option -g mouse on >/dev/null 2>&1 || true; tmux attach-session -t ${shellQuote(remoteSessionName)}`;
 }
 
 function remoteCommandPrefix(payload) {
@@ -718,6 +726,7 @@ install_claude
 install_rtk
 install_boxhaven_user
 install_wrappers
+install_tmux_config
 install_git_credential_helper
 install_remote_session
 install_boxhaven_agent

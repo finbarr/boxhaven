@@ -277,11 +277,11 @@ test("backend delegates session lifecycle to the machine agent", async () => {
     type: "rpc_result",
     rpc_id: sessionRPC.rpc_id,
     ok: true,
-    result: { status: "started", attach_command: "tmux attach-session -t 'boxhaven'", record_command: true },
+    result: { status: "started", attach_command: "tmux set-option -g mouse on >/dev/null 2>&1 || true; tmux attach-session -t 'boxhaven'", record_command: true },
   }));
   const session = await sessionRequest;
   assert.equal(session.statusCode, 200, session.body);
-  assert.equal(session.json().result.attach_command, "tmux attach-session -t 'boxhaven'");
+  assert.equal(session.json().result.attach_command, "tmux set-option -g mouse on >/dev/null 2>&1 || true; tmux attach-session -t 'boxhaven'");
 
   const fetched = await app.inject({ method: "GET", url: "/v1/machines/foo", headers });
   assert.deepEqual(fetched.json().machine.last_command, ["codex"]);
