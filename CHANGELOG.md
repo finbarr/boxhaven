@@ -21,8 +21,8 @@
   `make smoke-production-http`, `make smoke-remote`, `make audit-digitalocean`,
   `make audit-digitalocean-account`, uptime/alert/firewall remediators, strict
   environment and Compose validation, paginated DigitalOcean inventory reads,
-  DigitalOcean project drift and firewall coverage checks, backup storage
-  audits, and dry-run-first snapshot pruning.
+  DigitalOcean project drift, firewall coverage, and spend checks, backup
+  storage audits, and dry-run-first snapshot pruning.
 - Added explicit snapshot-id support to the dry-run-first DigitalOcean pruning
   workflow for retiring old manual snapshots while preserving the active image.
 - Tightened the DigitalOcean production audit to require the baseline BoxHaven

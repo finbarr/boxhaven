@@ -332,6 +332,9 @@ cat > "${account_audit_fixtures}/firewalls.json" <<'JSON'
   ]
 }
 JSON
+cat > "${account_audit_fixtures}/balance.json" <<'JSON'
+{"month_to_date_usage":"293.00"}
+JSON
 BOXHAVEN_DO_ACCOUNT_AUDIT_FIXTURES="$account_audit_fixtures" \
 BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=boxhaven-control-prod-nyc3-01,fundy-prod-nyc3-01 \
 BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
@@ -340,6 +343,7 @@ BOXHAVEN_DO_ACCOUNT_EXPECTED_PROJECTS=boxhaven,fundy,legacy \
 BOXHAVEN_DO_ACCOUNT_DROPLET_PROJECTS=boxhaven-control-prod-nyc3-01=boxhaven,fundy-prod-nyc3-01=fundy,web=legacy \
 BOXHAVEN_DO_ACCOUNT_REQUIRE_DEFAULT_PROJECT_EMPTY=1 \
 BOXHAVEN_DO_ACCOUNT_REQUIRE_FIREWALL_COVERAGE=1 \
+BOXHAVEN_DO_ACCOUNT_MAX_MONTH_TO_DATE_USAGE=250 \
   scripts/digitalocean-account-cleanup-audit.sh > "${tmpdir}/account-audit-bad.out" 2> "${tmpdir}/account-audit-bad.err" && {
     printf 'DigitalOcean account cleanup audit unexpectedly accepted cleanup fixtures\n' >&2
     exit 1
@@ -350,6 +354,7 @@ assert_contains "${tmpdir}/account-audit-bad.err" "cleanup snapshots still exist
 assert_contains "${tmpdir}/account-audit-bad.err" "droplets are not in expected projects: web->legacy"
 assert_contains "${tmpdir}/account-audit-bad.err" "default project still has droplets: web"
 assert_contains "${tmpdir}/account-audit-bad.err" "droplets have no firewall coverage: fundy-prod-nyc3-01"
+assert_contains "${tmpdir}/account-audit-bad.err" "month-to-date DigitalOcean usage exceeds 250: 293.00"
 cat > "${account_audit_fixtures}/droplets.json" <<'JSON'
 {
   "droplets": [
@@ -375,6 +380,9 @@ cat > "${account_audit_fixtures}/firewalls.json" <<'JSON'
   ]
 }
 JSON
+cat > "${account_audit_fixtures}/balance.json" <<'JSON'
+{"month_to_date_usage":"42.50"}
+JSON
 BOXHAVEN_DO_ACCOUNT_AUDIT_FIXTURES="$account_audit_fixtures" \
 BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=boxhaven-control-prod-nyc3-01,fundy-prod-nyc3-01 \
 BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
@@ -383,6 +391,7 @@ BOXHAVEN_DO_ACCOUNT_EXPECTED_PROJECTS=boxhaven,fundy,legacy \
 BOXHAVEN_DO_ACCOUNT_DROPLET_PROJECTS=boxhaven-control-prod-nyc3-01=boxhaven,fundy-prod-nyc3-01=fundy \
 BOXHAVEN_DO_ACCOUNT_REQUIRE_DEFAULT_PROJECT_EMPTY=1 \
 BOXHAVEN_DO_ACCOUNT_REQUIRE_FIREWALL_COVERAGE=1 \
+BOXHAVEN_DO_ACCOUNT_MAX_MONTH_TO_DATE_USAGE=250 \
   scripts/digitalocean-account-cleanup-audit.sh > "${tmpdir}/account-audit-good.out"
 assert_contains "${tmpdir}/account-audit-good.out" "DigitalOcean account cleanup audit passed"
 

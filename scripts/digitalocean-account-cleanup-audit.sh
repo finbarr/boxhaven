@@ -15,6 +15,7 @@ expected_projects="${BOXHAVEN_DO_ACCOUNT_EXPECTED_PROJECTS:-}"
 droplet_projects="${BOXHAVEN_DO_ACCOUNT_DROPLET_PROJECTS:-}"
 require_default_project_empty="${BOXHAVEN_DO_ACCOUNT_REQUIRE_DEFAULT_PROJECT_EMPTY:-0}"
 require_firewall_coverage="${BOXHAVEN_DO_ACCOUNT_REQUIRE_FIREWALL_COVERAGE:-0}"
+max_month_to_date_usage="${BOXHAVEN_DO_ACCOUNT_MAX_MONTH_TO_DATE_USAGE:-}"
 
 usage() {
   cat <<'EOF'
@@ -34,6 +35,7 @@ Env:
   BOXHAVEN_DO_ACCOUNT_DROPLET_PROJECTS=boxhaven-control-prod-nyc3-01=boxhaven,web=legacy
   BOXHAVEN_DO_ACCOUNT_REQUIRE_DEFAULT_PROJECT_EMPTY=1
   BOXHAVEN_DO_ACCOUNT_REQUIRE_FIREWALL_COVERAGE=1
+  BOXHAVEN_DO_ACCOUNT_MAX_MONTH_TO_DATE_USAGE=250
   BOXHAVEN_DO_ACCOUNT_AUDIT_FIXTURES=dir        # local tests; expects droplets.json, snapshots.json, and optional project fixtures
 EOF
 }
@@ -87,6 +89,25 @@ api_get_project_resources() {
   digitalocean_api_get_all resources "/v2/projects/${project_id}/resources?per_page=200"
 }
 
+api_get_raw() {
+  local fixture_key="$1"
+  local path="$2"
+  local fixture_path="${fixtures_dir}/${fixture_key}.json"
+  if [ -n "$fixtures_dir" ]; then
+    [ -f "$fixture_path" ] || {
+      printf 'missing fixture: %s\n' "$fixture_path" >&2
+      exit 2
+    }
+    cat "$fixture_path"
+    return
+  fi
+  [ -n "$token" ] || {
+    printf 'set DIGITALOCEAN_ACCESS_TOKEN or BOXHAVEN_DO_ACCOUNT_AUDIT_FIXTURES\n' >&2
+    exit 2
+  }
+  digitalocean_api_get_url "$path"
+}
+
 csv_to_json_array() {
   jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))'
 }
@@ -109,8 +130,13 @@ fail() {
 
 require_command curl
 require_command jq
+require_command awk
 
 failures=0
+if [ -n "$max_month_to_date_usage" ] && ! [[ "$max_month_to_date_usage" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+  printf 'BOXHAVEN_DO_ACCOUNT_MAX_MONTH_TO_DATE_USAGE must be a non-negative number\n' >&2
+  exit 2
+fi
 expected_droplets_json="$(printf '%s' "$expected_droplets" | csv_to_json_array)"
 cleanup_droplets_json="$(printf '%s' "$cleanup_droplets" | csv_to_json_array)"
 cleanup_snapshot_ids_json="$(printf '%s' "$cleanup_snapshot_ids" | csv_to_json_array)"
@@ -242,6 +268,17 @@ if [ "$require_firewall_coverage" = "1" ]; then
   ')"
   if [ -n "$uncovered_droplets" ]; then
     fail "droplets have no firewall coverage: $(printf '%s' "$uncovered_droplets" | paste -sd, -)"
+  fi
+fi
+
+if [ -n "$max_month_to_date_usage" ]; then
+  balance_json="$(api_get_raw balance "/v2/customers/my/balance")"
+  log "checking DigitalOcean spend"
+  month_to_date_usage="$(printf '%s' "$balance_json" | jq -r '.month_to_date_usage // .month_to_date_balance // empty')"
+  if [ -z "$month_to_date_usage" ] || ! [[ "$month_to_date_usage" =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
+    fail "DigitalOcean balance response did not include numeric month-to-date usage"
+  elif ! awk -v usage="$month_to_date_usage" -v max="$max_month_to_date_usage" 'BEGIN { exit (usage <= max ? 0 : 1) }'; then
+    fail "month-to-date DigitalOcean usage exceeds ${max_month_to_date_usage}: ${month_to_date_usage}"
   fi
 fi
 
