@@ -63,6 +63,12 @@ plain Ubuntu image. The image builder creates a temporary Droplet, installs the
 remote VM runtime, cleans cloud-init and SSH host identity, powers it off,
 snapshots it, deletes the builder Droplet, and prints the snapshot id.
 
+The snapshot contains the GitHub HTTPS credential helper and machine-agent
+runtime that sources `/run/boxhaven/session.env` for setup commands, direct
+commands, and tmux sessions. Rebuild and activate a new snapshot after changing
+`cmd/bh/assets/remote-vm-install.sh`; otherwise newly created boxes will keep
+the previous runtime behavior.
+
 From a clean, committed checkout:
 
 ```bash

@@ -72,6 +72,41 @@ func TestTopLevelHelpMentionsBHCommands(t *testing.T) {
 	}
 }
 
+func TestGitHubRepoURLDetection(t *testing.T) {
+	cases := map[string]bool{
+		"https://github.com/finbarr/boxhaven.git":   true,
+		"git@github.com:finbarr/boxhaven.git":       true,
+		"ssh://git@github.com/finbarr/boxhaven.git": true,
+		"https://www.github.com/finbarr/boxhaven":   true,
+		"https://gitlab.com/finbarr/boxhaven.git":   false,
+		"git@gitlab.com:finbarr/boxhaven.git":       false,
+		"not a repo":                                false,
+		"":                                          false,
+	}
+	for repoURL, want := range cases {
+		if got := isGitHubRepoURL(repoURL); got != want {
+			t.Fatalf("isGitHubRepoURL(%q) = %t, want %t", repoURL, got, want)
+		}
+	}
+}
+
+func TestRemoteGitAuthEnvForGitHubRepos(t *testing.T) {
+	t.Setenv("GH_TOKEN", "gh-token")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	env := remoteGitAuthEnv("https://github.com/finbarr/boxhaven.git")
+	if env["GH_TOKEN"] != "gh-token" {
+		t.Fatalf("GH_TOKEN = %q, want forwarded token", env["GH_TOKEN"])
+	}
+	if env["GITHUB_TOKEN"] != "gh-token" {
+		t.Fatalf("GITHUB_TOKEN = %q, want GH_TOKEN mirrored", env["GITHUB_TOKEN"])
+	}
+
+	if env := remoteGitAuthEnv("https://gitlab.com/finbarr/boxhaven.git"); len(env) != 0 {
+		t.Fatalf("non-GitHub repo unexpectedly received auth env: %#v", env)
+	}
+}
+
 func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stderr
