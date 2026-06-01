@@ -154,12 +154,14 @@ JSON
 cat > "${audit_fixtures}/snapshots.json" <<'JSON'
 {
   "snapshots": [
-    {"id":"snap-active","name":"boxhaven-remote-active","created_at":"2026-05-30T00:00:00Z"}
+    {"id":"snap-active","name":"custom-remote-active","created_at":"2026-05-30T00:00:00Z"},
+    {"id":"other-snap","name":"boxhaven-remote-ignored","created_at":"2026-05-30T00:00:00Z"}
   ]
 }
 JSON
 
 BOXHAVEN_DO_AUDIT_FIXTURES="$audit_fixtures" \
+BOXHAVEN_DO_AUDIT_SNAPSHOT_PREFIX=custom-remote- \
 BOXHAVEN_REMOTE_IMAGE=snap-active \
   scripts/digitalocean-production-audit.sh > "${tmpdir}/audit.out"
 assert_contains "${tmpdir}/audit.out" "DigitalOcean production audit passed"

@@ -8,6 +8,7 @@ fixtures_dir="${BOXHAVEN_DO_AUDIT_FIXTURES:-}"
 boxhaven_tag="${BOXHAVEN_DO_AUDIT_TAG:-boxhaven}"
 required_uptime_targets="${BOXHAVEN_DO_AUDIT_UPTIME_TARGETS:-https://api.boxhaven.dev/healthz,https://app.boxhaven.dev/healthz}"
 active_snapshot="${BOXHAVEN_REMOTE_IMAGE:-}"
+snapshot_prefix="${BOXHAVEN_DO_AUDIT_SNAPSHOT_PREFIX:-boxhaven-remote-}"
 snapshot_keep_days="${BOXHAVEN_DO_AUDIT_SNAPSHOT_KEEP_DAYS:-30}"
 fail_on_broad_ssh="${BOXHAVEN_DO_AUDIT_FAIL_BROAD_SSH:-1}"
 
@@ -30,6 +31,7 @@ containing JSON files named after the API resource:
 Useful env:
   BOXHAVEN_DO_AUDIT_TAG=boxhaven
   BOXHAVEN_DO_AUDIT_UPTIME_TARGETS=https://api.boxhaven.dev/healthz,https://app.boxhaven.dev/healthz
+  BOXHAVEN_DO_AUDIT_SNAPSHOT_PREFIX=boxhaven-remote-
   BOXHAVEN_DO_AUDIT_SNAPSHOT_KEEP_DAYS=30
   BOXHAVEN_DO_AUDIT_FAIL_BROAD_SSH=1
 EOF
@@ -161,9 +163,9 @@ if [ -n "$missing_targets" ]; then
 fi
 
 log "checking snapshots"
-boxhaven_snapshots="$(printf '%s' "$snapshots_json" | jq -r '.snapshots[]? | select((.name // "") | startswith("boxhaven-remote-")) | [.id, .name, .created_at] | @tsv')"
+boxhaven_snapshots="$(printf '%s' "$snapshots_json" | jq -r --arg prefix "$snapshot_prefix" '.snapshots[]? | select((.name // "") | startswith($prefix)) | [.id, .name, .created_at] | @tsv')"
 if [ -z "$boxhaven_snapshots" ]; then
-  fail "no boxhaven-remote snapshots found"
+  fail "no snapshots found with prefix ${snapshot_prefix}"
 else
   log "found $(printf '%s\n' "$boxhaven_snapshots" | sed '/^$/d' | wc -l | tr -d ' ') BoxHaven remote snapshots"
 fi
@@ -173,9 +175,9 @@ if [ -n "$active_snapshot" ]; then
   fi
 fi
 
-old_snapshots="$(printf '%s' "$snapshots_json" | jq -r --arg active "$active_snapshot" --argjson now "$now_epoch" --argjson keep "$snapshot_keep_seconds" '
+old_snapshots="$(printf '%s' "$snapshots_json" | jq -r --arg prefix "$snapshot_prefix" --arg active "$active_snapshot" --argjson now "$now_epoch" --argjson keep "$snapshot_keep_seconds" '
   .snapshots[]?
-  | select((.name // "") | startswith("boxhaven-remote-"))
+  | select((.name // "") | startswith($prefix))
   | select((.id | tostring) != $active)
   | select(.created_at)
   | select(($now - ((.created_at | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601))) > $keep)

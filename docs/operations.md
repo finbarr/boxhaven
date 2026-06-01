@@ -184,6 +184,7 @@ changes:
 ```bash
 DIGITALOCEAN_ACCESS_TOKEN=... \
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> \
+BOXHAVEN_DO_AUDIT_SNAPSHOT_PREFIX=boxhaven-remote- \
 make audit-digitalocean
 ```
 
