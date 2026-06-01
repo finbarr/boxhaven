@@ -51,6 +51,7 @@ data_root="${tmpdir}/data"
 good_env="${tmpdir}/good.env"
 bad_env="${tmpdir}/bad.env"
 release_dir="${tmpdir}/release"
+bad_release_dir="${tmpdir}/bad-release"
 mkdir -p "$audit_fixtures" "$prune_fixtures"
 
 cat > "$firewalls_fixture" <<'JSON'
@@ -282,5 +283,23 @@ BOXHAVEN_INSTALL_DIR="${tmpdir}/install-bin" \
   scripts/install-bh.sh > "${tmpdir}/install.out"
 assert_contains "${tmpdir}/install.out" "bh fixture-version"
 test -x "${tmpdir}/install-bin/bh"
+
+mkdir -p "${bad_release_dir}"
+cp "${release_dir}/boxhaven-vfixture-linux-amd64.tar.gz" "${bad_release_dir}/boxhaven-vfixture-linux-amd64.tar.gz"
+printf '%s  %s\n' "0000000000000000000000000000000000000000000000000000000000000000" "boxhaven-vfixture-linux-amd64.tar.gz" > "${bad_release_dir}/checksums-vfixture.txt"
+if BOXHAVEN_INSTALL_VERSION=vfixture \
+  BOXHAVEN_INSTALL_BASE_URL="file://${bad_release_dir}" \
+  BOXHAVEN_INSTALL_OS=linux \
+  BOXHAVEN_INSTALL_ARCH=amd64 \
+  BOXHAVEN_INSTALL_CHECKSUM_TOOL=shasum \
+  BOXHAVEN_INSTALL_DIR="${tmpdir}/bad-install-bin" \
+  scripts/install-bh.sh > "${tmpdir}/install-bad.out" 2> "${tmpdir}/install-bad.err"; then
+  printf 'installer unexpectedly accepted a bad checksum\n' >&2
+  exit 1
+fi
+if [ -e "${tmpdir}/bad-install-bin/bh" ]; then
+  printf 'installer wrote bh despite checksum failure\n' >&2
+  exit 1
+fi
 
 printf 'production fixture tests passed\n'
