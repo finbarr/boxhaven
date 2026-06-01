@@ -124,3 +124,21 @@ sudo systemctl status boxhaven-backend-backup.timer --no-pager
 sudo systemctl start boxhaven-backend-backup.service
 ls -lh /opt/boxhaven/backups
 ```
+
+After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or
+agent reconnect behavior, run the reusable lifecycle smoke from a machine with a
+valid BoxHaven session token:
+
+```bash
+BOXHAVEN_TOKEN=... \
+GH_TOKEN=... \
+BOXHAVEN_SMOKE_GIT_REMOTE=https://github.com/<org>/<smoke-repo>.git \
+make smoke-remote
+```
+
+For reconnect coverage, pass a backend restart command:
+
+```bash
+BOXHAVEN_SMOKE_RESTART_BACKEND_CMD="ssh root@<control-plane-ip> 'cd /opt/boxhaven/app && docker compose --env-file deploy/digitalocean/.env.production -f deploy/digitalocean/docker-compose.yml restart backend'" \
+make smoke-remote
+```
