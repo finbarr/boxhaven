@@ -2,7 +2,7 @@
 
 This bundle runs the BoxHaven console and API on a single DigitalOcean
 Droplet. Caddy terminates TLS for `app.boxhaven.dev`, `api.boxhaven.dev`, and
-generated preview hostnames under `hosted.boxhaven.dev`, then proxies those
+generated preview hostnames under `at.boxhaven.dev`, then proxies those
 hostnames to the backend container. Backend state is stored on the host under
 `/opt/boxhaven/data/backend` so it can be backed up outside Docker.
 
@@ -16,7 +16,7 @@ Required DNS records:
 ```text
 app.boxhaven.dev.  A  <droplet-ip>
 api.boxhaven.dev.  A  <droplet-ip>
-*.hosted.boxhaven.dev.  A  <droplet-ip>
+*.at.boxhaven.dev.  A  <droplet-ip>
 ```
 
 ## Configure

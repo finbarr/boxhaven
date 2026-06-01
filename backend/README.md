@@ -53,7 +53,7 @@ hosted split:
 
 - `app.boxhaven.dev` for the browser console
 - `api.boxhaven.dev` for API and Better Auth routes
-- `*.hosted.boxhaven.dev` for generated machine preview URLs
+- `*.at.boxhaven.dev` for generated machine preview URLs
 - Caddy-managed TLS in front of the backend container
 - host-mounted backend and Caddy data under `/opt/boxhaven/data`
 - a systemd timer that writes daily archives to `/opt/boxhaven/backups`
@@ -78,7 +78,7 @@ Environment:
 - `BOXHAVEN_APP_URL`: public app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_API_URL`: public API URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_BACKEND_CORS_ORIGINS`: comma-separated browser origins allowed to call the API.
-- `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `hosted.boxhaven.dev`.
+- `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.boxhaven.dev`.
 - `BOXHAVEN_PREVIEW_TARGET_PORT`: machine port that preview hosts proxy to, default `80`.
 - `BOXHAVEN_BACKEND_AUTH_DB`: SQLite auth database path.
 - `BOXHAVEN_BACKEND_LISTEN`: listen address, default `127.0.0.1:8787`.
