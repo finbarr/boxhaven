@@ -323,6 +323,17 @@ archive="$(
 )"
 test -f "$archive"
 test "$(stat -c '%a' "$archive" 2>/dev/null || stat -f '%Lp' "$archive")" = "600"
+BOXHAVEN_BACKUP_ROOT="$backup_root" \
+BOXHAVEN_DATA_ROOT="${tmpdir}/missing-data" \
+  deploy/digitalocean/backup-backend.sh > "${tmpdir}/backup-bad.out" 2> "${tmpdir}/backup-bad.err" && {
+    printf 'backup unexpectedly succeeded without required backend files\n' >&2
+    exit 1
+  }
+assert_contains "${tmpdir}/backup-bad.err" "backup is missing required file"
+if find "$backup_root" -maxdepth 1 -type f -name 'boxhaven-backend-*.tar.gz' | grep -qvFx "$archive"; then
+  printf 'failed backup left an unverified archive behind\n' >&2
+  exit 1
+fi
 scripts/verify-backend-backup-restore.sh "$archive" > "${tmpdir}/backup.out"
 assert_contains "${tmpdir}/backup.out" "backup restore verification passed"
 

@@ -61,7 +61,7 @@ hosted split:
 Enable DigitalOcean Droplet backups for machine-level recovery, then install the
 repo backup timer for application state recovery. The backend data backup uses
 SQLite's online backup command for `auth.sqlite` and includes `backend.json` plus
-Caddy data.
+Caddy data. Each new archive is restore-verified before old backups are pruned.
 
 Then sign up or sign in from another shell. The CLI prints a browser URL, tries
 to open it, and waits for the web app to grant access:

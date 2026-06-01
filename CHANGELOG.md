@@ -15,7 +15,8 @@
   limits, stale-create cleanup, idle disconnected machine cleanup, bearer-token
   protected `/metrics`, request logging controls, and safer state writes.
 - Added production backup/restore verification for backend state, auth SQLite
-  data, and SSH certificate authority keys.
+  data, and SSH certificate authority keys. The backup job now verifies each new
+  archive before pruning older backups.
 - Added reusable local and hosted production checks: `make production-check`,
   `make smoke-production-http`, `make smoke-remote`, `make audit-digitalocean`,
   uptime/alert/firewall remediators, strict environment and Compose validation,

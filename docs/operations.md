@@ -162,8 +162,10 @@ metrics rejection, and authenticated Prometheus metrics using
 `BOXHAVEN_METRICS_BEARER_TOKEN`.
 
 Backups are installed through `deploy/digitalocean/install-backups.sh` and write
-archives under `/opt/boxhaven/backups`. Verify restore viability after backup
-changes and during operations drills:
+archives under `/opt/boxhaven/backups`. The backup job verifies each new archive
+before pruning older backups, and removes a newly created archive if restore
+verification fails. Verify restore viability manually after backup changes and
+during operations drills:
 
 ```bash
 scripts/verify-backend-backup-restore.sh /opt/boxhaven/backups/<archive>.tar.gz

@@ -71,6 +71,9 @@ Install and start the backup timer:
 sudo deploy/digitalocean/install-backups.sh
 ```
 
+The installer deploys both the backup command and the restore verifier. Each
+backup run verifies the new archive before old archives are pruned.
+
 ## Build the Remote VM Image
 
 New remote machines should come from a prebuilt BoxHaven snapshot instead of a

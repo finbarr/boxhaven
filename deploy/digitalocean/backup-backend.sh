@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 backup_root="${BOXHAVEN_BACKUP_ROOT:-/opt/boxhaven/backups}"
 data_root="${BOXHAVEN_DATA_ROOT:-/opt/boxhaven/data}"
 retention_days="${BOXHAVEN_BACKUP_RETENTION_DAYS:-14}"
+verify_after_create="${BOXHAVEN_BACKUP_VERIFY_AFTER_CREATE:-1}"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-archive="${backup_root}/boxhaven-backend-${timestamp}.tar.gz"
+archive_base="${backup_root}/boxhaven-backend-${timestamp}"
+archive="${archive_base}.tar.gz"
 
 mkdir -p "${backup_root}"
+if [ -e "$archive" ]; then
+  archive_suffix=1
+  while [ -e "${archive_base}-${archive_suffix}.tar.gz" ]; do
+    archive_suffix=$((archive_suffix + 1))
+  done
+  archive="${archive_base}-${archive_suffix}.tar.gz"
+fi
 
 tmpdir="$(mktemp -d "${backup_root}/.tmp-boxhaven-backend.XXXXXX")"
 
@@ -39,6 +49,21 @@ fi
 
 tar -C "${tmpdir}" -czf "${archive}" .
 chmod 0600 "${archive}"
+
+if [ "$verify_after_create" = "1" ]; then
+  verify_command="${BOXHAVEN_BACKUP_VERIFY_COMMAND:-}"
+  if [ -z "$verify_command" ]; then
+    if [ -x "${script_dir}/../../scripts/verify-backend-backup-restore.sh" ]; then
+      verify_command="${script_dir}/../../scripts/verify-backend-backup-restore.sh"
+    else
+      verify_command="boxhaven-verify-backend-backup"
+    fi
+  fi
+  if ! "$verify_command" "$archive" >/dev/null; then
+    rm -f "$archive"
+    exit 1
+  fi
+fi
 
 find "${backup_root}" -maxdepth 1 -type f -name 'boxhaven-backend-*.tar.gz' -mtime "+${retention_days}" -delete
 
