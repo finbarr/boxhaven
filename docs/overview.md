@@ -69,6 +69,10 @@ set; otherwise the CLI falls back to `gh auth token` from the local GitHub CLI.
 The file is root-only, lives in tmpfs, and is sourced by the machine agent before
 setup, direct commands, or tmux session launches.
 
+For agent tools, the CLI forwards selected local Codex and Claude login/config
+files directly to the VM over SSH. This avoids repeated agent logins on fresh
+boxes without sending those files through the backend.
+
 ## Current Provider
 
 The current provider implementation is DigitalOcean. The provider creates boxes

@@ -127,6 +127,39 @@ func TestRemoteGitAuthEnvFallsBackToGitHubCLI(t *testing.T) {
 	}
 }
 
+func TestLocalRemoteAuthFilesSelectsAgentLoginFiles(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	mustWriteFile(t, filepath.Join(home, ".codex", "auth.json"), `{"token":"codex"}`)
+	mustWriteFile(t, filepath.Join(home, ".codex", "config.toml"), "model = \"gpt\"\n")
+	mustWriteFile(t, filepath.Join(home, ".claude.json"), `{"oauth":"claude"}`)
+	mustWriteFile(t, filepath.Join(home, ".codex", "history.jsonl"), "do not copy\n")
+
+	files := localRemoteAuthFiles()
+	targets := map[string]string{}
+	for _, file := range files {
+		targets[file.Target] = file.Data
+	}
+	for _, want := range []string{"/root/.codex/auth.json", "/root/.codex/config.toml", "/root/.claude.json"} {
+		if targets[want] == "" {
+			t.Fatalf("auth files missing %s: %#v", want, targets)
+		}
+	}
+	if _, ok := targets["/root/.codex/history.jsonl"]; ok {
+		t.Fatalf("auth files unexpectedly included history: %#v", targets)
+	}
+}
+
+func mustWriteFile(t *testing.T, path string, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stderr
