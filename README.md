@@ -95,6 +95,10 @@ agent login files for Codex and Claude, including `~/.codex/auth.json`,
 `~/.codex/config.toml`, `~/.claude.json`, and `~/.claude/settings.json`. It does
 not copy histories, sessions, caches, or databases.
 
+Those commands also forward the effective local Git author identity for the
+current project by setting `user.name` and `user.email` in the remote SSH user's
+global Git config. BoxHaven does not copy the full local Git config.
+
 ## Backend
 
 The open-source backend in [backend](backend) provides:

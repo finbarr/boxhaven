@@ -150,6 +150,40 @@ func TestLocalRemoteAuthFilesSelectsAgentLoginFiles(t *testing.T) {
 	}
 }
 
+func TestCurrentGitIdentityUsesEffectiveConfig(t *testing.T) {
+	temp := t.TempDir()
+	gitPath := filepath.Join(temp, "git")
+	script := "#!/usr/bin/env sh\nif [ \"$1\" = config ] && [ \"$2\" = --get ]; then\n  case \"$3\" in\n    user.name) echo 'Ada Lovelace'; exit 0 ;;\n    user.email) echo 'ada@example.com'; exit 0 ;;\n  esac\nfi\nexit 1\n"
+	if err := os.WriteFile(gitPath, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", temp+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	identity := currentGitIdentity(t.TempDir())
+	if identity.Name != "Ada Lovelace" {
+		t.Fatalf("name = %q, want effective git user.name", identity.Name)
+	}
+	if identity.Email != "ada@example.com" {
+		t.Fatalf("email = %q, want effective git user.email", identity.Email)
+	}
+}
+
+func TestRemoteGitIdentityScript(t *testing.T) {
+	script := remoteGitIdentityScript(gitIdentity{
+		Name:  "Ada O'Neil",
+		Email: "ada@example.com",
+	})
+	if !strings.Contains(script, "git config --global user.name 'Ada O'\"'\"'Neil'") {
+		t.Fatalf("script did not quote user.name correctly:\n%s", script)
+	}
+	if !strings.Contains(script, "git config --global user.email 'ada@example.com'") {
+		t.Fatalf("script did not include user.email:\n%s", script)
+	}
+	if got := remoteGitIdentityScript(gitIdentity{}); got != "" {
+		t.Fatalf("empty identity script = %q, want empty", got)
+	}
+}
+
 func mustWriteFile(t *testing.T, path string, contents string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
