@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { CreateMachineRequest, ListProviderMachinesRequest, MachineProvider, MachineProviderInfo, RemoteMachine } from "./types.js";
+import { CreateMachineRequest, ListProviderMachinesRequest, MachineProvider, MachineProviderInfo, RemoteMachine, defaultSSHUser } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 const apiBaseURL = "https://api.digitalocean.com";
@@ -200,7 +200,7 @@ export class DigitalOceanProvider implements MachineProvider {
       region: droplet.region?.slug || this.config.region,
       size: droplet.size_slug || this.config.size,
       image: droplet.image?.slug || droplet.image?.name || this.config.image,
-      ssh_user: sshUser || "root",
+      ssh_user: sshUser || defaultSSHUser,
       created_at: droplet.created_at || now,
       updated_at: now,
       bootstrap_complete: this.dropletBootstrapComplete(droplet),
@@ -292,6 +292,7 @@ write_files:
       ${shellEnvAssignment("BOXHAVEN_AGENT_TOKEN", token)}
       ${shellEnvAssignment("BOXHAVEN_AGENT_BACKEND_URL", backendURL)}
 runcmd:
+  - [sh, -lc, ${cloudInitSingleQuote(ensureSudoUserCommand(request.ssh_user))}]
   - [sh, -lc, ${cloudInitSingleQuote(sshCertificateTrustCommand(userCA, principal, request.ssh_user))}]
   - [sh, -lc, 'systemctl enable --now boxhaven-agent || true']
 `;
@@ -301,9 +302,23 @@ function shellEnvAssignment(name: string, value: string): string {
   return `${name}='${value.replace(/'/g, "'\"'\"'")}'`;
 }
 
+function ensureSudoUserCommand(sshUser: string | undefined): string {
+  const user = safeLinuxUser(sshUser || defaultSSHUser);
+  if (user === "root") return "true";
+  return [
+    `if ! id -u ${shellSingleQuote(user)} >/dev/null 2>&1; then useradd -m -s /bin/bash ${shellSingleQuote(user)}; fi`,
+    `usermod -aG sudo ${shellSingleQuote(user)} || true`,
+    `if getent group docker >/dev/null 2>&1; then usermod -aG docker ${shellSingleQuote(user)} || true; fi`,
+    `printf '%s\\n' ${shellSingleQuote(`${user} ALL=(ALL) NOPASSWD:ALL`)} > /etc/sudoers.d/${shellSingleQuote(user)}`,
+    `chmod 0440 /etc/sudoers.d/${shellSingleQuote(user)}`,
+    `install -d -o ${shellSingleQuote(user)} -g ${shellSingleQuote(user)} -m 0755 /home/${shellSingleQuote(user)}`,
+    `install -d -o ${shellSingleQuote(user)} -g ${shellSingleQuote(user)} -m 0755 /opt/boxhaven/project`,
+  ].join(" && ");
+}
+
 function sshCertificateTrustCommand(userCA: string | undefined, principal: string | undefined, sshUser: string | undefined): string {
   if (!userCA || !principal) return "true";
-  const user = safeLinuxUser(sshUser || "root");
+  const user = safeLinuxUser(sshUser || defaultSSHUser);
   return [
     "install -d -m 0755 /run/sshd /etc/ssh/auth_principals /etc/ssh/sshd_config.d",
     `printf '%s\\n' ${shellSingleQuote(userCA)} > /etc/ssh/boxhaven_user_ca_keys`,
@@ -317,7 +332,7 @@ function sshCertificateTrustCommand(userCA: string | undefined, principal: strin
 }
 
 function safeLinuxUser(value: string): string {
-  return /^[a-z_][a-z0-9_-]*[$]?$/i.test(value) ? value : "root";
+  return /^[a-z_][a-z0-9_-]*[$]?$/i.test(value) ? value : defaultSSHUser;
 }
 
 function cloudInitSingleQuote(value: string): string {

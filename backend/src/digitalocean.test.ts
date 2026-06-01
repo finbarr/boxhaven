@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { digitalOceanAgentUserData, digitalOceanImageForCreate, digitalOceanImageIsBoxHavenRemote, digitalOceanProviderFromEnv, digitalOceanSizeForTier } from "./digitalocean.js";
+import { defaultSSHUser } from "./types.js";
 
 test("DigitalOcean provider prefers generic BoxHaven image override", () => {
   const provider = digitalOceanProviderFromEnv({
@@ -119,6 +120,8 @@ test("DigitalOcean agent user data carries token credentials and SSH CA trust", 
   assert.match(userData, /BOXHAVEN_AGENT_TOKEN='test-token'/);
   assert.match(userData, /BOXHAVEN_AGENT_BACKEND_URL='https:\/\/api\.example\.com'/);
   assert.match(userData, /ssh_pwauth: false/);
+  assert.match(userData, new RegExp(`useradd -m -s /bin/bash .*${defaultSSHUser}`));
+  assert.match(userData, new RegExp(`${defaultSSHUser} ALL=\\(ALL\\) NOPASSWD:ALL`));
   assert.match(userData, /\/run\/sshd/);
   assert.match(userData, /TrustedUserCAKeys \/etc\/ssh\/boxhaven_user_ca_keys/);
   assert.match(userData, /AuthorizedPrincipalsFile \/etc\/ssh\/auth_principals\/%u/);

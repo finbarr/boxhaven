@@ -10,7 +10,7 @@ import { createBackendAuth, migrateBackendAuth } from "./auth.js";
 import { StateStore } from "./state.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
-import { CreateMachineRequest, MachineProvider, RemoteMachine } from "./types.js";
+import { CreateMachineRequest, MachineProvider, RemoteMachine, defaultSSHUser } from "./types.js";
 
 const testSSHUserPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBxsqJzPGdcbwFthXVe2lyIImV6BwTw4Ee5WcoeczwJf test";
 
@@ -32,7 +32,7 @@ class FakeProvider implements MachineProvider {
         provider: this.name,
         provider_id: `fake-${request.provider_name || request.name}`,
         public_ipv4: this.publicIPv4,
-        ssh_user: request.ssh_user || "root",
+        ssh_user: request.ssh_user || defaultSSHUser,
         bootstrap_complete: true,
       },
     };
@@ -53,7 +53,7 @@ class FakeProvider implements MachineProvider {
       status: "active",
       machine: {
         provider: this.name,
-        ssh_user: "root",
+        ssh_user: defaultSSHUser,
         ...machine,
       },
     }));
@@ -224,7 +224,7 @@ test("backend signs short-lived SSH certificates for owned machines", async () =
   assert.match(cert.json().certificate, /^ssh-ed25519-cert-v01@openssh.com /);
   assert.equal(cert.json().principal, created.json().machine.ssh_principal);
   assert.equal(cert.json().host, "203.0.113.10");
-  assert.equal(cert.json().ssh_user, "root");
+  assert.equal(cert.json().ssh_user, defaultSSHUser);
 });
 
 test("backend signs SSH certificates without a connected machine agent", async () => {
@@ -272,6 +272,7 @@ test("backend delegates session lifecycle to the machine agent", async () => {
   assert.equal(sessionRPC.type, "rpc");
   assert.equal(sessionRPC.action, "prepare_session");
   assert.deepEqual(sessionRPC.payload.command, ["codex"]);
+  assert.equal(sessionRPC.payload.ssh_user, defaultSSHUser);
   assert.equal(sessionRPC.payload.attach, true);
   agent.send(JSON.stringify({
     type: "rpc_result",

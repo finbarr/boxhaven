@@ -19,6 +19,7 @@ import (
 
 const (
 	remoteDefaultSessionName = "boxhaven"
+	remoteDefaultSSHUser     = "boxhaven"
 	remoteProjectRoot        = "/opt/boxhaven/project"
 	remoteKnownHostsFileName = "remote_known_hosts"
 	remoteSessionEnvFile     = "/run/boxhaven/session.env"
@@ -900,7 +901,7 @@ func remoteSSHCommand(machine remoteMachine, forwardAgent bool) (string, error) 
 func (m remoteMachine) sshTarget() string {
 	user := m.SSHUser
 	if user == "" {
-		user = "root"
+		user = remoteDefaultSSHUser
 	}
 	return user + "@" + m.sshHost()
 }
@@ -954,7 +955,7 @@ func syncRemoteAuthState(machine remoteMachine) error {
 	if err := syncRemoteGitAuthEnvironment(machine); err != nil {
 		return err
 	}
-	files := localRemoteAuthFiles()
+	files := localRemoteAuthFiles(machine.SSHUser)
 	if len(files) == 0 {
 		return nil
 	}
@@ -965,7 +966,7 @@ func syncRemoteAuthState(machine remoteMachine) error {
 func syncRemoteGitAuthEnvironment(machine remoteMachine) error {
 	env := remoteGitAuthEnv(machine.RepoURL)
 	if len(env) == 0 {
-		return runSSHCommand(machine, "rm -f "+shellQuote(remoteSessionEnvFile), false, false)
+		return runSSHCommand(machine, removeRemoteSessionEnvCommand(), false, false)
 	}
 	info("Forwarding GitHub auth environment to remote %s", machine.Name)
 	return writeRemoteSessionEnv(machine, env)
@@ -1040,19 +1041,20 @@ type remoteAuthFile struct {
 	Data   string
 }
 
-func localRemoteAuthFiles() []remoteAuthFile {
+func localRemoteAuthFiles(sshUser string) []remoteAuthFile {
 	home, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
 		return nil
 	}
+	remoteHome := remoteHomeDir(sshUser)
 	candidates := []struct {
 		source string
 		target string
 	}{
-		{filepath.Join(home, ".codex", "auth.json"), "/root/.codex/auth.json"},
-		{filepath.Join(home, ".codex", "config.toml"), "/root/.codex/config.toml"},
-		{filepath.Join(home, ".claude.json"), "/root/.claude.json"},
-		{filepath.Join(home, ".claude", "settings.json"), "/root/.claude/settings.json"},
+		{filepath.Join(home, ".codex", "auth.json"), filepath.Join(remoteHome, ".codex", "auth.json")},
+		{filepath.Join(home, ".codex", "config.toml"), filepath.Join(remoteHome, ".codex", "config.toml")},
+		{filepath.Join(home, ".claude.json"), filepath.Join(remoteHome, ".claude.json")},
+		{filepath.Join(home, ".claude", "settings.json"), filepath.Join(remoteHome, ".claude", "settings.json")},
 	}
 	var files []remoteAuthFile
 	for _, candidate := range candidates {
@@ -1084,9 +1086,10 @@ func readRemoteAuthFile(path string) (string, error) {
 func writeRemoteAuthFiles(machine remoteMachine, files []remoteAuthFile) error {
 	var script strings.Builder
 	script.WriteString("set -euo pipefail\numask 077\n")
+	remoteHome := remoteHomeDir(machine.SSHUser)
 	for _, file := range files {
-		target := strings.TrimSpace(file.Target)
-		if !strings.HasPrefix(target, "/root/") || strings.Contains(target, "\x00") {
+		target := filepath.Clean(strings.TrimSpace(file.Target))
+		if !isPathInsideRemoteHome(target, remoteHome) || strings.Contains(target, "\x00") {
 			continue
 		}
 		script.WriteString("install -d -m 0700 ")
@@ -1116,8 +1119,53 @@ func writeRemoteSessionEnv(machine remoteMachine, env map[string]string) error {
 		contents.WriteString(shellQuote(value))
 		contents.WriteString("\n")
 	}
-	remoteCommand := "umask 077; install -d -m 0700 /run/boxhaven; cat > " + shellQuote(remoteSessionEnvFile)
+	remoteCommand := strings.Join([]string{
+		"set -euo pipefail",
+		"tmp=$(mktemp)",
+		"trap 'rm -f \"$tmp\"' EXIT",
+		"cat > \"$tmp\"",
+		"chmod 0600 \"$tmp\"",
+		"uid=$(id -u)",
+		"gid=$(id -g)",
+		"if [ \"$uid\" -eq 0 ]; then",
+		"  install -d -o \"$uid\" -g \"$gid\" -m 0700 /run/boxhaven",
+		"  install -o \"$uid\" -g \"$gid\" -m 0600 \"$tmp\" " + shellQuote(remoteSessionEnvFile),
+		"else",
+		"  sudo install -d -o \"$uid\" -g \"$gid\" -m 0700 /run/boxhaven",
+		"  sudo install -o \"$uid\" -g \"$gid\" -m 0600 \"$tmp\" " + shellQuote(remoteSessionEnvFile),
+		"fi",
+	}, "\n")
 	return runSSHCommand(machine, remoteCommand, false, false, strings.NewReader(contents.String()))
+}
+
+func removeRemoteSessionEnvCommand() string {
+	return strings.Join([]string{
+		"set -euo pipefail",
+		"if [ \"$(id -u)\" -eq 0 ]; then",
+		"  rm -f " + shellQuote(remoteSessionEnvFile),
+		"else",
+		"  sudo rm -f " + shellQuote(remoteSessionEnvFile),
+		"fi",
+	}, "\n")
+}
+
+func remoteHomeDir(user string) string {
+	user = strings.TrimSpace(user)
+	if user == "" {
+		user = remoteDefaultSSHUser
+	}
+	if user == "root" {
+		return "/root"
+	}
+	return filepath.Join("/home", user)
+}
+
+func isPathInsideRemoteHome(path string, remoteHome string) bool {
+	if path == "" || remoteHome == "" {
+		return false
+	}
+	home := filepath.Clean(remoteHome)
+	return path == home || strings.HasPrefix(path, home+"/")
 }
 
 func shellJoin(args []string) string {

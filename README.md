@@ -63,7 +63,7 @@ config from `.boxhaven.toml`.
 [remote]
 backend_url = "https://api.boxhaven.dev"
 token = "browser-granted-session-token"
-ssh_user = "root"
+ssh_user = "boxhaven"
 setup = [
   "docker compose up -d db"
 ]
@@ -79,10 +79,10 @@ Environment overrides:
 
 When the current project's `origin` points at GitHub, `bh create`, `bh run`,
 `bh connect`, and `bh sync up` forward GitHub auth to the remote box in
-`/run/boxhaven/session.env`. The file is root-only, lives in tmpfs, and is
-replaced or removed by the CLI on the next command. The remote image includes a
-Git credential helper that uses those variables, so agents and shells inside the
-box can push to HTTPS GitHub remotes.
+`/run/boxhaven/session.env`. The file lives in tmpfs, is readable only by the
+remote SSH user and root, and is replaced or removed by the CLI on the next
+command. The remote image includes a Git credential helper that uses those
+variables, so agents and shells inside the box can push to HTTPS GitHub remotes.
 
 `GH_TOKEN` or `GITHUB_TOKEN` are used when set. Otherwise, if the GitHub CLI is
 installed and authenticated locally, `bh` uses `gh auth token` and forwards that

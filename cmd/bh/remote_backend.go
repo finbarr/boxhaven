@@ -103,7 +103,7 @@ func createRemoteBackendMachine(cfg Config, projectDir string, opts remoteProvis
 	repo := currentGitRepo(sourcePath)
 	req := remoteBackendCreateRequest{
 		Name:       opts.Name,
-		SSHUser:    firstNonEmpty(opts.SSHUser, cfg.Remote.SSHUser, "root"),
+		SSHUser:    firstNonEmpty(opts.SSHUser, cfg.Remote.SSHUser, remoteDefaultSSHUser),
 		Tier:       opts.Tier,
 		SourcePath: sourcePath,
 		RepoURL:    repo.URL,
@@ -139,7 +139,7 @@ func getRemoteBackendMachine(cfg Config, name string) (remoteMachine, string, er
 	machine := response.Machine
 	machine.Name = name
 	if machine.SSHUser == "" {
-		machine.SSHUser = firstNonEmpty(cfg.Remote.SSHUser, "root")
+		machine.SSHUser = firstNonEmpty(cfg.Remote.SSHUser, remoteDefaultSSHUser)
 	}
 	if machine.ProjectPath == "" {
 		machine.ProjectPath = remoteProjectPath()
@@ -157,7 +157,7 @@ func listRemoteBackendMachines(cfg Config) ([]remoteMachine, error) {
 			response.Machines[i].ProjectPath = remoteProjectPath()
 		}
 		if response.Machines[i].SSHUser == "" {
-			response.Machines[i].SSHUser = firstNonEmpty(cfg.Remote.SSHUser, "root")
+			response.Machines[i].SSHUser = firstNonEmpty(cfg.Remote.SSHUser, remoteDefaultSSHUser)
 		}
 	}
 	return response.Machines, nil
@@ -188,7 +188,7 @@ func renameRemoteBackendMachine(cfg Config, fromName string, toName string) (rem
 		machine.Name = toName
 	}
 	if machine.SSHUser == "" {
-		machine.SSHUser = firstNonEmpty(cfg.Remote.SSHUser, "root")
+		machine.SSHUser = firstNonEmpty(cfg.Remote.SSHUser, remoteDefaultSSHUser)
 	}
 	if machine.ProjectPath == "" {
 		machine.ProjectPath = remoteProjectPath()
