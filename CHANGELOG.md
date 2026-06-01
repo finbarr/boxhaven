@@ -20,6 +20,8 @@
   `make smoke-production-http`, `make smoke-remote`, `make audit-digitalocean`,
   uptime/alert/firewall remediators, strict environment and Compose validation,
   paginated DigitalOcean inventory reads, and dry-run-first snapshot pruning.
+- Added explicit snapshot-id support to the dry-run-first DigitalOcean pruning
+  workflow for retiring old manual snapshots while preserving the active image.
 - Required production deployments to set `BOXHAVEN_REMOTE_IMAGE` to an active
   BoxHaven remote snapshot before Compose can start the backend.
 - Tightened golden-image builder cleanup so temporary DigitalOcean SSH keys it

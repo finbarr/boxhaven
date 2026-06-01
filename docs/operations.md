@@ -212,6 +212,16 @@ The snapshot prune command is dry-run by default. Set
 `BOXHAVEN_REMOTE_IMAGE` and `BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1` only after
 reviewing the listed snapshot IDs.
 
+For old manual snapshots that do not use the BoxHaven prefix, list the explicit
+IDs and review the dry-run output first:
+
+```bash
+DIGITALOCEAN_ACCESS_TOKEN=... \
+BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> \
+BOXHAVEN_DO_SNAPSHOT_PRUNE_IDS=160948396,160956820 \
+make prune-snapshots
+```
+
 Create missing app/API uptime checks with:
 
 ```bash

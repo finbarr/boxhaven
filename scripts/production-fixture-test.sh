@@ -276,6 +276,14 @@ assert_not_contains "${tmpdir}/prune.out" "snap-active"
 assert_not_contains "${tmpdir}/prune.out" "snap-new"
 assert_not_contains "${tmpdir}/prune.out" "other-old"
 
+BOXHAVEN_DO_SNAPSHOT_PRUNE_FIXTURES="$prune_fixtures" \
+BOXHAVEN_DO_SNAPSHOT_PRUNE_IDS=other-old,snap-active \
+BOXHAVEN_REMOTE_IMAGE=snap-active \
+BOXHAVEN_DO_SNAPSHOT_KEEP_DAYS=30 \
+  scripts/prune-digitalocean-snapshots.sh > "${tmpdir}/prune-explicit.out"
+assert_contains "${tmpdir}/prune-explicit.out" "would delete snapshot other-old"
+assert_not_contains "${tmpdir}/prune-explicit.out" "snap-active"
+
 if BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1 \
   DIGITALOCEAN_ACCESS_TOKEN=test \
   BOXHAVEN_DIGITALOCEAN_API_URL=http://127.0.0.1:1 \
