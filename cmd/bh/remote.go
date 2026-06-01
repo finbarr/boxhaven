@@ -149,7 +149,7 @@ func runRemoteRun(args []string, projectDir string) error {
 		return err
 	}
 	defer cleanup()
-	return runRemoteMachineCommand(cfg, machine, commandArgs)
+	return runRemoteMachineCommand(cfg, machine, commandArgs, projectDir)
 }
 
 func parseRemoteCreateArgs(args []string, cfg Config) (remoteProvisionOptions, bool, error) {
@@ -263,7 +263,7 @@ func runRemoteConnect(args []string, projectDir string) error {
 		return err
 	}
 	defer cleanup()
-	return runRemoteMachineCommand(cfg, machine, []string{"shell"})
+	return runRemoteMachineCommand(cfg, machine, []string{"shell"}, projectDir)
 }
 
 func runRemoteSync(args []string, projectDir string) error {
@@ -598,6 +598,11 @@ type gitRepoInfo struct {
 	Branch string
 }
 
+type gitIdentity struct {
+	Name  string
+	Email string
+}
+
 func currentGitRepo(projectDir string) gitRepoInfo {
 	url, err := gitOutput(projectDir, "config", "--get", "remote.origin.url")
 	if err != nil || strings.TrimSpace(url) == "" {
@@ -612,6 +617,15 @@ func currentGitRepo(projectDir string) gitRepoInfo {
 		branch = ""
 	}
 	return gitRepoInfo{URL: strings.TrimSpace(url), Branch: branch}
+}
+
+func currentGitIdentity(projectDir string) gitIdentity {
+	name, _ := gitOutput(projectDir, "config", "--get", "user.name")
+	email, _ := gitOutput(projectDir, "config", "--get", "user.email")
+	return gitIdentity{
+		Name:  strings.TrimSpace(name),
+		Email: strings.TrimSpace(email),
+	}
 }
 
 func gitOutput(dir string, args ...string) (string, error) {
@@ -639,7 +653,7 @@ func syncRemoteProject(machine *remoteMachine, cfg Config, projectDir string) er
 	if machine.ProjectPath == "" {
 		machine.ProjectPath = remoteProjectPath()
 	}
-	if err := syncRemoteAuthState(*machine); err != nil {
+	if err := syncRemoteAuthState(*machine, sourcePath); err != nil {
 		return err
 	}
 
@@ -742,11 +756,15 @@ func rsyncPathFromRemote(machine remoteMachine, projectPath string, destinationP
 	return cmd.Run()
 }
 
-func runRemoteMachineCommand(cfg Config, machine remoteMachine, commandArgs []string) error {
+func runRemoteMachineCommand(cfg Config, machine remoteMachine, commandArgs []string, projectDir string) error {
 	if machine.ProjectPath == "" {
 		machine.ProjectPath = remoteProjectPath()
 	}
-	if err := syncRemoteAuthState(machine); err != nil {
+	sourcePath, err := normalizedProjectPath(projectDir)
+	if err != nil {
+		return err
+	}
+	if err := syncRemoteAuthState(machine, sourcePath); err != nil {
 		return err
 	}
 	if len(commandArgs) == 0 {
@@ -951,8 +969,11 @@ func shouldForwardSSHAgent(repoURL string) bool {
 	return strings.HasPrefix(repoURL, "git@") || strings.HasPrefix(repoURL, "ssh://")
 }
 
-func syncRemoteAuthState(machine remoteMachine) error {
+func syncRemoteAuthState(machine remoteMachine, projectDir string) error {
 	if err := syncRemoteGitAuthEnvironment(machine); err != nil {
+		return err
+	}
+	if err := syncRemoteGitIdentity(machine, projectDir); err != nil {
 		return err
 	}
 	files := localRemoteAuthFiles(machine.SSHUser)
@@ -970,6 +991,42 @@ func syncRemoteGitAuthEnvironment(machine remoteMachine) error {
 	}
 	info("Forwarding GitHub auth environment to remote %s", machine.Name)
 	return writeRemoteSessionEnv(machine, env)
+}
+
+func syncRemoteGitIdentity(machine remoteMachine, projectDir string) error {
+	identity := currentGitIdentity(projectDir)
+	if identity.Name == "" && identity.Email == "" {
+		return nil
+	}
+	info("Forwarding local Git identity to remote %s", machine.Name)
+	return writeRemoteGitIdentity(machine, identity)
+}
+
+func writeRemoteGitIdentity(machine remoteMachine, identity gitIdentity) error {
+	script := remoteGitIdentityScript(identity)
+	if strings.TrimSpace(script) == "" {
+		return nil
+	}
+	return runSSHCommand(machine, script, false, false)
+}
+
+func remoteGitIdentityScript(identity gitIdentity) string {
+	var script strings.Builder
+	script.WriteString("set -euo pipefail\n")
+	if identity.Name != "" {
+		script.WriteString("git config --global user.name ")
+		script.WriteString(shellQuote(identity.Name))
+		script.WriteString("\n")
+	}
+	if identity.Email != "" {
+		script.WriteString("git config --global user.email ")
+		script.WriteString(shellQuote(identity.Email))
+		script.WriteString("\n")
+	}
+	if script.Len() == len("set -euo pipefail\n") {
+		return ""
+	}
+	return script.String()
 }
 
 func remoteGitAuthEnv(repoURL string) map[string]string {

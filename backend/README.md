@@ -220,3 +220,7 @@ direct SSH when a remote session is created, connected, run, or synced up. Those
 files are written into the remote SSH user's home so users do not need to repeat
 agent login flows on every new VM. The backend does not receive or store these
 files.
+
+The CLI also forwards only the effective local Git author identity,
+`user.name` and `user.email`, into the remote SSH user's global Git config. It
+does not copy the full local Git config.
