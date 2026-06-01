@@ -25,6 +25,25 @@ step() {
   echo "remote setup: $*" >&3
 }
 
+disable_unattended_apt() {
+  step "disabling unattended apt timers"
+  systemctl disable --now apt-daily.timer apt-daily-upgrade.timer >/dev/null 2>&1 || true
+  systemctl mask apt-daily.service apt-daily-upgrade.service apt-daily.timer apt-daily-upgrade.timer >/dev/null 2>&1 || true
+  if [ -f /etc/apt/apt.conf.d/20auto-upgrades ]; then
+    sed -i \
+      -e 's/^\s*APT::Periodic::Update-Package-Lists.*/APT::Periodic::Update-Package-Lists "0";/' \
+      -e 's/^\s*APT::Periodic::Unattended-Upgrade.*/APT::Periodic::Unattended-Upgrade "0";/' \
+      /etc/apt/apt.conf.d/20auto-upgrades || true
+  fi
+  cat > /etc/apt/apt.conf.d/99-boxhaven-no-unattended-upgrades <<'EOF'
+APT::Periodic::Enable "0";
+APT::Periodic::Update-Package-Lists "0";
+APT::Periodic::Download-Upgradeable-Packages "0";
+APT::Periodic::AutocleanInterval "0";
+APT::Periodic::Unattended-Upgrade "0";
+EOF
+}
+
 apt_install() {
   step "installing base packages"
   apt-get update
@@ -714,6 +733,7 @@ export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.npm-global}"
 EOF
 }
 
+disable_unattended_apt
 apt_install
 install_node
 install_gh
