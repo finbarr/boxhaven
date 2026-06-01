@@ -193,12 +193,17 @@ builder_name="${builder_name:0:63}"
 snapshot_prefix="${BOXHAVEN_REMOTE_IMAGE_PREFIX:-boxhaven-remote}"
 snapshot_done=0
 builder_id=""
+created_builder_ssh_key_id=""
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
   if [ -n "$builder_id" ] && [ "$keep_builder" -eq 0 ]; then
     log "deleting builder Droplet ${builder_id}"
     do_api DELETE "/v2/droplets/${builder_id}" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$created_builder_ssh_key_id" ] && [ "$keep_builder" -eq 0 ]; then
+    log "deleting temporary builder SSH key ${created_builder_ssh_key_id}"
+    do_api DELETE "/v2/account/keys/${created_builder_ssh_key_id}" >/dev/null 2>&1 || true
   fi
   rm -rf "$tmp_dir"
 }
@@ -290,6 +295,7 @@ resolve_ssh_keys_json() {
     key_name="boxhaven-image-builder-$(hash_public_key "$public_key")"
     created="$(do_api POST "/v2/account/keys" "$(jq -cn --arg name "$key_name" --arg public_key "$public_key" '{name: $name, public_key: $public_key}')")"
     key_id="$(printf '%s' "$created" | jq -r '.ssh_key.id')"
+    created_builder_ssh_key_id="$key_id"
   fi
   jq -cn --argjson key_id "$key_id" '[$key_id]'
 }

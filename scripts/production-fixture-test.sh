@@ -42,6 +42,15 @@ assert_not_contains() {
   fi
 }
 
+assert_contains_literal() {
+  local file="$1"
+  local pattern="$2"
+  grep -Fq "$pattern" "$file" || {
+    printf 'expected %s to contain literal %s\n' "$file" "$pattern" >&2
+    exit 1
+  }
+}
+
 firewalls_fixture="${tmpdir}/firewalls.json"
 alerts_fixture="${tmpdir}/alert_policies.json"
 uptime_fixture="${tmpdir}/uptime_checks.json"
@@ -77,6 +86,8 @@ api_url="file://${pagination_dir}" \
 test "$(jq -r '.snapshots | length' "${tmpdir}/pagination.out")" = "2"
 assert_contains "${tmpdir}/pagination.out" "snap-page-1"
 assert_contains "${tmpdir}/pagination.out" "snap-page-2"
+assert_contains_literal deploy/digitalocean/build-remote-image.sh "created_builder_ssh_key_id="
+assert_contains_literal deploy/digitalocean/build-remote-image.sh "do_api DELETE \"/v2/account/keys/\${created_builder_ssh_key_id}\""
 
 cat > "$firewalls_fixture" <<'JSON'
 {

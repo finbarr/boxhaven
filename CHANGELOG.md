@@ -20,6 +20,8 @@
   `make smoke-remote`, `make audit-digitalocean`, uptime/alert/firewall
   remediators, strict environment and Compose validation, paginated
   DigitalOcean inventory reads, and dry-run-first snapshot pruning.
+- Tightened golden-image builder cleanup so temporary DigitalOcean SSH keys it
+  creates are removed with the builder Droplet.
 - Added release packaging and installation automation with cross-platform CLI
   archives, checksums, a tag-driven GitHub release workflow, and
   `scripts/install-bh.sh`.

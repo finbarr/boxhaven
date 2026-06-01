@@ -95,7 +95,9 @@ deploy/digitalocean/build-remote-image.sh \
 The builder Droplet still needs an SSH key for the temporary image build. Use
 `DIGITALOCEAN_SSH_KEYS` only when the matching private key is available to the
 host running the script. Otherwise set `BOXHAVEN_IMAGE_BUILDER_SSH_PUBLIC_KEY`
-and pass the matching private key with `--ssh-key`. Quote
+and pass the matching private key with `--ssh-key`. If the builder script
+registers a missing key itself, it deletes that temporary account key during
+cleanup unless `--keep-builder` is set. Quote
 `BOXHAVEN_IMAGE_BUILDER_SSH_PUBLIC_KEY` in `.env.production` because OpenSSH
 public keys contain spaces.
 
