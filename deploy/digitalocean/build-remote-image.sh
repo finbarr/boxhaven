@@ -3,6 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
+. "${repo_root}/scripts/lib/digitalocean-pagination.sh"
 
 usage() {
   cat <<'EOF'
@@ -284,7 +285,7 @@ resolve_ssh_keys_json() {
 
   local public_key key_id key_name created
   public_key="$(first_public_key)" || die "set DIGITALOCEAN_SSH_KEYS or provide an SSH public key via BOXHAVEN_IMAGE_BUILDER_SSH_PUBLIC_KEY, ssh-agent, or ~/.ssh/*.pub"
-  key_id="$(do_api GET "/v2/account/keys?per_page=200" | jq -r --arg public_key "$public_key" '.ssh_keys[] | select(.public_key == $public_key) | .id' | sed -n '1p')"
+  key_id="$(digitalocean_api_get_all ssh_keys "/v2/account/keys?per_page=200" | jq -r --arg public_key "$public_key" '.ssh_keys[] | select(.public_key == $public_key) | .id' | sed -n '1p')"
   if [ -z "$key_id" ]; then
     key_name="boxhaven-image-builder-$(hash_public_key "$public_key")"
     created="$(do_api POST "/v2/account/keys" "$(jq -cn --arg name "$key_name" --arg public_key "$public_key" '{name: $name, public_key: $public_key}')")"
@@ -471,7 +472,7 @@ for _ in $(seq 1 360); do
 done
 [ "$snapshot_done" -eq 1 ] || die "timed out waiting for snapshot action ${snapshot_action_id}"
 
-snapshot_id="$(do_api GET "/v2/snapshots?resource_type=droplet&per_page=200" | jq -r --arg name "$snapshot_name" '.snapshots[] | select(.name == $name) | .id' | sed -n '1p')"
+snapshot_id="$(digitalocean_api_get_all snapshots "/v2/snapshots?resource_type=droplet&per_page=200" | jq -r --arg name "$snapshot_name" '.snapshots[] | select(.name == $name) | .id' | sed -n '1p')"
 [ -n "$snapshot_id" ] && [ "$snapshot_id" != "null" ] || die "snapshot completed, but snapshot id was not found by name"
 
 if [ "$keep_builder" -eq 0 ]; then

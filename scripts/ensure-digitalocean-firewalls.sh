@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${script_dir}/lib/digitalocean-pagination.sh"
+
 api_url="${BOXHAVEN_DIGITALOCEAN_API_URL:-https://api.digitalocean.com}"
 api_url="${api_url%/}"
 token="${DIGITALOCEAN_ACCESS_TOKEN:-${DIGITALOCEAN_TOKEN:-${DO_API_TOKEN:-}}}"
@@ -84,7 +87,7 @@ names_json="$(printf '%s' "$firewall_names" | csv_json_array)"
 if [ -n "$fixture_path" ]; then
   firewalls_json="$(cat "$fixture_path")"
 else
-  firewalls_json="$(api GET "/v2/firewalls?per_page=200")"
+  firewalls_json="$(digitalocean_api_get_all firewalls "/v2/firewalls?per_page=200")"
 fi
 
 selected="$(printf '%s' "$firewalls_json" | jq -c --arg tag "$boxhaven_tag" --argjson names "$names_json" '

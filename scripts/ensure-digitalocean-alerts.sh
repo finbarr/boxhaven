@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${script_dir}/lib/digitalocean-pagination.sh"
+
 api_url="${BOXHAVEN_DIGITALOCEAN_API_URL:-https://api.digitalocean.com}"
 api_url="${api_url%/}"
 token="${DIGITALOCEAN_ACCESS_TOKEN:-${DIGITALOCEAN_TOKEN:-${DO_API_TOKEN:-}}}"
@@ -81,7 +84,7 @@ emails_json="$(printf '%s' "$emails" | csv_json_array)"
 if [ -n "$fixture_path" ]; then
   alerts_json="$(cat "$fixture_path")"
 else
-  alerts_json="$(api GET "/v2/monitoring/alerts?per_page=200")"
+  alerts_json="$(digitalocean_api_get_all policies "/v2/monitoring/alerts?per_page=200")"
 fi
 
 definitions_json="$(jq -cn --arg tag "$tag" --arg window "$window" '[

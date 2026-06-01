@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${script_dir}/lib/digitalocean-pagination.sh"
+
 api_url="${BOXHAVEN_DIGITALOCEAN_API_URL:-https://api.digitalocean.com}"
 api_url="${api_url%/}"
 token="${DIGITALOCEAN_ACCESS_TOKEN:-${DIGITALOCEAN_TOKEN:-${DO_API_TOKEN:-}}}"
@@ -78,7 +81,7 @@ fi
 if [ -n "$fixture_path" ]; then
   checks_json="$(cat "$fixture_path")"
 else
-  checks_json="$(api GET "/v2/uptime/checks?per_page=200")"
+  checks_json="$(digitalocean_api_get_all checks "/v2/uptime/checks?per_page=200")"
 fi
 regions_json="$(printf '%s' "$regions" | csv_json_array)"
 

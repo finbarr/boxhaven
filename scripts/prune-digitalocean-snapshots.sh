@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${script_dir}/lib/digitalocean-pagination.sh"
+
 api_url="${BOXHAVEN_DIGITALOCEAN_API_URL:-https://api.digitalocean.com}"
 api_url="${api_url%/}"
 token="${DIGITALOCEAN_ACCESS_TOKEN:-${DIGITALOCEAN_TOKEN:-${DO_API_TOKEN:-}}}"
@@ -54,7 +57,7 @@ api_get_snapshots() {
     printf 'set DIGITALOCEAN_ACCESS_TOKEN or BOXHAVEN_DO_SNAPSHOT_PRUNE_FIXTURES\n' >&2
     exit 2
   }
-  curl -fsS -H "Authorization: Bearer ${token}" "${api_url}/v2/snapshots?resource_type=droplet&per_page=200"
+  digitalocean_api_get_all snapshots "/v2/snapshots?resource_type=droplet&per_page=200"
 }
 
 api_delete_snapshot() {

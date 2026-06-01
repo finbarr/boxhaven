@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${script_dir}/lib/digitalocean-pagination.sh"
+
 api_url="${BOXHAVEN_DIGITALOCEAN_API_URL:-https://api.digitalocean.com}"
 api_url="${api_url%/}"
 token="${DIGITALOCEAN_ACCESS_TOKEN:-${DIGITALOCEAN_TOKEN:-${DO_API_TOKEN:-}}}"
@@ -64,9 +67,10 @@ fail() {
 }
 
 api_get() {
-  local key="$1"
-  local path="$2"
-  local fixture_path="${fixtures_dir}/${key}.json"
+  local fixture_key="$1"
+  local response_key="$2"
+  local path="$3"
+  local fixture_path="${fixtures_dir}/${fixture_key}.json"
   if [ -n "$fixtures_dir" ]; then
     [ -f "$fixture_path" ] || {
       printf 'missing fixture: %s\n' "$fixture_path" >&2
@@ -79,7 +83,7 @@ api_get() {
     printf 'set DIGITALOCEAN_ACCESS_TOKEN or BOXHAVEN_DO_AUDIT_FIXTURES\n' >&2
     exit 2
   }
-  curl -fsS -H "Authorization: Bearer ${token}" "${api_url}${path}"
+  digitalocean_api_get_all "$response_key" "$path"
 }
 
 json_array_len() {
@@ -100,11 +104,11 @@ require_command curl
 require_command jq
 require_command date
 
-droplets_json="$(api_get droplets "/v2/droplets?tag_name=${boxhaven_tag}&per_page=200")"
-firewalls_json="$(api_get firewalls "/v2/firewalls?per_page=200")"
-alerts_json="$(api_get alert_policies "/v2/monitoring/alerts?per_page=200")"
-uptime_json="$(api_get uptime_checks "/v2/uptime/checks?per_page=200")"
-snapshots_json="$(api_get snapshots "/v2/snapshots?resource_type=droplet&per_page=200")"
+droplets_json="$(api_get droplets droplets "/v2/droplets?tag_name=${boxhaven_tag}&per_page=200")"
+firewalls_json="$(api_get firewalls firewalls "/v2/firewalls?per_page=200")"
+alerts_json="$(api_get alert_policies policies "/v2/monitoring/alerts?per_page=200")"
+uptime_json="$(api_get uptime_checks checks "/v2/uptime/checks?per_page=200")"
+snapshots_json="$(api_get snapshots snapshots "/v2/snapshots?resource_type=droplet&per_page=200")"
 
 log "checking droplets tagged ${boxhaven_tag}"
 boxhaven_droplets="$(printf '%s' "$droplets_json" | json_array_len '.droplets // []')"

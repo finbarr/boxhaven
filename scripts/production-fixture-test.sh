@@ -10,6 +10,7 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$repo_root"
+. "${repo_root}/scripts/lib/digitalocean-pagination.sh"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -46,6 +47,7 @@ alerts_fixture="${tmpdir}/alert_policies.json"
 uptime_fixture="${tmpdir}/uptime_checks.json"
 audit_fixtures="${tmpdir}/audit"
 prune_fixtures="${tmpdir}/prune"
+pagination_dir="${tmpdir}/pagination"
 backup_root="${tmpdir}/backups"
 data_root="${tmpdir}/data"
 good_env="${tmpdir}/good.env"
@@ -54,7 +56,27 @@ malicious_env="${tmpdir}/malicious.env"
 malicious_marker="${tmpdir}/malicious-marker"
 release_dir="${tmpdir}/release"
 bad_release_dir="${tmpdir}/bad-release"
-mkdir -p "$audit_fixtures" "$prune_fixtures"
+mkdir -p "$audit_fixtures" "$prune_fixtures" "$pagination_dir"
+
+cat > "${pagination_dir}/snapshots-page-1.json" <<EOF_JSON
+{
+  "snapshots": [{"id":"snap-page-1","name":"boxhaven-remote-page-1"}],
+  "links": {"pages": {"next": "file://${pagination_dir}/snapshots-page-2.json"}}
+}
+EOF_JSON
+cat > "${pagination_dir}/snapshots-page-2.json" <<'JSON'
+{
+  "snapshots": [{"id":"snap-page-2","name":"boxhaven-remote-page-2"}],
+  "links": {"pages": {}}
+}
+JSON
+
+token=test \
+api_url="file://${pagination_dir}" \
+  digitalocean_api_get_all snapshots "/snapshots-page-1.json" > "${tmpdir}/pagination.out"
+test "$(jq -r '.snapshots | length' "${tmpdir}/pagination.out")" = "2"
+assert_contains "${tmpdir}/pagination.out" "snap-page-1"
+assert_contains "${tmpdir}/pagination.out" "snap-page-2"
 
 cat > "$firewalls_fixture" <<'JSON'
 {
