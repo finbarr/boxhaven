@@ -158,13 +158,16 @@ if [ "$alert_count" -eq 0 ]; then
 else
   log "found ${alert_count} alert policies"
 fi
-missing_alerts="$(printf '%s' "$alerts_json" | jq -r --argjson required "$required_alerts_json" '
-  [(.policies // .alert_policies // .alerts // [])[]?.description] as $descriptions
+missing_alerts="$(printf '%s' "$alerts_json" | jq -r --arg tag "$boxhaven_tag" --argjson required "$required_alerts_json" '
+  [(.policies // .alert_policies // .alerts // [])[]?
+    | select((.tags // []) | index($tag))
+    | .description
+  ] as $descriptions
   | $required[]
   | select(($descriptions | index(.)) | not)
 ')"
 if [ -n "$missing_alerts" ]; then
-  fail "missing monitoring alert policies: $(printf '%s' "$missing_alerts" | paste -sd, -)"
+  fail "missing ${boxhaven_tag} monitoring alert policies: $(printf '%s' "$missing_alerts" | paste -sd, -)"
 fi
 
 log "checking uptime checks"

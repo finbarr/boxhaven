@@ -117,7 +117,10 @@ definitions_json="$(jq -cn --arg tag "$tag" --arg window "$window" '[
 created=0
 printf '%s' "$definitions_json" | jq -c '.[]' | while IFS= read -r definition; do
   description="$(printf '%s' "$definition" | jq -r '.description')"
-  if printf '%s' "$alerts_json" | jq -e --arg description "$description" '(.policies // .alert_policies // .alerts // [])[]? | select(.description == $description)' >/dev/null; then
+  if printf '%s' "$alerts_json" | jq -e --arg description "$description" --arg tag "$tag" '
+    (.policies // .alert_policies // .alerts // [])[]?
+    | select(.description == $description and ((.tags // []) | index($tag)))
+  ' >/dev/null; then
     printf 'alert policy already exists: %s\n' "$description"
     continue
   fi

@@ -178,7 +178,11 @@ assert_contains "${tmpdir}/firewalls.out" "would update firewall boxhaven-user-b
 assert_contains "${tmpdir}/firewalls.out" "203.0.113.10/32"
 
 cat > "$alerts_fixture" <<'JSON'
-{"policies":[]}
+{
+  "policies": [
+    {"uuid":"wrong-tag","description":"BoxHaven CPU above 80%","tags":["other"]}
+  ]
+}
 JSON
 
 BOXHAVEN_ALERT_EMAILS=ops@example.com \
@@ -187,6 +191,7 @@ BOXHAVEN_DO_ALERT_DRY_RUN=1 \
   scripts/ensure-digitalocean-alerts.sh > "${tmpdir}/alerts.out"
 assert_contains "${tmpdir}/alerts.out" "BoxHaven CPU above 80%"
 assert_contains "${tmpdir}/alerts.out" "ops@example.com"
+assert_contains "${tmpdir}/alerts.out" '"tags":\["boxhaven"\]'
 
 cat > "$uptime_fixture" <<'JSON'
 {
@@ -233,9 +238,10 @@ JSON
 cat > "${audit_fixtures}/alert_policies.json" <<'JSON'
 {
   "policies": [
-    {"uuid":"policy-1","description":"BoxHaven CPU above 80%"},
-    {"uuid":"policy-2","description":"BoxHaven memory above 90%"},
-    {"uuid":"policy-3","description":"BoxHaven disk above 85%"}
+    {"uuid":"ignored","description":"BoxHaven CPU above 80%","tags":["other"]},
+    {"uuid":"policy-1","description":"BoxHaven CPU above 80%","tags":["boxhaven"]},
+    {"uuid":"policy-2","description":"BoxHaven memory above 90%","tags":["boxhaven"]},
+    {"uuid":"policy-3","description":"BoxHaven disk above 85%","tags":["boxhaven"]}
   ]
 }
 JSON
