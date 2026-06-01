@@ -94,7 +94,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "%sCONFIG:%s\n", colorBold, colorReset)
 	fmt.Fprintln(os.Stderr, "  Global:  ~/.config/boxhaven/config.toml")
 	fmt.Fprintln(os.Stderr, "  Project: .boxhaven.toml")
-	fmt.Fprintln(os.Stderr, "  Env:     BOXHAVEN_BACKEND_URL, BOXHAVEN_TOKEN")
+	fmt.Fprintln(os.Stderr, "  Env:     BOXHAVEN_BACKEND_URL, BOXHAVEN_TOKEN, GH_TOKEN, GITHUB_TOKEN")
 }
 
 func printVersion() {

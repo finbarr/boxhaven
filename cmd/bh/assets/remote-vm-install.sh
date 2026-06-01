@@ -277,10 +277,15 @@ git config --global --add safe.directory "$workdir" >/dev/null 2>&1 || true
 docker network create boxhaven-net >/dev/null 2>&1 || true
 
 if command -v jq >/dev/null 2>&1; then
+  gh_token_forwarded=false
+  if [ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]; then
+    gh_token_forwarded=true
+  fi
   jq -n \
     --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg workdir "$workdir" \
     --arg home "$home_dir" \
+    --argjson gh_token_forwarded "$gh_token_forwarded" \
     '{
       schema_version: 1,
       inside_boxhaven: true,
@@ -298,8 +303,8 @@ if command -v jq >/dev/null 2>&1; then
         command: [],
         working_dir: $workdir,
         context_file: "/run/boxhaven/context.json",
-        auto_passthrough_env_keys: [],
-        gh_token_forwarded: false
+        auto_passthrough_env_keys: (if $gh_token_forwarded then ["GH_TOKEN", "GITHUB_TOKEN"] else [] end),
+        gh_token_forwarded: $gh_token_forwarded
       },
       paths: {
         project: $workdir,
@@ -329,7 +334,7 @@ if command -v jq >/dev/null 2>&1; then
         opencode_config: false,
         pi_config: false,
         git_config: false,
-        gh_token: false,
+        gh_token: $gh_token_forwarded,
         rtk: false,
         copy_agent_instructions: false,
         docker: true,
@@ -383,6 +388,7 @@ const defaultProjectPath = "/opt/boxhaven/project";
 const remoteSessionName = "boxhaven";
 const remoteSessionScript = "/usr/local/bin/boxhaven-remote-session";
 const boxhavenContextFile = "/run/boxhaven/context.json";
+const sessionEnvFile = "/run/boxhaven/session.env";
 
 if (!backendURL || !token) {
   console.error("boxhaven agent token/backend URL is not configured");
@@ -566,6 +572,7 @@ function remoteCommandPrefix(payload) {
     `export BOXHAVEN_PROJECT_PATH=${shellQuote(workPath)}`,
     `export BOXHAVEN_CONTEXT_FILE=${shellQuote(boxhavenContextFile)}`,
   ];
+  parts.push(`if [ -r ${shellQuote(sessionEnvFile)} ]; then . ${shellQuote(sessionEnvFile)}; fi`);
   if (String(payload.preview_url || "").trim()) {
     parts.push(`export BOXHAVEN_PREVIEW_URL=${shellQuote(String(payload.preview_url).trim())}`);
   }
