@@ -93,8 +93,9 @@ npm run deploy:production
 
 By default the command SSHes to `root@app.boxhaven.dev`, fast-forwards
 `/opt/boxhaven/app` on `master`, runs the Compose deploy on the Droplet, and
-checks both public health endpoints. On the Droplet itself, use
-`npm run deploy:production:local`.
+checks both public health endpoints. It forwards your SSH agent so the Droplet
+can fetch the private GitHub repo without storing a GitHub token. On the Droplet
+itself, use `npm run deploy:production:local`.
 
 Then sign up or sign in from another shell. The CLI prints a browser URL, tries
 to open it, and waits for the web app to grant access:

@@ -52,8 +52,9 @@ npm run deploy:production
 The command SSHes to `root@app.boxhaven.dev`, fast-forwards
 `/opt/boxhaven/app` on `master`, runs the Docker Compose deploy on the Droplet,
 and checks `https://api.boxhaven.dev/healthz` plus
-`https://app.boxhaven.dev/healthz`. For self-hosted installs, override the SSH
-target or checkout path:
+`https://app.boxhaven.dev/healthz`. It forwards your SSH agent so the Droplet can
+fetch the private GitHub repo without storing a GitHub token. For self-hosted
+installs, override the SSH target or checkout path:
 
 ```bash
 BOXHAVEN_DEPLOY_TARGET=root@<control-plane-ip> \

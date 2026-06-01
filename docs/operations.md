@@ -139,9 +139,10 @@ npm run deploy:production
 
 The command SSHes to `root@app.boxhaven.dev`, fast-forwards
 `/opt/boxhaven/app` on `master`, runs the Compose deploy on the Droplet, and
-checks the app and API health endpoints. Override the SSH target with
-`BOXHAVEN_DEPLOY_TARGET=root@<control-plane-ip>` or run
-`npm run deploy:production:local` from the Droplet checkout.
+checks the app and API health endpoints. It forwards your SSH agent so the
+Droplet can fetch the private GitHub repo without storing a GitHub token.
+Override the SSH target with `BOXHAVEN_DEPLOY_TARGET=root@<control-plane-ip>` or
+run `npm run deploy:production:local` from the Droplet checkout.
 
 ## Production Health Checks
 
