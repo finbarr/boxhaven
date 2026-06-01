@@ -138,9 +138,7 @@ and recreating the backend container.
 make production-check
 docker compose --env-file deploy/digitalocean/.env.production \
   -f deploy/digitalocean/docker-compose.yml ps
-curl -fsS https://api.boxhaven.dev/healthz
-curl -fsS -H "Authorization: Bearer $BOXHAVEN_METRICS_BEARER_TOKEN" https://api.boxhaven.dev/metrics
-curl -fsS https://app.boxhaven.dev/healthz
+make smoke-production-http
 sudo systemctl status boxhaven-backend-backup.timer --no-pager
 sudo systemctl start boxhaven-backend-backup.service
 ls -lh /opt/boxhaven/backups

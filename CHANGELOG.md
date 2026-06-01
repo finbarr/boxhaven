@@ -17,9 +17,9 @@
 - Added production backup/restore verification for backend state, auth SQLite
   data, and SSH certificate authority keys.
 - Added reusable local and hosted production checks: `make production-check`,
-  `make smoke-remote`, `make audit-digitalocean`, uptime/alert/firewall
-  remediators, strict environment and Compose validation, paginated
-  DigitalOcean inventory reads, and dry-run-first snapshot pruning.
+  `make smoke-production-http`, `make smoke-remote`, `make audit-digitalocean`,
+  uptime/alert/firewall remediators, strict environment and Compose validation,
+  paginated DigitalOcean inventory reads, and dry-run-first snapshot pruning.
 - Required production deployments to set `BOXHAVEN_REMOTE_IMAGE` to an active
   BoxHaven remote snapshot before Compose can start the backend.
 - Tightened golden-image builder cleanup so temporary DigitalOcean SSH keys it

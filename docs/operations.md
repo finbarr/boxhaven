@@ -153,11 +153,13 @@ For the hosted DigitalOcean deployment:
 ```bash
 docker compose --env-file deploy/digitalocean/.env.production \
   -f deploy/digitalocean/docker-compose.yml ps
-curl -fsS https://api.boxhaven.dev/healthz
-curl -fsS -H "Authorization: Bearer $BOXHAVEN_METRICS_BEARER_TOKEN" https://api.boxhaven.dev/metrics
-curl -fsS https://app.boxhaven.dev/healthz
+make smoke-production-http
 sudo systemctl status boxhaven-backend-backup.timer --no-pager
 ```
+
+`make smoke-production-http` checks API health, app health, unauthenticated
+metrics rejection, and authenticated Prometheus metrics using
+`BOXHAVEN_METRICS_BEARER_TOKEN`.
 
 Backups are installed through `deploy/digitalocean/install-backups.sh` and write
 archives under `/opt/boxhaven/backups`. Verify restore viability after backup

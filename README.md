@@ -99,8 +99,8 @@ protect `/metrics` with `BOXHAVEN_METRICS_BEARER_TOKEN`, pass
 `make validate-production-env` and `make validate-production-compose`, set
 `BOXHAVEN_REMOTE_IMAGE` to the active golden snapshot, create provider uptime
 checks and alerts, restrict SSH ingress with `make ensure-firewalls`, prune old
-non-active remote snapshots after smoke, and run `make audit-digitalocean`
-against hosted deployments. See
+non-active remote snapshots after smoke, and run `make smoke-production-http`
+and `make audit-digitalocean` against hosted deployments. See
 [backend/README.md](backend/README.md), [docs/operations.md](docs/operations.md), and
 [deploy/digitalocean/README.md](deploy/digitalocean/README.md).
 

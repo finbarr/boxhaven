@@ -3,8 +3,12 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/boxhaven-production-fixtures.XXXXXX")"
+http_smoke_pid=""
 
 cleanup() {
+  if [ -n "$http_smoke_pid" ]; then
+    kill "$http_smoke_pid" >/dev/null 2>&1 || true
+  fi
   rm -rf "$tmpdir"
 }
 trap cleanup EXIT
@@ -21,6 +25,7 @@ require_command() {
 
 require_command jq
 require_command bash
+require_command python3
 require_command ssh-keygen
 require_command tar
 
@@ -88,6 +93,56 @@ assert_contains "${tmpdir}/pagination.out" "snap-page-1"
 assert_contains "${tmpdir}/pagination.out" "snap-page-2"
 assert_contains_literal deploy/digitalocean/build-remote-image.sh "created_builder_ssh_key_id="
 assert_contains_literal deploy/digitalocean/build-remote-image.sh "do_api DELETE \"/v2/account/keys/\${created_builder_ssh_key_id}\""
+
+cat > "${tmpdir}/http-smoke-server.py" <<'PY'
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import sys
+
+port_file = sys.argv[1]
+token = sys.argv[2]
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/healthz":
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok\n")
+            return
+        if self.path == "/metrics":
+            if self.headers.get("Authorization") != f"Bearer {token}":
+                self.send_response(401)
+                self.end_headers()
+                self.wfile.write(b"unauthorized\n")
+                return
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"boxhaven_machines 1\n")
+            return
+        self.send_response(404)
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        return
+
+server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+with open(port_file, "w", encoding="utf-8") as handle:
+    handle.write(str(server.server_port))
+server.serve_forever()
+PY
+http_smoke_port_file="${tmpdir}/http-smoke-port"
+python3 "${tmpdir}/http-smoke-server.py" "$http_smoke_port_file" "metrics-token-0123456789abcdef" &
+http_smoke_pid="$!"
+for _ in $(seq 1 50); do
+  [ -s "$http_smoke_port_file" ] && break
+  sleep 0.1
+done
+test -s "$http_smoke_port_file"
+http_smoke_url="http://127.0.0.1:$(cat "$http_smoke_port_file")"
+BOXHAVEN_PRODUCTION_API_URL="$http_smoke_url" \
+BOXHAVEN_PRODUCTION_APP_URL="$http_smoke_url" \
+BOXHAVEN_METRICS_BEARER_TOKEN=metrics-token-0123456789abcdef \
+  scripts/smoke-production-http.sh > "${tmpdir}/http-smoke.out"
+assert_contains "${tmpdir}/http-smoke.out" "production HTTP smoke passed"
 
 cat > "$firewalls_fixture" <<'JSON'
 {
