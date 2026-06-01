@@ -161,6 +161,16 @@ sudo systemctl status boxhaven-backend-backup.timer --no-pager
 metrics rejection, and authenticated Prometheus metrics using
 `BOXHAVEN_METRICS_BEARER_TOKEN`.
 
+Check production DNS for the app, API, and preview wildcard hosts:
+
+```bash
+BOXHAVEN_DNS_EXPECTED_IP=<control-plane-ip> make smoke-production-dns
+```
+
+`make smoke-production-dns` resolves `app.boxhaven.dev`, `api.boxhaven.dev`,
+and `sample.at.boxhaven.dev` by default, and fails if any host is missing or
+does not resolve to `BOXHAVEN_DNS_EXPECTED_IP` when that value is set.
+
 Backups are installed through `deploy/digitalocean/install-backups.sh` and write
 archives under `/opt/boxhaven/backups`. The backup job verifies each new archive
 before pruning older backups, and removes a newly created archive if restore

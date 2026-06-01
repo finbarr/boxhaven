@@ -59,6 +59,7 @@ assert_contains_literal() {
 firewalls_fixture="${tmpdir}/firewalls.json"
 alerts_fixture="${tmpdir}/alert_policies.json"
 uptime_fixture="${tmpdir}/uptime_checks.json"
+dns_fixture="${tmpdir}/dns-hosts.txt"
 audit_fixtures="${tmpdir}/audit"
 account_audit_fixtures="${tmpdir}/account-audit"
 prune_fixtures="${tmpdir}/prune"
@@ -145,6 +146,22 @@ BOXHAVEN_PRODUCTION_APP_URL="$http_smoke_url" \
 BOXHAVEN_METRICS_BEARER_TOKEN=metrics-token-0123456789abcdef \
   scripts/smoke-production-http.sh > "${tmpdir}/http-smoke.out"
 assert_contains "${tmpdir}/http-smoke.out" "production HTTP smoke passed"
+cat > "$dns_fixture" <<'EOF_DNS'
+app.boxhaven.dev 203.0.113.42
+api.boxhaven.dev 203.0.113.42
+sample.at.boxhaven.dev 203.0.113.42
+EOF_DNS
+BOXHAVEN_DNS_FIXTURE="$dns_fixture" \
+BOXHAVEN_DNS_EXPECTED_IP=203.0.113.42 \
+  scripts/smoke-production-dns.sh > "${tmpdir}/dns-smoke.out"
+assert_contains "${tmpdir}/dns-smoke.out" "production DNS smoke passed"
+BOXHAVEN_DNS_FIXTURE="$dns_fixture" \
+BOXHAVEN_DNS_EXPECTED_IP=203.0.113.43 \
+  scripts/smoke-production-dns.sh > "${tmpdir}/dns-smoke-bad.out" 2> "${tmpdir}/dns-smoke-bad.err" && {
+    printf 'DNS smoke unexpectedly accepted wrong production IP\n' >&2
+    exit 1
+  }
+assert_contains "${tmpdir}/dns-smoke-bad.err" "expected app"
 
 cat > "$firewalls_fixture" <<'JSON'
 {

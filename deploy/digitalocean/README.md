@@ -141,6 +141,7 @@ and recreating the backend container.
 make production-check
 docker compose --env-file deploy/digitalocean/.env.production \
   -f deploy/digitalocean/docker-compose.yml ps
+BOXHAVEN_DNS_EXPECTED_IP=<control-plane-ip> make smoke-production-dns
 make smoke-production-http
 sudo systemctl status boxhaven-backend-backup.timer --no-pager
 sudo systemctl start boxhaven-backend-backup.service
@@ -167,6 +168,8 @@ BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1 ma
 
 `make audit-digitalocean` also requires `BOXHAVEN_REMOTE_IMAGE` so the read-only
 audit proves the deployed backend is pointing at an existing active snapshot.
+`make smoke-production-dns` checks the app, API, and preview wildcard DNS
+records before HTTP and lifecycle smokes.
 `make audit-digitalocean-account` is a separate read-only account cleanup audit
 for known legacy Droplets and old manual snapshots.
 `make audit-backup-storage` is a read-only audit for backup directory size and

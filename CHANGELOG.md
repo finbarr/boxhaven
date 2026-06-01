@@ -18,8 +18,9 @@
   data, and SSH certificate authority keys. The backup job now verifies each new
   archive before pruning older backups.
 - Added reusable local and hosted production checks: `make production-check`,
-  `make smoke-production-http`, `make smoke-remote`, `make audit-digitalocean`,
-  `make audit-digitalocean-account`, uptime/alert/firewall remediators, strict
+  `make smoke-production-http`, `make smoke-production-dns`,
+  `make smoke-remote`, `make audit-digitalocean`, `make
+  audit-digitalocean-account`, uptime/alert/firewall remediators, strict
   environment and Compose validation, paginated DigitalOcean inventory reads,
   DigitalOcean project drift, firewall coverage, and spend checks, backup
   storage audits, and dry-run-first snapshot pruning.
