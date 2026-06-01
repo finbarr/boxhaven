@@ -12,6 +12,7 @@ require_preview="${BOXHAVEN_SMOKE_REQUIRE_PREVIEW:-1}"
 git_remote="${BOXHAVEN_SMOKE_GIT_REMOTE:-}"
 restart_backend_cmd="${BOXHAVEN_SMOKE_RESTART_BACKEND_CMD:-}"
 agent_reconnect_sleep="${BOXHAVEN_SMOKE_AGENT_RECONNECT_SLEEP:-20}"
+production_mode="${BOXHAVEN_SMOKE_PRODUCTION:-0}"
 
 raw_prefix="${BOXHAVEN_SMOKE_PREFIX:-smoke-$(date -u +%H%M%S)}"
 prefix="$(printf "%s" "$raw_prefix" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed -E 's/^-+//; s/-+$//; s/-+/-/g' | cut -c1-48)"
@@ -48,6 +49,32 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || {
     printf 'missing required command: %s\n' "$1" >&2
     exit 1
+  }
+}
+
+preflight() {
+  if [ "$production_mode" != "1" ]; then
+    return
+  fi
+  [ -n "${BOXHAVEN_TOKEN:-}" ] || {
+    printf 'BOXHAVEN_SMOKE_PRODUCTION=1 requires BOXHAVEN_TOKEN\n' >&2
+    exit 2
+  }
+  [ -n "$git_remote" ] || {
+    printf 'BOXHAVEN_SMOKE_PRODUCTION=1 requires BOXHAVEN_SMOKE_GIT_REMOTE\n' >&2
+    exit 2
+  }
+  [ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ] || {
+    printf 'BOXHAVEN_SMOKE_PRODUCTION=1 requires GH_TOKEN or GITHUB_TOKEN\n' >&2
+    exit 2
+  }
+  [ -n "$restart_backend_cmd" ] || {
+    printf 'BOXHAVEN_SMOKE_PRODUCTION=1 requires BOXHAVEN_SMOKE_RESTART_BACKEND_CMD\n' >&2
+    exit 2
+  }
+  [ "$require_preview" = "1" ] || {
+    printf 'BOXHAVEN_SMOKE_PRODUCTION=1 requires BOXHAVEN_SMOKE_REQUIRE_PREVIEW=1\n' >&2
+    exit 2
   }
 }
 
@@ -205,6 +232,7 @@ printf "agent reconnected on %s\n" "$BOXHAVEN_PROJECT_PATH"
 require_command git
 require_command curl
 require_command awk
+preflight
 ensure_bh
 init_project
 

@@ -60,9 +60,11 @@ make smoke-remote
 Typical hosted production run:
 
 ```bash
+BOXHAVEN_SMOKE_PRODUCTION=1 \
 BOXHAVEN_TOKEN=... \
 GH_TOKEN=... \
 BOXHAVEN_SMOKE_GIT_REMOTE=https://github.com/<org>/<smoke-repo>.git \
+BOXHAVEN_SMOKE_RESTART_BACKEND_CMD="ssh root@<control-plane-ip> 'cd /opt/boxhaven/app && docker compose --env-file deploy/digitalocean/.env.production -f deploy/digitalocean/docker-compose.yml restart backend'" \
 make smoke-remote
 ```
 
@@ -98,6 +100,10 @@ For agent reconnect coverage, pass a backend restart command:
 BOXHAVEN_SMOKE_RESTART_BACKEND_CMD="ssh root@<control-plane-ip> 'cd /opt/boxhaven/app && docker compose --env-file deploy/digitalocean/.env.production -f deploy/digitalocean/docker-compose.yml restart backend'" \
 make smoke-remote
 ```
+
+`BOXHAVEN_SMOKE_PRODUCTION=1` fails fast unless `BOXHAVEN_TOKEN`,
+`GH_TOKEN` or `GITHUB_TOKEN`, `BOXHAVEN_SMOKE_GIT_REMOTE`, preview checks, and
+`BOXHAVEN_SMOKE_RESTART_BACKEND_CMD` are all configured.
 
 ## Golden Image Rotation
 

@@ -257,4 +257,10 @@ if scripts/validate-production-compose.sh --env-file "$bad_env" > "${tmpdir}/com
 fi
 assert_contains "${tmpdir}/compose-bad.err" "production env validation failed"
 
+if BOXHAVEN_SMOKE_PRODUCTION=1 scripts/smoke-remote-lifecycle.sh > "${tmpdir}/smoke-preflight.out" 2> "${tmpdir}/smoke-preflight.err"; then
+  printf 'production smoke unexpectedly passed without credentials\n' >&2
+  exit 1
+fi
+assert_contains "${tmpdir}/smoke-preflight.err" "requires BOXHAVEN_TOKEN"
+
 printf 'production fixture tests passed\n'
