@@ -18,12 +18,19 @@ def main() -> int:
 
     lines = changelog.read_text(encoding="utf-8").splitlines()
     heading = re.compile(rf"^##\s+v?{re.escape(version)}(?:\s+-.*)?\s*$")
+    unreleased_heading = re.compile(r"^##\s+Unreleased\s*$", re.IGNORECASE)
 
     start = None
     for idx, line in enumerate(lines):
         if heading.match(line.strip()):
             start = idx
             break
+
+    if start is None:
+        for idx, line in enumerate(lines):
+            if unreleased_heading.match(line.strip()):
+                start = idx
+                break
 
     if start is None:
         print(f"See CHANGELOG.md for {tag}.")

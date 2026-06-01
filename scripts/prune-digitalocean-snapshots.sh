@@ -74,6 +74,10 @@ if [ "$apply" = "1" ] && [ -z "$token" ]; then
   printf 'set DIGITALOCEAN_ACCESS_TOKEN before applying deletes\n' >&2
   exit 2
 fi
+if [ "$apply" = "1" ] && [ -z "$active_snapshot" ]; then
+  printf 'set BOXHAVEN_REMOTE_IMAGE to the active snapshot id before applying deletes\n' >&2
+  exit 2
+fi
 
 now_epoch="$(date -u +%s)"
 keep_seconds=$((keep_days * 24 * 60 * 60))

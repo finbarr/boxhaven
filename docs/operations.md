@@ -183,8 +183,8 @@ make prune-snapshots
 ```
 
 The snapshot prune command is dry-run by default. Set
-`BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1` only after reviewing the listed snapshot
-IDs.
+`BOXHAVEN_REMOTE_IMAGE` and `BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1` only after
+reviewing the listed snapshot IDs.
 
 Create missing app/API uptime checks with:
 
