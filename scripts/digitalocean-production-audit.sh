@@ -36,6 +36,7 @@ Useful env:
   BOXHAVEN_DO_AUDIT_TAG=boxhaven
   BOXHAVEN_DO_AUDIT_UPTIME_TARGETS=https://api.boxhaven.dev/healthz,https://app.boxhaven.dev/healthz
   BOXHAVEN_DO_AUDIT_ALERT_DESCRIPTIONS=BoxHaven CPU above 80%,BoxHaven memory above 90%,BoxHaven disk above 85%
+  BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id-or-name>
   BOXHAVEN_DO_AUDIT_SNAPSHOT_PREFIX=boxhaven-remote-
   BOXHAVEN_DO_AUDIT_SNAPSHOT_KEEP_DAYS=30
   BOXHAVEN_DO_AUDIT_FAIL_BROAD_SSH=1
@@ -213,10 +214,13 @@ if [ -z "$boxhaven_snapshots" ]; then
 else
   log "found $(printf '%s\n' "$boxhaven_snapshots" | sed '/^$/d' | wc -l | tr -d ' ') BoxHaven remote snapshots"
 fi
-if [ -n "$active_snapshot" ]; then
-  if ! printf '%s' "$snapshots_json" | jq -e --arg id "$active_snapshot" '.snapshots[]? | select((.id | tostring) == $id)' >/dev/null; then
-    fail "active BOXHAVEN_REMOTE_IMAGE snapshot ${active_snapshot} was not found"
-  fi
+if [ -z "$active_snapshot" ]; then
+  fail "set BOXHAVEN_REMOTE_IMAGE to the active BoxHaven remote snapshot id or name"
+elif ! printf '%s' "$snapshots_json" | jq -e --arg image "$active_snapshot" '
+  .snapshots[]?
+  | select((.id | tostring) == $image or (.name // "") == $image)
+' >/dev/null; then
+  fail "active BOXHAVEN_REMOTE_IMAGE snapshot ${active_snapshot} was not found by id or name"
 fi
 
 old_snapshots="$(printf '%s' "$snapshots_json" | jq -r --arg prefix "$snapshot_prefix" --arg active "$active_snapshot" --argjson now "$now_epoch" --argjson keep "$snapshot_keep_seconds" '

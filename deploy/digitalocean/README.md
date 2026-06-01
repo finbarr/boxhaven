@@ -155,6 +155,9 @@ BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_IDS=160948
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1 make prune-snapshots
 ```
 
+`make audit-digitalocean` also requires `BOXHAVEN_REMOTE_IMAGE` so the read-only
+audit proves the deployed backend is pointing at an existing active snapshot.
+
 After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or
 agent reconnect behavior, run the reusable lifecycle smoke from a machine with a
 valid BoxHaven session token:
