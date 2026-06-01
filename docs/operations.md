@@ -30,7 +30,8 @@ make production-check
 
 This covers local builds, tests, lint, release packaging, checksum validation,
 CLI smoke commands, script syntax, and fixture tests for the cloud audit and
-remediation scripts. It does not replace the remote lifecycle smoke or hosted
+remediation scripts. It also validates the production Caddyfile when `caddy` or
+Docker is available. It does not replace the remote lifecycle smoke or hosted
 DigitalOcean audit.
 
 `make lint` always runs `go vet`. It also runs `golangci-lint` when that binary

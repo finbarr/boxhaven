@@ -118,6 +118,12 @@ jobs:
       - name: Check shell syntax
         run: bash -n scripts/*.sh deploy/digitalocean/*.sh
 
+      - name: Run production fixture checks
+        run: scripts/production-fixture-test.sh
+
+      - name: Validate Caddy config
+        run: scripts/validate-caddy-config.sh
+
       - name: Build release archives
         run: VERSION=ci make dist
 
