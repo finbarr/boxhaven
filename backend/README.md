@@ -202,3 +202,8 @@ set; otherwise the CLI falls back to the local GitHub CLI via `gh auth token`.
 The machine agent sources that root-only tmpfs file before setup commands,
 direct commands, and tmux session launches. The backend does not persist those
 GitHub tokens.
+
+The CLI also forwards selected local Codex and Claude login/config files over
+direct SSH when a remote session is created, connected, run, or synced up. Those
+files are written into the remote home so users do not need to repeat agent login
+flows on every new VM. The backend does not receive or store these files.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/url"
@@ -21,6 +22,7 @@ const (
 	remoteProjectRoot        = "/opt/boxhaven/project"
 	remoteKnownHostsFileName = "remote_known_hosts"
 	remoteSessionEnvFile     = "/run/boxhaven/session.env"
+	maxRemoteAuthFileBytes   = 1024 * 1024
 )
 
 type remoteMachine struct {
@@ -636,7 +638,7 @@ func syncRemoteProject(machine *remoteMachine, cfg Config, projectDir string) er
 	if machine.ProjectPath == "" {
 		machine.ProjectPath = remoteProjectPath()
 	}
-	if err := syncRemoteGitAuthEnvironment(*machine); err != nil {
+	if err := syncRemoteAuthState(*machine); err != nil {
 		return err
 	}
 
@@ -743,7 +745,7 @@ func runRemoteMachineCommand(cfg Config, machine remoteMachine, commandArgs []st
 	if machine.ProjectPath == "" {
 		machine.ProjectPath = remoteProjectPath()
 	}
-	if err := syncRemoteGitAuthEnvironment(machine); err != nil {
+	if err := syncRemoteAuthState(machine); err != nil {
 		return err
 	}
 	if len(commandArgs) == 0 {
@@ -948,6 +950,18 @@ func shouldForwardSSHAgent(repoURL string) bool {
 	return strings.HasPrefix(repoURL, "git@") || strings.HasPrefix(repoURL, "ssh://")
 }
 
+func syncRemoteAuthState(machine remoteMachine) error {
+	if err := syncRemoteGitAuthEnvironment(machine); err != nil {
+		return err
+	}
+	files := localRemoteAuthFiles()
+	if len(files) == 0 {
+		return nil
+	}
+	info("Forwarding local agent auth files to remote %s", machine.Name)
+	return writeRemoteAuthFiles(machine, files)
+}
+
 func syncRemoteGitAuthEnvironment(machine remoteMachine) error {
 	env := remoteGitAuthEnv(machine.RepoURL)
 	if len(env) == 0 {
@@ -1018,6 +1032,74 @@ func isGitHubRepoURL(repoURL string) bool {
 func normalizedGitHost(host string) string {
 	host = strings.Trim(strings.ToLower(strings.TrimSpace(host)), "[]")
 	return strings.TrimPrefix(host, "www.")
+}
+
+type remoteAuthFile struct {
+	Source string
+	Target string
+	Data   string
+}
+
+func localRemoteAuthFiles() []remoteAuthFile {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return nil
+	}
+	candidates := []struct {
+		source string
+		target string
+	}{
+		{filepath.Join(home, ".codex", "auth.json"), "/root/.codex/auth.json"},
+		{filepath.Join(home, ".codex", "config.toml"), "/root/.codex/config.toml"},
+		{filepath.Join(home, ".claude.json"), "/root/.claude.json"},
+		{filepath.Join(home, ".claude", "settings.json"), "/root/.claude/settings.json"},
+	}
+	var files []remoteAuthFile
+	for _, candidate := range candidates {
+		data, err := readRemoteAuthFile(candidate.source)
+		if err != nil {
+			continue
+		}
+		files = append(files, remoteAuthFile{
+			Source: candidate.source,
+			Target: candidate.target,
+			Data:   data,
+		})
+	}
+	return files
+}
+
+func readRemoteAuthFile(path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() || info.Size() <= 0 || info.Size() > maxRemoteAuthFileBytes {
+		return "", fmt.Errorf("skip auth file")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func writeRemoteAuthFiles(machine remoteMachine, files []remoteAuthFile) error {
+	var script strings.Builder
+	script.WriteString("set -euo pipefail\numask 077\n")
+	for _, file := range files {
+		target := strings.TrimSpace(file.Target)
+		if !strings.HasPrefix(target, "/root/") || strings.Contains(target, "\x00") {
+			continue
+		}
+		script.WriteString("install -d -m 0700 ")
+		script.WriteString(shellQuote(filepath.Dir(target)))
+		script.WriteString("\nprintf %s ")
+		script.WriteString(shellQuote(base64.StdEncoding.EncodeToString([]byte(file.Data))))
+		script.WriteString(" | base64 -d > ")
+		script.WriteString(shellQuote(target))
+		script.WriteString("\nchmod 0600 ")
+		script.WriteString(shellQuote(target))
+		script.WriteString("\n")
+	}
+	return runSSHCommand(machine, script.String(), false, false)
 }
 
 func writeRemoteSessionEnv(machine remoteMachine, env map[string]string) error {
