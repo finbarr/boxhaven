@@ -47,6 +47,8 @@ audit_fixtures="${tmpdir}/audit"
 prune_fixtures="${tmpdir}/prune"
 backup_root="${tmpdir}/backups"
 data_root="${tmpdir}/data"
+good_env="${tmpdir}/good.env"
+bad_env="${tmpdir}/bad.env"
 mkdir -p "$audit_fixtures" "$prune_fixtures"
 
 cat > "$firewalls_fixture" <<'JSON'
@@ -207,5 +209,45 @@ test -f "$archive"
 test "$(stat -c '%a' "$archive" 2>/dev/null || stat -f '%Lp' "$archive")" = "600"
 scripts/verify-backend-backup-restore.sh "$archive" > "${tmpdir}/backup.out"
 assert_contains "${tmpdir}/backup.out" "backup restore verification passed"
+
+cat > "$good_env" <<'EOF_ENV'
+ACME_EMAIL=ops@boxhaven.dev
+BOXHAVEN_APP_HOST=app.boxhaven.dev
+BOXHAVEN_API_HOST=api.boxhaven.dev
+BOXHAVEN_PREVIEW_BASE_DOMAIN=at.boxhaven.dev
+BOXHAVEN_APP_URL=https://app.boxhaven.dev
+BOXHAVEN_API_URL=https://api.boxhaven.dev
+BETTER_AUTH_URL=https://api.boxhaven.dev/v1/auth
+BETTER_AUTH_TRUSTED_ORIGINS=https://app.boxhaven.dev,https://api.boxhaven.dev
+BOXHAVEN_BACKEND_CORS_ORIGINS=https://app.boxhaven.dev,https://api.boxhaven.dev
+BETTER_AUTH_SECRET=0123456789abcdef0123456789abcdef
+BOXHAVEN_SIGNUP_MODE=invite
+BOXHAVEN_SIGNUP_INVITE_CODES=invite-code-1
+DIGITALOCEAN_ACCESS_TOKEN=dop_v1_live_token_shape
+EOF_ENV
+scripts/validate-production-env.sh --env-file "$good_env" > "${tmpdir}/env-good.out"
+assert_contains "${tmpdir}/env-good.out" "production env validation passed"
+
+cat > "$bad_env" <<'EOF_ENV'
+ACME_EMAIL=admin@example.com
+BOXHAVEN_APP_HOST=app.boxhaven.dev
+BOXHAVEN_API_HOST=api.boxhaven.dev
+BOXHAVEN_PREVIEW_BASE_DOMAIN=at.boxhaven.dev
+BOXHAVEN_APP_URL=https://app.boxhaven.dev
+BOXHAVEN_API_URL=https://api.boxhaven.dev
+BETTER_AUTH_URL=https://api.boxhaven.dev/v1/auth
+BETTER_AUTH_TRUSTED_ORIGINS=https://app.boxhaven.dev,https://api.boxhaven.dev
+BOXHAVEN_BACKEND_CORS_ORIGINS=https://app.boxhaven.dev,https://api.boxhaven.dev
+BETTER_AUTH_SECRET=replace-with-a-random-secret-at-least-32-bytes
+BOXHAVEN_SIGNUP_MODE=open
+BOXHAVEN_SIGNUP_INVITE_CODES=replace-with-one-or-more-comma-separated-invite-codes
+DIGITALOCEAN_ACCESS_TOKEN=dop_v1_example
+EOF_ENV
+if scripts/validate-production-env.sh --env-file "$bad_env" > "${tmpdir}/env-bad.out" 2> "${tmpdir}/env-bad.err"; then
+  printf 'bad production env unexpectedly passed validation\n' >&2
+  exit 1
+fi
+assert_contains "${tmpdir}/env-bad.err" "BOXHAVEN_SIGNUP_MODE must be invite or disabled"
+assert_contains "${tmpdir}/env-bad.err" "DIGITALOCEAN_ACCESS_TOKEN still looks like a placeholder"
 
 printf 'production fixture tests passed\n'

@@ -118,6 +118,13 @@ jobs:
       - name: Check shell syntax
         run: bash -n scripts/*.sh deploy/digitalocean/*.sh
 
+      - name: Check production env example fails validation
+        run: |
+          if scripts/validate-production-env.sh --env-file deploy/digitalocean/env.production.example; then
+            echo "example production env unexpectedly passed validation" >&2
+            exit 1
+          fi
+
       - name: Run production fixture checks
         run: scripts/production-fixture-test.sh
 

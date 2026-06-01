@@ -26,6 +26,8 @@ secret values:
 
 ```bash
 cp deploy/digitalocean/env.production.example deploy/digitalocean/.env.production
+$EDITOR deploy/digitalocean/.env.production
+make validate-production-env
 ```
 
 `BETTER_AUTH_SECRET` must be a long random value. The backend also needs

@@ -34,6 +34,15 @@ remediation scripts. It also validates the production Caddyfile when `caddy` or
 Docker is available. It does not replace the remote lifecycle smoke or hosted
 DigitalOcean audit.
 
+Before deploying or restarting production, validate the server env file:
+
+```bash
+make validate-production-env
+```
+
+This fails on missing required values, checked-in placeholders, non-HTTPS public
+URLs, and production signup modes other than `invite` or `disabled`.
+
 `make lint` always runs `go vet`. It also runs `golangci-lint` when that binary
 is installed locally.
 
