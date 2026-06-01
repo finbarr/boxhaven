@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { Activity, Check, Cloud, Copy, LogOut, MonitorDot, Play, Plus, RefreshCw, Server, ShieldCheck, Terminal, Trash2, XCircle } from "lucide-react";
+import { Activity, Check, Cloud, Copy, Home, LogOut, MonitorDot, Play, Plus, RefreshCw, Server, ShieldCheck, Trash2, XCircle } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import logoURL from "./assets/boxhaven-logo.png";
 import "./styles.css";
 
 type AuthUser = {
@@ -71,10 +72,10 @@ type ConnectResponse = MachineResponse & {
 
 type MachineTier = "small" | "medium" | "large";
 
-const machineTiers: Array<{ value: MachineTier; label: string }> = [
-  { value: "small", label: "Small" },
-  { value: "medium", label: "Medium" },
-  { value: "large", label: "Large" },
+const machineTiers: Array<{ value: MachineTier; label: string; detail: string }> = [
+  { value: "small", label: "Small", detail: "2 vCPU / 4 GB" },
+  { value: "medium", label: "Medium", detail: "4 vCPU / 8 GB" },
+  { value: "large", label: "Large", detail: "8 vCPU / 16 GB" },
 ];
 
 const configuredAPIURL = (import.meta.env.VITE_BOXHAVEN_API_URL || "").replace(/\/+$/, "");
@@ -146,19 +147,19 @@ function ConsoleRoute() {
 
   return (
     <main className="console">
-      <div className="backdrop-grid" />
+      <div className="backdrop" />
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark"><Terminal size={18} /></div>
+          <div className="brand-mark"><img src={logoURL} alt="" /></div>
           <div>
-            <strong>boxhaven</strong>
-            <span>remote console</span>
+            <strong>BoxHaven</strong>
+            <span>remote dev boxes</span>
           </div>
         </div>
         <div className="topbar-actions">
-          <span className="pulse"><Activity size={14} /> api</span>
+          <span className="pulse"><Activity size={14} /> API</span>
           {authenticated ? (
-            <button className="icon-button" type="button" onClick={handleLogout} title="Log out">
+            <button className="icon-button" type="button" onClick={handleLogout} title="Log out" aria-label="Log out">
               <LogOut size={17} />
             </button>
           ) : null}
@@ -205,17 +206,25 @@ function AccessPanel({ onToken, deviceUserCode }: { onToken: (token: string) => 
 
   return (
     <section className="access-layout">
-      <div className="terminal-panel">
-        <div className="terminal-title">
-          <span />
-          <span />
-          <span />
+      <div className="welcome-panel">
+        <div className="logo-stage"><img src={logoURL} alt="BoxHaven logo" /></div>
+        <div className="terminal-card">
+          <div className="terminal-title">
+            <span />
+            <span />
+            <span />
+          </div>
+          <pre>{`$ bh list
+NAME      SIZE              STATUS
+porch     s-2vcpu-4gb-amd  ready
+attic     s-4vcpu-8gb-amd  running`}</pre>
         </div>
-        <pre>{`$ bh list
-NAME   SIZE              URL
-boom   s-2vcpu-4gb-amd  https://amber-bridge-a1b2c3.hosted.boxhaven.dev`}</pre>
       </div>
       <form className="auth-panel" onSubmit={submit}>
+        <div className="panel-heading">
+          <span>{mode === "signup" ? "new account" : "welcome back"}</span>
+          <h1>{mode === "signup" ? "Bring a box home" : "Open the haven"}</h1>
+        </div>
         <div className="segmented">
           <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>Sign up</button>
           <button type="button" className={mode === "signin" ? "active" : ""} onClick={() => setMode("signin")}>Sign in</button>
@@ -267,23 +276,26 @@ function DeviceGrantPanel({ token, user, userCode, onDone }: {
 
   return (
     <section className="access-layout grant-layout">
-      <div className="terminal-panel">
-        <div className="terminal-title">
-          <span />
-          <span />
-          <span />
-        </div>
-        <pre>{`$ bh login
+      <div className="welcome-panel compact">
+        <div className="logo-stage"><img src={logoURL} alt="BoxHaven logo" /></div>
+        <div className="terminal-card">
+          <div className="terminal-title">
+            <span />
+            <span />
+            <span />
+          </div>
+          <pre>{`$ bh login
 browser grant requested
 account: ${user?.email || "signed-in user"}
 code: ${formatUserCode(userCode)}`}</pre>
+        </div>
       </div>
       <div className="auth-panel grant-panel">
         <div className="grant-icon"><ShieldCheck size={28} /></div>
-        <div>
-          <span className="eyebrow">CLI access request</span>
-          <h1>Allow boxhaven CLI?</h1>
-          <p>Grant this terminal session access to your machines as <strong>{user?.email || "this account"}</strong>.</p>
+        <div className="panel-heading">
+          <span>CLI access request</span>
+          <h1>Allow BoxHaven CLI?</h1>
+          <p>Grant this terminal session access as <strong>{user?.email || "this account"}</strong>.</p>
         </div>
         <div className="code-chip">{formatUserCode(userCode)}</div>
         {verify.error ? <p className="error">{(verify.error as Error).message}</p> : null}
@@ -357,21 +369,28 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
 
   return (
     <section className="dashboard">
-      <div className="rail">
+      <aside className="rail">
         <div className="account">
-          <span>signed in</span>
-          <strong>{user?.email || "account"}</strong>
+          <img src={logoURL} alt="" />
+          <div>
+            <span>signed in</span>
+            <strong>{user?.email || "account"}</strong>
+          </div>
         </div>
         <form className="create-form" onSubmit={submit}>
+          <div className="panel-heading small">
+            <span>new box</span>
+            <h2>Make room</h2>
+          </div>
           <label>
             Machine name
-            <input value={name} onChange={(event) => setName(slugName(event.target.value))} placeholder="main-dev" required />
+            <input value={name} onChange={(event) => setName(slugName(event.target.value))} placeholder="porch" required />
           </label>
           <label>
             Size
             <select value={tier} onChange={(event) => setTier(event.target.value as MachineTier)}>
               {machineTiers.map((option) => (
-                <option value={option.value} key={option.value}>{option.label}</option>
+                <option value={option.value} key={option.value}>{option.label} - {option.detail}</option>
               ))}
             </select>
           </label>
@@ -389,15 +408,15 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
             </div>
           ))}
         </div>
-      </div>
+      </aside>
 
       <div className="machine-table">
         <div className="section-heading">
           <div>
-            <span>machines</span>
+            <span>rooms occupied</span>
             <strong>{machineList.length}</strong>
           </div>
-          <button className="icon-button" type="button" onClick={() => void machines.refetch()} title="Refresh">
+          <button className="icon-button" type="button" onClick={() => void machines.refetch()} title="Refresh" aria-label="Refresh machines">
             <RefreshCw size={16} />
           </button>
         </div>
@@ -412,7 +431,12 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
               <code>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code>
             </button>
           ))}
-          {!machineList.length ? <div className="empty">No machines yet.</div> : null}
+          {!machineList.length ? (
+            <div className="empty">
+              <Home size={24} />
+              <span>No boxes checked in.</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -438,7 +462,7 @@ function MachineDetail({ machine, connect, loading, onDestroy, destroying }: {
     return (
       <div className="detail empty-detail">
         <Server size={32} />
-        <span>{loading ? "Loading machines" : "Create or select a machine"}</span>
+        <span>{loading ? "Loading boxes" : "Create or select a box"}</span>
       </div>
     );
   }
@@ -446,7 +470,7 @@ function MachineDetail({ machine, connect, loading, onDestroy, destroying }: {
     <div className="detail">
       <div className="detail-header">
         <div>
-          <span>{connect?.status || "machine"}</span>
+          <span>{connect?.status || "box"}</span>
           <h1>{machine.name}</h1>
         </div>
         <button className="danger-button" type="button" onClick={() => onDestroy(machine.name)} disabled={destroying} title="Destroy machine">
@@ -460,9 +484,9 @@ function MachineDetail({ machine, connect, loading, onDestroy, destroying }: {
         <Metric label="Size" value={machine.size || "-"} />
         <Metric label="Image" value={machine.image || "-"} />
       </div>
-      <CommandBlock label="Preview URL" value={machine.preview_url || ""} />
-      <CommandBlock label="CLI connect" value={connect?.connect.cli || `bh connect ${machine.name}`} />
-      <CommandBlock label="CLI run" value={connect?.connect.cli_run || `bh run ${machine.name}`} />
+      <CommandBlock label="Preview" value={machine.preview_url || ""} />
+      <CommandBlock label="Connect" value={connect?.connect.cli || `bh connect ${machine.name}`} />
+      <CommandBlock label="Run" value={connect?.connect.cli_run || `bh run ${machine.name}`} />
       <dl className="meta">
         <div><dt>Provider ID</dt><dd>{machine.provider_id || "-"}</dd></div>
         <div><dt>Project path</dt><dd>{machine.project_path || "/opt/boxhaven/project"}</dd></div>
@@ -490,7 +514,7 @@ function CommandBlock({ label, value }: { label: string; value: string }) {
     <div className="command-block">
       <span>{label}</span>
       <code>{value || "-"}</code>
-      <button className="icon-button" type="button" title="Copy" onClick={() => {
+      <button className="icon-button" type="button" title="Copy" aria-label={`Copy ${label}`} onClick={() => {
         void navigator.clipboard.writeText(value);
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1200);
