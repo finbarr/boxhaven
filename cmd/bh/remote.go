@@ -75,6 +75,8 @@ func runRemote(args []string, projectDir string) error {
 		return runRemoteList(args[1:], projectDir)
 	case "status":
 		return runRemoteStatus(args[1:], projectDir)
+	case "rename":
+		return runRemoteRename(args[1:], projectDir)
 	case "destroy":
 		return runRemoteDestroy(args[1:], projectDir)
 	default:
@@ -91,6 +93,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  bh sync down <name> --force")
 	fmt.Fprintln(os.Stderr, "  bh list")
 	fmt.Fprintln(os.Stderr, "  bh status <name>")
+	fmt.Fprintln(os.Stderr, "  bh rename <old-name> <new-name>")
 	fmt.Fprintln(os.Stderr, "  bh destroy <name>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "OPTIONS:")
@@ -431,6 +434,30 @@ func runRemoteDestroy(args []string, projectDir string) error {
 		return err
 	}
 	success("Destroyed remote %s", name)
+	return nil
+}
+
+func runRemoteRename(args []string, projectDir string) error {
+	if len(args) != 2 {
+		return fmt.Errorf("bh rename requires an old remote name and a new remote name")
+	}
+	fromName := strings.ToLower(strings.TrimSpace(args[0]))
+	toName := strings.ToLower(strings.TrimSpace(args[1]))
+	if err := validateRemoteName(fromName); err != nil {
+		return err
+	}
+	if err := validateRemoteName(toName); err != nil {
+		return err
+	}
+	cfg, err := loadConfig(projectDir)
+	if err != nil {
+		return err
+	}
+	machine, err := renameRemoteBackendMachine(cfg, fromName, toName)
+	if err != nil {
+		return err
+	}
+	success("Renamed remote %s to %s", fromName, machine.Name)
 	return nil
 }
 

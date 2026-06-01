@@ -158,6 +158,7 @@ Routes:
 - `GET /v1/machines`
 - `GET /v1/machines/:name`
 - `GET /v1/machines/:name/connect`
+- `PATCH /v1/machines/:name`
 - `POST /v1/machines/:name/ssh-cert`
 - `POST /v1/machines/:name/setup`
 - `POST /v1/machines/:name/sync-complete`
@@ -172,7 +173,9 @@ and CLI can see machines already present in the authenticated account. There are
 no multiple backend workspaces or named sessions per machine; the backend and VM
 agent own one project path and one tmux session on the VM. Bootstrap status is
 provider-owned. `POST /v1/machines` creates a new machine and returns `409` when
-the authenticated user already has that name.
+the authenticated user already has that name. `PATCH /v1/machines/:name` renames
+the authenticated user's BoxHaven machine record while keeping the underlying
+provider VM, preview hostname, SSH principal, and agent identity unchanged.
 
 Every machine created by the backend gets a server-generated 48-byte random
 machine-agent token. The backend stores only a hash of that token and passes the
