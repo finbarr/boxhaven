@@ -35,6 +35,7 @@ commands run over direct SSH.
 - A managed tmux session per box for long-running AI agent sessions.
 - Direct SSH using backend-signed short-lived user certificates.
 - GitHub HTTPS credential forwarding from local `GH_TOKEN` or `GITHUB_TOKEN`.
+- Git safe-directory configuration for the synced project path.
 - Optional preview hostnames for HTTP services running on the box.
 - An open-source Fastify/Better Auth backend with a DigitalOcean provider.
 

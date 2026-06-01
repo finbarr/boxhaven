@@ -254,6 +254,10 @@ EOF
   chmod +x /opt/boxhaven/bin/git-credential-github-token
   git config --system --add credential.https://github.com.helper "" || true
   git config --system --add credential.https://github.com.helper "!/opt/boxhaven/bin/git-credential-github-token" || true
+  git config --system --get-all safe.directory | grep -Fx /opt/boxhaven/project >/dev/null 2>&1 || \
+    git config --system --add safe.directory /opt/boxhaven/project || true
+  git config --system --get-all safe.directory | grep -Fx /workspace >/dev/null 2>&1 || \
+    git config --system --add safe.directory /workspace || true
 }
 
 install_remote_session() {
@@ -265,6 +269,7 @@ set -euo pipefail
 workdir="${1:-${BOXHAVEN_PROJECT_PATH:-$(pwd)}}"
 home_dir="${HOME:-/root}"
 
+export HOME="$home_dir"
 export BOXHAVEN=1
 export BOXHAVEN_REMOTE=1
 export BOXHAVEN_PROJECT_PATH="$workdir"
@@ -273,7 +278,8 @@ export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-${home_dir}/.npm-global}"
 
 mkdir -p "$workdir" "$home_dir/.npm-global" /run/boxhaven
 ln -sfn "$workdir" /workspace
-git config --global --add safe.directory "$workdir" >/dev/null 2>&1 || true
+git config --global --get-all safe.directory | grep -Fx "$workdir" >/dev/null 2>&1 || \
+  git config --global --add safe.directory "$workdir" >/dev/null 2>&1 || true
 docker network create boxhaven-net >/dev/null 2>&1 || true
 
 if command -v jq >/dev/null 2>&1; then
