@@ -93,3 +93,22 @@ bh create work
 
 Production deployment and golden-image tooling live in
 [deploy/digitalocean](deploy/digitalocean).
+
+## Production Smoke
+
+Run the reusable remote lifecycle smoke against the hosted backend after remote
+VM, SSH, sync, snapshot, or agent changes:
+
+```bash
+BOXHAVEN_TOKEN=... \
+GH_TOKEN=... \
+BOXHAVEN_SMOKE_GIT_REMOTE=https://github.com/<org>/<smoke-repo>.git \
+make smoke-remote
+```
+
+The smoke creates two boxes, syncs a temporary Git project, verifies runtime
+tools on both boxes, fetches their preview URLs, optionally pushes and deletes
+temporary GitHub smoke branches, and destroys both boxes unless
+`BOXHAVEN_SMOKE_KEEP=1` is set. Set `BOXHAVEN_SMOKE_RESTART_BACKEND_CMD` to a
+shell command that restarts the backend when the agent reconnect path needs to
+be exercised.
