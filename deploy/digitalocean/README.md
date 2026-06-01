@@ -128,6 +128,7 @@ and recreating the backend container.
 ## Verify
 
 ```bash
+make production-check
 docker compose --env-file deploy/digitalocean/.env.production \
   -f deploy/digitalocean/docker-compose.yml ps
 curl -fsS https://api.boxhaven.dev/healthz
