@@ -24,6 +24,9 @@ Environment:
                                        Default: deploy/digitalocean/.env.production.
   BOXHAVEN_PRODUCTION_API_HEALTH_URL   Default: https://api.boxhaven.dev/healthz.
   BOXHAVEN_PRODUCTION_APP_HEALTH_URL   Default: https://app.boxhaven.dev/healthz.
+
+Remote deploys use SSH agent forwarding so the Droplet can fetch private GitHub
+repositories without storing a long-lived GitHub token on the host.
 EOF
 }
 
@@ -85,7 +88,7 @@ if [ "$local_mode" -ne 1 ]; then
   fi
 
   echo "Deploying ${deploy_branch} to ${deploy_target}:${deploy_dir}"
-  ssh "$deploy_target" "bash -s" -- \
+  ssh -A "$deploy_target" "bash -s" -- \
     "$deploy_dir" \
     "$deploy_branch" \
     "$remote_verify_arg" \

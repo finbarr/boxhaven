@@ -135,8 +135,10 @@ npm run deploy:production
 
 The command SSHes to `root@app.boxhaven.dev`, fast-forwards
 `/opt/boxhaven/app` on `master`, runs the DigitalOcean Compose deploy, and
-checks the production app and API health endpoints. Override the target with
-`BOXHAVEN_DEPLOY_TARGET` or `-- --target user@host` for self-hosted installs.
+checks the production app and API health endpoints. It forwards your SSH agent
+so the Droplet can fetch the private GitHub repo without storing a GitHub token.
+Override the target with `BOXHAVEN_DEPLOY_TARGET` or `-- --target user@host` for
+self-hosted installs.
 
 ## Production Smoke
 
