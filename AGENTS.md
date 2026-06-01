@@ -25,6 +25,13 @@ run, what was not run, and why.
 When creating production or browser smoke tests, keep them as reusable scripts
 checked into the repo instead of one-off local commands.
 
+When verification inside a BoxHaven remote box exposes a reusable environment
+problem, fix that environment issue as a separate committed change instead of
+working around it locally. Examples include missing Go cache paths, stale
+platform-specific Node dependencies, missing runtime tools, or other box setup
+drift that would make future agents hit the same failure. Keep the environment
+fix independent from the feature or bugfix that uncovered it.
+
 ## Build Commands
 
 ```bash
