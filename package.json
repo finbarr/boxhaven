@@ -1,0 +1,9 @@
+{
+  "name": "boxhaven",
+  "private": true,
+  "scripts": {
+    "deploy:production": "deploy/digitalocean/deploy-production.sh",
+    "deploy:production:local": "deploy/digitalocean/deploy-production.sh --local",
+    "deploy:production:verify": "deploy/digitalocean/deploy-production.sh --verify-only"
+  }
+}

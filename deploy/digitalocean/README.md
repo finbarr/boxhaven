@@ -43,11 +43,36 @@ traffic somewhere else.
 
 ## Deploy
 
-From the repository root on the Droplet:
+From the repository root on your workstation:
 
 ```bash
-docker compose --env-file deploy/digitalocean/.env.production \
-  -f deploy/digitalocean/docker-compose.yml up -d --build
+npm run deploy:production
+```
+
+The command SSHes to `root@app.boxhaven.dev`, fast-forwards
+`/opt/boxhaven/app` on `master`, runs the Docker Compose deploy on the Droplet,
+and checks `https://api.boxhaven.dev/healthz` plus
+`https://app.boxhaven.dev/healthz`. For self-hosted installs, override the SSH
+target or checkout path:
+
+```bash
+BOXHAVEN_DEPLOY_TARGET=root@<control-plane-ip> \
+BOXHAVEN_DEPLOY_DIR=/opt/boxhaven/app \
+BOXHAVEN_PRODUCTION_API_HEALTH_URL=https://api.example.com/healthz \
+BOXHAVEN_PRODUCTION_APP_HEALTH_URL=https://app.example.com/healthz \
+npm run deploy:production
+```
+
+From the repository root on the Droplet, run the local variant:
+
+```bash
+npm run deploy:production:local
+```
+
+Run only the production container and health checks with:
+
+```bash
+npm run deploy:production:verify
 ```
 
 Install and start the backup timer:
@@ -88,8 +113,7 @@ public keys contain spaces.
 the env file. Restart the backend after that so future creates use the snapshot:
 
 ```bash
-docker compose --env-file deploy/digitalocean/.env.production \
-  -f deploy/digitalocean/docker-compose.yml up -d --build --force-recreate backend
+npm run deploy:production:local
 ```
 
 For a release-grade image, build from a pushed tag or commit:
@@ -116,10 +140,7 @@ and recreating the backend container.
 ## Verify
 
 ```bash
-docker compose --env-file deploy/digitalocean/.env.production \
-  -f deploy/digitalocean/docker-compose.yml ps
-curl -fsS https://api.boxhaven.dev/healthz
-curl -fsS https://app.boxhaven.dev/healthz
+npm run deploy:production:verify
 sudo systemctl status boxhaven-backend-backup.timer --no-pager
 sudo systemctl start boxhaven-backend-backup.service
 ls -lh /opt/boxhaven/backups

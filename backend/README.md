@@ -85,6 +85,17 @@ repo backup timer for application state recovery. The backend data backup uses
 SQLite's online backup command for `auth.sqlite` and includes `backend.json` plus
 Caddy data.
 
+Deploy the hosted production stack from the repository root:
+
+```bash
+npm run deploy:production
+```
+
+By default the command SSHes to `root@app.boxhaven.dev`, fast-forwards
+`/opt/boxhaven/app` on `master`, runs the Compose deploy on the Droplet, and
+checks both public health endpoints. On the Droplet itself, use
+`npm run deploy:production:local`.
+
 Then sign up or sign in from another shell. The CLI prints a browser URL, tries
 to open it, and waits for the web app to grant access:
 

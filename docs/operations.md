@@ -123,21 +123,32 @@ Restart the backend after `BOXHAVEN_REMOTE_IMAGE` changes so new creates use the
 new snapshot:
 
 ```bash
-docker compose --env-file deploy/digitalocean/.env.production \
-  -f deploy/digitalocean/docker-compose.yml up -d --build --force-recreate backend
+npm run deploy:production
 ```
 
 Keep the previous snapshot id until the remote lifecycle smoke passes.
+
+## Production Deploy
+
+For the hosted DigitalOcean deployment, use the checked-in npm entrypoint from
+the repository root:
+
+```bash
+npm run deploy:production
+```
+
+The command SSHes to `root@app.boxhaven.dev`, fast-forwards
+`/opt/boxhaven/app` on `master`, runs the Compose deploy on the Droplet, and
+checks the app and API health endpoints. Override the SSH target with
+`BOXHAVEN_DEPLOY_TARGET=root@<control-plane-ip>` or run
+`npm run deploy:production:local` from the Droplet checkout.
 
 ## Production Health Checks
 
 For the hosted DigitalOcean deployment:
 
 ```bash
-docker compose --env-file deploy/digitalocean/.env.production \
-  -f deploy/digitalocean/docker-compose.yml ps
-curl -fsS https://api.boxhaven.dev/healthz
-curl -fsS https://app.boxhaven.dev/healthz
+npm run deploy:production:verify
 sudo systemctl status boxhaven-backend-backup.timer --no-pager
 ```
 

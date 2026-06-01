@@ -126,7 +126,17 @@ bh create work
 ## DigitalOcean Deployment
 
 Production deployment and golden-image tooling live in
-[deploy/digitalocean](deploy/digitalocean).
+[deploy/digitalocean](deploy/digitalocean). Deploy the hosted production stack
+from the repository root with:
+
+```bash
+npm run deploy:production
+```
+
+The command SSHes to `root@app.boxhaven.dev`, fast-forwards
+`/opt/boxhaven/app` on `master`, runs the DigitalOcean Compose deploy, and
+checks the production app and API health endpoints. Override the target with
+`BOXHAVEN_DEPLOY_TARGET` or `-- --target user@host` for self-hosted installs.
 
 ## Production Smoke
 
