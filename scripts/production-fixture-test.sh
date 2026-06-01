@@ -265,6 +265,7 @@ BOXHAVEN_METRICS_BEARER_TOKEN=metrics-token-0123456789abcdef
 BOXHAVEN_SIGNUP_MODE=invite
 BOXHAVEN_SIGNUP_INVITE_CODES=invite-code-1
 DIGITALOCEAN_ACCESS_TOKEN=dop_v1_live_token_shape
+BOXHAVEN_REMOTE_IMAGE=230979614
 EOF_ENV
 scripts/validate-production-env.sh --env-file "$good_env" > "${tmpdir}/env-good.out"
 assert_contains "${tmpdir}/env-good.out" "production env validation passed"
@@ -286,6 +287,7 @@ BOXHAVEN_METRICS_BEARER_TOKEN=replace-with-a-random-metrics-token
 BOXHAVEN_SIGNUP_MODE=open
 BOXHAVEN_SIGNUP_INVITE_CODES=replace-with-one-or-more-comma-separated-invite-codes
 DIGITALOCEAN_ACCESS_TOKEN=dop_v1_example
+BOXHAVEN_REMOTE_IMAGE=replace-with-active-boxhaven-remote-snapshot-id
 EOF_ENV
 if scripts/validate-production-env.sh --env-file "$bad_env" > "${tmpdir}/env-bad.out" 2> "${tmpdir}/env-bad.err"; then
   printf 'bad production env unexpectedly passed validation\n' >&2
@@ -293,6 +295,7 @@ if scripts/validate-production-env.sh --env-file "$bad_env" > "${tmpdir}/env-bad
 fi
 assert_contains "${tmpdir}/env-bad.err" "BOXHAVEN_SIGNUP_MODE must be invite or disabled"
 assert_contains "${tmpdir}/env-bad.err" "DIGITALOCEAN_ACCESS_TOKEN still looks like a placeholder"
+assert_contains "${tmpdir}/env-bad.err" "BOXHAVEN_REMOTE_IMAGE still looks like a placeholder"
 if scripts/validate-production-compose.sh --env-file "$bad_env" > "${tmpdir}/compose-bad.out" 2> "${tmpdir}/compose-bad.err"; then
   printf 'bad production compose unexpectedly passed validation\n' >&2
   exit 1
@@ -314,6 +317,7 @@ BOXHAVEN_METRICS_BEARER_TOKEN=metrics-token-0123456789abcdef
 BOXHAVEN_SIGNUP_MODE=invite
 BOXHAVEN_SIGNUP_INVITE_CODES=invite-code-1
 DIGITALOCEAN_ACCESS_TOKEN=dop_v1_live_token_shape
+BOXHAVEN_REMOTE_IMAGE=230979614
 EOF_ENV
 if scripts/validate-production-env.sh --env-file "$malicious_env" > "${tmpdir}/env-malicious.out" 2> "${tmpdir}/env-malicious.err"; then
   printf 'malicious production env unexpectedly passed validation\n' >&2

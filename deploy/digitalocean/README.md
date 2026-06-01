@@ -77,6 +77,8 @@ New remote machines should come from a prebuilt BoxHaven snapshot instead of a
 plain Ubuntu image. The image builder creates a temporary Droplet, installs the
 remote VM runtime, cleans cloud-init and SSH host identity, powers it off,
 snapshots it, deletes the builder Droplet, and prints the snapshot id.
+Production env and Compose validation require `BOXHAVEN_REMOTE_IMAGE` to be set
+to the active snapshot id or `boxhaven-remote-*` image name before deploy.
 
 The snapshot contains the GitHub HTTPS credential helper and machine-agent
 runtime that sources `/run/boxhaven/session.env` for setup commands, direct

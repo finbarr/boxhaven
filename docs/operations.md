@@ -117,6 +117,10 @@ deploy/digitalocean/build-remote-image.sh \
   --set-active
 ```
 
+Production env validation requires `BOXHAVEN_REMOTE_IMAGE` to name the active
+BoxHaven remote snapshot before deployment, so new boxes never fall back to a
+plain Ubuntu image.
+
 Restart the backend after `BOXHAVEN_REMOTE_IMAGE` changes so new creates use the
 new snapshot:
 

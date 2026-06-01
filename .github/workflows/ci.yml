@@ -152,6 +152,7 @@ jobs:
           BOXHAVEN_SIGNUP_MODE=invite
           BOXHAVEN_SIGNUP_INVITE_CODES=invite-code-1
           DIGITALOCEAN_ACCESS_TOKEN=dop_v1_live_token_shape
+          BOXHAVEN_REMOTE_IMAGE=230979614
           EOF
           scripts/validate-production-compose.sh --env-file "$tmp_env"
 

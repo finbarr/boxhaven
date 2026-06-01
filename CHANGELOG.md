@@ -20,6 +20,8 @@
   `make smoke-remote`, `make audit-digitalocean`, uptime/alert/firewall
   remediators, strict environment and Compose validation, paginated
   DigitalOcean inventory reads, and dry-run-first snapshot pruning.
+- Required production deployments to set `BOXHAVEN_REMOTE_IMAGE` to an active
+  BoxHaven remote snapshot before Compose can start the backend.
 - Tightened golden-image builder cleanup so temporary DigitalOcean SSH keys it
   creates are removed with the builder Droplet.
 - Added release packaging and installation automation with cross-platform CLI

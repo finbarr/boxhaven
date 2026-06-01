@@ -148,6 +148,7 @@ required_vars=(
   BOXHAVEN_METRICS_BEARER_TOKEN
   BOXHAVEN_SIGNUP_MODE
   DIGITALOCEAN_ACCESS_TOKEN
+  BOXHAVEN_REMOTE_IMAGE
 )
 
 for key in "${required_vars[@]}"; do
@@ -160,6 +161,7 @@ placeholder_vars=(
   BOXHAVEN_METRICS_BEARER_TOKEN
   BOXHAVEN_SIGNUP_INVITE_CODES
   DIGITALOCEAN_ACCESS_TOKEN
+  BOXHAVEN_REMOTE_IMAGE
 )
 
 for key in "${placeholder_vars[@]}"; do
@@ -199,6 +201,10 @@ fi
 metrics_token="${BOXHAVEN_METRICS_BEARER_TOKEN:-}"
 if [ "${#metrics_token}" -lt 24 ]; then
   fail "BOXHAVEN_METRICS_BEARER_TOKEN must be at least 24 characters"
+fi
+
+if ! [[ "${BOXHAVEN_REMOTE_IMAGE:-}" =~ ^([0-9]+|boxhaven-remote-.+)$ ]]; then
+  fail "BOXHAVEN_REMOTE_IMAGE must be an active BoxHaven remote snapshot id or boxhaven-remote-* image name"
 fi
 
 if [ "${BOXHAVEN_APP_URL:-}" = "${BOXHAVEN_API_URL:-}" ]; then
