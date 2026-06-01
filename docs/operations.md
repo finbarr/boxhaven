@@ -98,6 +98,19 @@ docker compose --env-file deploy/digitalocean/.env.production \
 
 Keep the previous snapshot id until the remote lifecycle smoke passes.
 
+## Release Archives
+
+For a CLI release, build archives and checksums from a clean committed checkout:
+
+```bash
+make dist VERSION=v0.1.0
+ls -lh dist/
+sha256sum -c dist/checksums-v0.1.0.txt
+```
+
+Create the golden remote image from the same pushed tag or commit so the CLI,
+backend, and VM runtime can be traced to one source revision.
+
 ## Production Health Checks
 
 For the hosted DigitalOcean deployment:
@@ -153,3 +166,23 @@ Create missing app/API uptime checks with:
 ```bash
 DIGITALOCEAN_ACCESS_TOKEN=... make ensure-uptime
 ```
+
+Create baseline CPU, memory, and disk alert policies for BoxHaven-tagged
+Droplets:
+
+```bash
+DIGITALOCEAN_ACCESS_TOKEN=... \
+BOXHAVEN_ALERT_EMAILS=ops@example.com \
+make ensure-alerts
+```
+
+Restrict BoxHaven SSH firewall ingress after deciding the trusted operator IP
+ranges:
+
+```bash
+DIGITALOCEAN_ACCESS_TOKEN=... \
+BOXHAVEN_TRUSTED_SSH_CIDRS=203.0.113.10/32,2001:db8::/64 \
+make ensure-firewalls
+```
+
+Use `BOXHAVEN_DO_FIREWALL_DRY_RUN=1` first to review the exact firewall payload.

@@ -5,7 +5,7 @@ BINDIR ?= $(PREFIX)/bin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
-.PHONY: build test go-test backend-test backend-build lint smoke-remote audit-digitalocean ensure-uptime verify-backup install uninstall clean
+.PHONY: build test go-test backend-test backend-build lint smoke-remote audit-digitalocean ensure-uptime ensure-alerts ensure-firewalls verify-backup dist install uninstall clean
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) $(CMD_DIR)
@@ -36,9 +36,18 @@ audit-digitalocean:
 ensure-uptime:
 	scripts/ensure-digitalocean-uptime.sh
 
+ensure-alerts:
+	scripts/ensure-digitalocean-alerts.sh
+
+ensure-firewalls:
+	scripts/ensure-digitalocean-firewalls.sh
+
 verify-backup:
 	@test -n "$(BACKUP)" || (echo "usage: make verify-backup BACKUP=/path/to/boxhaven-backend-archive.tar.gz" >&2; exit 2)
 	scripts/verify-backend-backup-restore.sh "$(BACKUP)"
+
+dist:
+	VERSION="$(VERSION)" scripts/build-release.sh
 
 install: build
 	mkdir -p $(BINDIR)

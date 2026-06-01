@@ -138,6 +138,8 @@ sudo systemctl start boxhaven-backend-backup.service
 ls -lh /opt/boxhaven/backups
 scripts/verify-backend-backup-restore.sh /opt/boxhaven/backups/<archive>.tar.gz
 make ensure-uptime
+BOXHAVEN_ALERT_EMAILS=<ops-email> make ensure-alerts
+BOXHAVEN_TRUSTED_SSH_CIDRS=<trusted-cidrs> make ensure-firewalls
 make audit-digitalocean
 ```
 
