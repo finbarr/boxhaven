@@ -77,16 +77,18 @@ Environment overrides:
 
 ## GitHub Repository Access
 
-When the current project's `origin` points at GitHub and `GH_TOKEN` or
-`GITHUB_TOKEN` is set locally, `bh create`, `bh run`, `bh connect`, and
-`bh sync up` forward that token to the remote box in
+When the current project's `origin` points at GitHub, `bh create`, `bh run`,
+`bh connect`, and `bh sync up` forward GitHub auth to the remote box in
 `/run/boxhaven/session.env`. The file is root-only, lives in tmpfs, and is
 replaced or removed by the CLI on the next command. The remote image includes a
 Git credential helper that uses those variables, so agents and shells inside the
 box can push to HTTPS GitHub remotes.
 
-For the smoothest agent workflow, use an HTTPS GitHub origin and export a token
-with the repository scopes your team allows before starting the remote session.
+`GH_TOKEN` or `GITHUB_TOKEN` are used when set. Otherwise, if the GitHub CLI is
+installed and authenticated locally, `bh` uses `gh auth token` and forwards that
+token for the remote session. For the smoothest agent workflow, use an HTTPS
+GitHub origin and either export a token with the repository scopes your team
+allows or run `gh auth login` before starting the remote session.
 
 ## Backend
 

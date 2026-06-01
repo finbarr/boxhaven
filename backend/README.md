@@ -196,7 +196,9 @@ owner. The CLI uses the returned OpenSSH certificate with local `ssh` and
 backend. CLI-side host-key pinning lives in `~/.boxhaven/remote_known_hosts`.
 
 The remote image also includes a GitHub HTTPS credential helper. When the CLI
-detects a GitHub project and local `GH_TOKEN` or `GITHUB_TOKEN`, it writes those
-values over direct SSH to `/run/boxhaven/session.env` on the VM. The machine
-agent sources that root-only tmpfs file before setup commands, direct commands,
-and tmux session launches. The backend does not persist those GitHub tokens.
+detects a GitHub project, it writes GitHub auth over direct SSH to
+`/run/boxhaven/session.env` on the VM. `GH_TOKEN` or `GITHUB_TOKEN` are used when
+set; otherwise the CLI falls back to the local GitHub CLI via `gh auth token`.
+The machine agent sources that root-only tmpfs file before setup commands,
+direct commands, and tmux session launches. The backend does not persist those
+GitHub tokens.

@@ -100,18 +100,20 @@ bh sync down work --force
 ## Push To GitHub From The Box
 
 For agent workflows that commit and push from the remote box, use an HTTPS
-GitHub origin and export a token locally before creating or connecting:
+GitHub origin and make local GitHub auth available before creating or
+connecting:
 
 ```bash
-export GH_TOKEN=...
+gh auth login
 git remote set-url origin https://github.com/<org>/<repo>.git
 bh run work codex
 ```
 
 When the project origin points at GitHub, the CLI forwards `GH_TOKEN` or
-`GITHUB_TOKEN` to `/run/boxhaven/session.env` on the VM. The remote image
-includes a Git credential helper that uses those variables for HTTPS GitHub
-operations.
+`GITHUB_TOKEN` when set, otherwise it falls back to `gh auth token` from the
+local GitHub CLI. The token is written to `/run/boxhaven/session.env` on the VM.
+The remote image includes a Git credential helper that uses those variables for
+HTTPS GitHub operations.
 
 ## Inspect And Clean Up
 
