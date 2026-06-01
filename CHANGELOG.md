@@ -12,13 +12,14 @@
   build surfaces from this repository.
 - Hardened hosted backend guardrails with invite-gated signup, optional email
   domain checks, per-user and deployment-wide machine quotas, auth/create rate
-  limits, stale-create cleanup, idle disconnected machine cleanup, `/metrics`,
-  request logging controls, and safer state writes.
+  limits, stale-create cleanup, idle disconnected machine cleanup, bearer-token
+  protected `/metrics`, request logging controls, and safer state writes.
 - Added production backup/restore verification for backend state, auth SQLite
   data, and SSH certificate authority keys.
 - Added reusable local and hosted production checks: `make production-check`,
   `make smoke-remote`, `make audit-digitalocean`, uptime/alert/firewall
-  remediators, and dry-run-first DigitalOcean snapshot pruning.
+  remediators, strict environment and Compose validation, paginated
+  DigitalOcean inventory reads, and dry-run-first snapshot pruning.
 - Added release packaging and installation automation with cross-platform CLI
   archives, checksums, a tag-driven GitHub release workflow, and
   `scripts/install-bh.sh`.
