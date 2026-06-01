@@ -1,9 +1,9 @@
-# boxhaven Backend
+# BoxHaven Backend
 
 This is the open-source remote control plane. The CLI always talks to a backend;
 it does not provision cloud machines locally. The hosted backend can offer a free
 account/control-plane layer, let users attach their own cloud credentials, and
-gate boxhaven-owned VMs behind paid plans. Self-hosters can run this package with
+gate BoxHaven-owned VMs behind paid plans. Self-hosters can run this package with
 their own provider credentials.
 
 The browser app is built with TanStack Router and TanStack Query. In production
@@ -89,7 +89,7 @@ Environment:
 - `DIGITALOCEAN_REGION`: default `nyc3`.
 - `DIGITALOCEAN_SIZE`: default provider size for creates without an explicit tier, default `s-2vcpu-4gb-amd`.
 - Create-time tiers map to DigitalOcean AMD sizes: `small` is 2 vCPU / 4 GB, `medium` is 4 vCPU / 8 GB, and `large` is 8 vCPU / 16 GB.
-- `BOXHAVEN_REMOTE_IMAGE`: provider image id, snapshot id, or slug for a prebuilt boxhaven VM image. Numeric DigitalOcean snapshot ids are sent as image IDs when creating Droplets. Machines created from this image are treated as backend-bootstrapped. When unset, DigitalOcean falls back to `DIGITALOCEAN_IMAGE` and then `ubuntu-24-04-x64`; the CLI does not bootstrap plain hosts.
+- `BOXHAVEN_REMOTE_IMAGE`: provider image id, snapshot id, or slug for a prebuilt BoxHaven VM image. Numeric DigitalOcean snapshot ids are sent as image IDs when creating Droplets. Machines created from this image are treated as backend-bootstrapped. When unset, DigitalOcean falls back to `DIGITALOCEAN_IMAGE` and then `ubuntu-24-04-x64`; the CLI does not bootstrap plain hosts.
 - `DIGITALOCEAN_IMAGE`: DigitalOcean image fallback, default `ubuntu-24-04-x64`.
 - `DIGITALOCEAN_TAGS`: comma-separated tags, default `boxhaven`.
 - `DIGITALOCEAN_VPC_UUID`: optional VPC UUID.
