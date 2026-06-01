@@ -58,6 +58,7 @@ require_command python3
 require_command sha256sum
 
 run bash -n scripts/*.sh deploy/digitalocean/*.sh
+run scripts/production-fixture-test.sh
 run make clean
 run make build
 run make test

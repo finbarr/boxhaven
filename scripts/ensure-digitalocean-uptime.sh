@@ -8,6 +8,7 @@ targets="${BOXHAVEN_DO_UPTIME_TARGETS:-https://api.boxhaven.dev/healthz,https://
 regions="${BOXHAVEN_DO_UPTIME_REGIONS:-us_east,us_west,eu_west}"
 name_prefix="${BOXHAVEN_DO_UPTIME_NAME_PREFIX:-boxhaven}"
 dry_run="${BOXHAVEN_DO_UPTIME_DRY_RUN:-0}"
+fixture_path="${BOXHAVEN_DO_UPTIME_FIXTURE:-}"
 
 usage() {
   cat <<'EOF'
@@ -23,6 +24,7 @@ Env:
   BOXHAVEN_DO_UPTIME_REGIONS=us_east,us_west,eu_west
   BOXHAVEN_DO_UPTIME_NAME_PREFIX=boxhaven
   BOXHAVEN_DO_UPTIME_DRY_RUN=1
+  BOXHAVEN_DO_UPTIME_FIXTURE=/path/to/uptime_checks.json
 EOF
 }
 
@@ -63,14 +65,24 @@ require_command curl
 require_command jq
 
 [ -n "$token" ] || {
-  printf 'set DIGITALOCEAN_ACCESS_TOKEN, DIGITALOCEAN_TOKEN, or DO_API_TOKEN\n' >&2
-  exit 2
+  if [ -z "$fixture_path" ]; then
+    printf 'set DIGITALOCEAN_ACCESS_TOKEN, DIGITALOCEAN_TOKEN, DO_API_TOKEN, or BOXHAVEN_DO_UPTIME_FIXTURE\n' >&2
+    exit 2
+  fi
 }
+if [ -n "$fixture_path" ] && [ "$dry_run" != "1" ]; then
+  printf 'BOXHAVEN_DO_UPTIME_FIXTURE requires BOXHAVEN_DO_UPTIME_DRY_RUN=1\n' >&2
+  exit 2
+fi
 
-checks_json="$(api GET "/v2/uptime/checks?per_page=200")"
+if [ -n "$fixture_path" ]; then
+  checks_json="$(cat "$fixture_path")"
+else
+  checks_json="$(api GET "/v2/uptime/checks?per_page=200")"
+fi
 regions_json="$(printf '%s' "$regions" | csv_json_array)"
 
-printf '%s' "$targets" | tr ',' '\n' | while IFS= read -r raw_target; do
+printf '%s\n' "$targets" | tr ',' '\n' | while IFS= read -r raw_target; do
   target="$(printf '%s' "$raw_target" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
   [ -n "$target" ] || continue
   if printf '%s' "$checks_json" | jq -e --arg target "$target" '(.checks // [])[]? | select(.target == $target)' >/dev/null; then

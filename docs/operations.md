@@ -29,8 +29,9 @@ make production-check
 ```
 
 This covers local builds, tests, lint, release packaging, checksum validation,
-CLI smoke commands, and script syntax. It does not replace the remote lifecycle
-smoke or hosted DigitalOcean audit.
+CLI smoke commands, script syntax, and fixture tests for the cloud audit and
+remediation scripts. It does not replace the remote lifecycle smoke or hosted
+DigitalOcean audit.
 
 `make lint` always runs `go vet`. It also runs `golangci-lint` when that binary
 is installed locally.
