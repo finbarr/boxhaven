@@ -150,6 +150,10 @@ make ensure-uptime
 BOXHAVEN_ALERT_EMAILS=<ops-email> make ensure-alerts
 BOXHAVEN_TRUSTED_SSH_CIDRS=<trusted-cidrs> make ensure-firewalls
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> make audit-digitalocean
+BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=<expected-droplet-names> \
+  BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
+  BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS=160948396,160956820 \
+  make audit-digitalocean-account
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> make prune-snapshots
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_IDS=160948396,160956820 make prune-snapshots
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1 make prune-snapshots
@@ -157,6 +161,8 @@ BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1 ma
 
 `make audit-digitalocean` also requires `BOXHAVEN_REMOTE_IMAGE` so the read-only
 audit proves the deployed backend is pointing at an existing active snapshot.
+`make audit-digitalocean-account` is a separate read-only account cleanup audit
+for known legacy Droplets and old manual snapshots.
 
 After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or
 agent reconnect behavior, run the reusable lifecycle smoke from a machine with a

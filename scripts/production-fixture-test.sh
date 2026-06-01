@@ -60,6 +60,7 @@ firewalls_fixture="${tmpdir}/firewalls.json"
 alerts_fixture="${tmpdir}/alert_policies.json"
 uptime_fixture="${tmpdir}/uptime_checks.json"
 audit_fixtures="${tmpdir}/audit"
+account_audit_fixtures="${tmpdir}/account-audit"
 prune_fixtures="${tmpdir}/prune"
 pagination_dir="${tmpdir}/pagination"
 backup_root="${tmpdir}/backups"
@@ -70,7 +71,7 @@ malicious_env="${tmpdir}/malicious.env"
 malicious_marker="${tmpdir}/malicious-marker"
 release_dir="${tmpdir}/release"
 bad_release_dir="${tmpdir}/bad-release"
-mkdir -p "$audit_fixtures" "$prune_fixtures" "$pagination_dir"
+mkdir -p "$audit_fixtures" "$account_audit_fixtures" "$prune_fixtures" "$pagination_dir"
 
 cat > "${pagination_dir}/snapshots-page-1.json" <<EOF_JSON
 {
@@ -283,6 +284,56 @@ BOXHAVEN_REMOTE_IMAGE=other-snap \
     exit 1
   }
 assert_contains "${tmpdir}/audit-wrong-image.err" "does not match prefix"
+
+cat > "${account_audit_fixtures}/droplets.json" <<'JSON'
+{
+  "droplets": [
+    {"id":101,"name":"boxhaven-control-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z"},
+    {"id":102,"name":"fundy-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z"},
+    {"id":103,"name":"web","status":"active","created_at":"2015-01-01T00:00:00Z"}
+  ]
+}
+JSON
+cat > "${account_audit_fixtures}/snapshots.json" <<'JSON'
+{
+  "snapshots": [
+    {"id":"160948396","name":"web-1721476164359","created_at":"2024-07-20T00:00:00Z"},
+    {"id":"230979614","name":"boxhaven-remote-active","created_at":"2026-06-01T00:00:00Z"}
+  ]
+}
+JSON
+BOXHAVEN_DO_ACCOUNT_AUDIT_FIXTURES="$account_audit_fixtures" \
+BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=boxhaven-control-prod-nyc3-01,fundy-prod-nyc3-01 \
+BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
+BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS=160948396 \
+  scripts/digitalocean-account-cleanup-audit.sh > "${tmpdir}/account-audit-bad.out" 2> "${tmpdir}/account-audit-bad.err" && {
+    printf 'DigitalOcean account cleanup audit unexpectedly accepted cleanup fixtures\n' >&2
+    exit 1
+  }
+assert_contains "${tmpdir}/account-audit-bad.err" "unexpected active droplets found: web"
+assert_contains "${tmpdir}/account-audit-bad.err" "cleanup droplets still exist: web"
+assert_contains "${tmpdir}/account-audit-bad.err" "cleanup snapshots still exist: 160948396"
+cat > "${account_audit_fixtures}/droplets.json" <<'JSON'
+{
+  "droplets": [
+    {"id":101,"name":"boxhaven-control-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z"},
+    {"id":102,"name":"fundy-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z"}
+  ]
+}
+JSON
+cat > "${account_audit_fixtures}/snapshots.json" <<'JSON'
+{
+  "snapshots": [
+    {"id":"230979614","name":"boxhaven-remote-active","created_at":"2026-06-01T00:00:00Z"}
+  ]
+}
+JSON
+BOXHAVEN_DO_ACCOUNT_AUDIT_FIXTURES="$account_audit_fixtures" \
+BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=boxhaven-control-prod-nyc3-01,fundy-prod-nyc3-01 \
+BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
+BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS=160948396 \
+  scripts/digitalocean-account-cleanup-audit.sh > "${tmpdir}/account-audit-good.out"
+assert_contains "${tmpdir}/account-audit-good.out" "DigitalOcean account cleanup audit passed"
 
 cat > "${prune_fixtures}/snapshots.json" <<'JSON'
 {

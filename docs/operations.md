@@ -202,6 +202,21 @@ with the expected metric thresholds, uptime checks for app/API health URLs,
 active BoxHaven snapshot presence, and old non-active BoxHaven snapshots that
 should be reviewed for cleanup.
 
+Run the account cleanup audit when retiring legacy resources or validating the
+cleanup notes:
+
+```bash
+DIGITALOCEAN_ACCESS_TOKEN=... \
+BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=boxhaven-control-prod-nyc3-01,fundy-prod-nyc3-01,calmbox-prod-nyc3-01,electric-monk-prod-nyc3-01 \
+BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
+BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS=160948396,160956820 \
+make audit-digitalocean-account
+```
+
+This audit is read-only and fails while named cleanup droplets or snapshots
+still exist, or when the live active Droplet inventory differs from the expected
+list.
+
 Prune old non-active BoxHaven snapshots after the active image has passed a
 production smoke:
 
