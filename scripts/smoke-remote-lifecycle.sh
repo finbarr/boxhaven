@@ -194,7 +194,6 @@ if [ -f /tmp/boxhaven-preview.pid ]; then
     kill "$old_pid" >/dev/null 2>&1 || true
   fi
 fi
-pkill -f "[p]ython3 -m http.server 80 --bind 0.0.0.0" >/dev/null 2>&1 || true
 cd /tmp/boxhaven-preview
 nohup python3 -m http.server 80 --bind 0.0.0.0 >/tmp/boxhaven-preview.log 2>&1 &
 echo "$!" > /tmp/boxhaven-preview.pid
