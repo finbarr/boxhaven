@@ -5,7 +5,7 @@ BINDIR ?= $(PREFIX)/bin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
-.PHONY: build test go-test backend-test backend-build lint production-check validate-production-env smoke-remote audit-digitalocean ensure-uptime ensure-alerts ensure-firewalls prune-snapshots verify-backup dist install uninstall clean
+.PHONY: build test go-test backend-test backend-build lint production-check validate-production-env validate-production-compose smoke-remote audit-digitalocean ensure-uptime ensure-alerts ensure-firewalls prune-snapshots verify-backup dist install uninstall clean
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) $(CMD_DIR)
@@ -32,6 +32,9 @@ production-check:
 
 validate-production-env:
 	scripts/validate-production-env.sh
+
+validate-production-compose:
+	scripts/validate-production-compose.sh
 
 smoke-remote: build
 	scripts/smoke-remote-lifecycle.sh

@@ -227,6 +227,8 @@ DIGITALOCEAN_ACCESS_TOKEN=dop_v1_live_token_shape
 EOF_ENV
 scripts/validate-production-env.sh --env-file "$good_env" > "${tmpdir}/env-good.out"
 assert_contains "${tmpdir}/env-good.out" "production env validation passed"
+scripts/validate-production-compose.sh --env-file "$good_env" > "${tmpdir}/compose-good.out"
+assert_contains "${tmpdir}/compose-good.out" "production compose validation passed"
 
 cat > "$bad_env" <<'EOF_ENV'
 ACME_EMAIL=admin@example.com
@@ -249,5 +251,10 @@ if scripts/validate-production-env.sh --env-file "$bad_env" > "${tmpdir}/env-bad
 fi
 assert_contains "${tmpdir}/env-bad.err" "BOXHAVEN_SIGNUP_MODE must be invite or disabled"
 assert_contains "${tmpdir}/env-bad.err" "DIGITALOCEAN_ACCESS_TOKEN still looks like a placeholder"
+if scripts/validate-production-compose.sh --env-file "$bad_env" > "${tmpdir}/compose-bad.out" 2> "${tmpdir}/compose-bad.err"; then
+  printf 'bad production compose unexpectedly passed validation\n' >&2
+  exit 1
+fi
+assert_contains "${tmpdir}/compose-bad.err" "production env validation failed"
 
 printf 'production fixture tests passed\n'

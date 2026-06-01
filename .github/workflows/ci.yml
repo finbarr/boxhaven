@@ -131,6 +131,26 @@ jobs:
       - name: Validate Caddy config
         run: scripts/validate-caddy-config.sh
 
+      - name: Validate production Compose
+        run: |
+          tmp_env="$(mktemp)"
+          cat > "$tmp_env" <<'EOF'
+          ACME_EMAIL=ops@boxhaven.dev
+          BOXHAVEN_APP_HOST=app.boxhaven.dev
+          BOXHAVEN_API_HOST=api.boxhaven.dev
+          BOXHAVEN_PREVIEW_BASE_DOMAIN=at.boxhaven.dev
+          BOXHAVEN_APP_URL=https://app.boxhaven.dev
+          BOXHAVEN_API_URL=https://api.boxhaven.dev
+          BETTER_AUTH_URL=https://api.boxhaven.dev/v1/auth
+          BETTER_AUTH_TRUSTED_ORIGINS=https://app.boxhaven.dev,https://api.boxhaven.dev
+          BOXHAVEN_BACKEND_CORS_ORIGINS=https://app.boxhaven.dev,https://api.boxhaven.dev
+          BETTER_AUTH_SECRET=0123456789abcdef0123456789abcdef
+          BOXHAVEN_SIGNUP_MODE=invite
+          BOXHAVEN_SIGNUP_INVITE_CODES=invite-code-1
+          DIGITALOCEAN_ACCESS_TOKEN=dop_v1_live_token_shape
+          EOF
+          scripts/validate-production-compose.sh --env-file "$tmp_env"
+
       - name: Build release archives
         run: VERSION=ci make dist
 

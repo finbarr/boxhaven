@@ -38,10 +38,12 @@ Before deploying or restarting production, validate the server env file:
 
 ```bash
 make validate-production-env
+make validate-production-compose
 ```
 
 This fails on missing required values, checked-in placeholders, non-HTTPS public
-URLs, and production signup modes other than `invite` or `disabled`.
+URLs, production signup modes other than `invite` or `disabled`, and invalid
+production Docker Compose structure.
 
 `make lint` always runs `go vet`. It also runs `golangci-lint` when that binary
 is installed locally.

@@ -28,6 +28,7 @@ secret values:
 cp deploy/digitalocean/env.production.example deploy/digitalocean/.env.production
 $EDITOR deploy/digitalocean/.env.production
 make validate-production-env
+make validate-production-compose
 ```
 
 `BETTER_AUTH_SECRET` must be a long random value. The backend also needs
