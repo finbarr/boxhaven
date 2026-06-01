@@ -40,6 +40,7 @@ make test           # Run Go and backend tests
 make lint           # Run go vet and golangci-lint when available
 make backend-build  # Build the TypeScript backend and web app
 make smoke-remote   # Run the reusable production/prod-equivalent remote smoke
+npm run deploy:production  # Deploy and verify the hosted DigitalOcean stack
 make install        # Install bh to ~/.local/bin
 make clean          # Remove built binary
 ```
