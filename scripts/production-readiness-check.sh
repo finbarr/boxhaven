@@ -58,6 +58,7 @@ require_command python3
 require_command sha256sum
 
 run bash -n scripts/*.sh deploy/digitalocean/*.sh
+run scripts/audit-github-actions.sh
 run scripts/production-fixture-test.sh
 run scripts/validate-caddy-config.sh
 run make clean

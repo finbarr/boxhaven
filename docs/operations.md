@@ -29,10 +29,10 @@ make production-check
 ```
 
 This covers local builds, tests, lint, release packaging, checksum validation,
-CLI smoke commands, script syntax, and fixture tests for the cloud audit and
-remediation scripts. It also validates the production Caddyfile when `caddy` or
-Docker is available. It does not replace the remote lifecycle smoke or hosted
-DigitalOcean audit.
+CLI smoke commands, script syntax, GitHub workflow action versions, and fixture
+tests for the cloud audit and remediation scripts. It also validates the
+production Caddyfile when `caddy` or Docker is available. It does not replace
+the remote lifecycle smoke or hosted DigitalOcean audit.
 
 Before deploying or restarting production, validate the server env file:
 
