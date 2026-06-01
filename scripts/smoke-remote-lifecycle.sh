@@ -188,9 +188,16 @@ verify_preview() {
   run_remote "$name" 'set -euo pipefail
 mkdir -p /tmp/boxhaven-preview
 printf "boxhaven preview smoke\n" > /tmp/boxhaven-preview/index.html
-pkill -f "python3 -m http.server 80" >/dev/null 2>&1 || true
+if [ -f /tmp/boxhaven-preview.pid ]; then
+  old_pid="$(cat /tmp/boxhaven-preview.pid 2>/dev/null || true)"
+  if [ -n "$old_pid" ]; then
+    kill "$old_pid" >/dev/null 2>&1 || true
+  fi
+fi
+pkill -f "[p]ython3 -m http.server 80 --bind 0.0.0.0" >/dev/null 2>&1 || true
 cd /tmp/boxhaven-preview
 nohup python3 -m http.server 80 --bind 0.0.0.0 >/tmp/boxhaven-preview.log 2>&1 &
+echo "$!" > /tmp/boxhaven-preview.pid
 '
   local url
   url="$(preview_url_for "$name")"
