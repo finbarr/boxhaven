@@ -600,6 +600,9 @@ function remoteCommandPrefix(payload) {
   const parts = [
     "export PATH=\"/opt/boxhaven/bin:/root/.npm-global/bin:/home/boxhaven/.npm-global/bin:/root/.local/bin:/home/boxhaven/.local/bin:/usr/local/go/bin:$PATH\"",
     "export NPM_CONFIG_PREFIX=\"${NPM_CONFIG_PREFIX:-$HOME/.npm-global}\"",
+    "export GOPATH=\"${GOPATH:-$HOME/go}\"",
+    "export GOCACHE=\"${GOCACHE:-$HOME/.cache/go-build}\"",
+    "export GOMODCACHE=\"${GOMODCACHE:-$GOPATH/pkg/mod}\"",
     "export BOXHAVEN=1",
     "export BOXHAVEN_REMOTE=1",
     `export BOXHAVEN_PROJECT_PATH=${shellQuote(workPath)}`,
@@ -726,10 +729,17 @@ EOF
 write_profile() {
   step "writing shell profile"
   cat > /etc/profile.d/boxhaven-remote.sh <<'EOF'
+if [ -z "${HOME:-}" ]; then
+  HOME="$(getent passwd "$(id -u)" | cut -d: -f6)"
+  export HOME
+fi
 export PATH="/opt/boxhaven/bin:/root/.npm-global/bin:/home/boxhaven/.npm-global/bin:/usr/local/go/bin:$PATH"
 export BOXHAVEN=1
 export BOXHAVEN_REMOTE=1
 export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.npm-global}"
+export GOPATH="${GOPATH:-$HOME/go}"
+export GOCACHE="${GOCACHE:-$HOME/.cache/go-build}"
+export GOMODCACHE="${GOMODCACHE:-$GOPATH/pkg/mod}"
 EOF
 }
 
