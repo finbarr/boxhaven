@@ -74,6 +74,7 @@ run bash -c "cd dist && sha256sum -c checksums-${version}.txt"
 run scripts/install-bh.sh --help
 run scripts/smoke-production-http.sh --help
 run scripts/digitalocean-account-cleanup-audit.sh --help
+run scripts/backup-storage-audit.sh --help
 run python3 .github/scripts/extract-release-notes.py "$version" CHANGELOG.md
 run python3 .github/scripts/extract-release-notes.py v999.999.999 CHANGELOG.md
 

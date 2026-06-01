@@ -217,6 +217,19 @@ This audit is read-only and fails while named cleanup droplets or snapshots
 still exist, or when the live active Droplet inventory differs from the expected
 list.
 
+Audit backup storage after retention or cleanup changes, including adjacent
+production services with large backup directories:
+
+```bash
+BOXHAVEN_BACKUP_STORAGE_TARGETS=boxhaven=/opt/boxhaven/backups,fundy=root@fundy-prod-nyc3-01:/opt/fundy/backups \
+BOXHAVEN_BACKUP_STORAGE_MAX_GIB=250 \
+BOXHAVEN_BACKUP_STORAGE_MAX_FILES=30 \
+make audit-backup-storage
+```
+
+The backup storage audit is read-only. It reports size and top-level file count
+for each target and fails when configured thresholds are exceeded.
+
 Prune old non-active BoxHaven snapshots after the active image has passed a
 production smoke:
 

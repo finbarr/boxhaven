@@ -154,6 +154,7 @@ BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=<expected-droplet-names> \
   BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
   BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS=160948396,160956820 \
   make audit-digitalocean-account
+BOXHAVEN_BACKUP_STORAGE_TARGETS=boxhaven=/opt/boxhaven/backups make audit-backup-storage
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> make prune-snapshots
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_IDS=160948396,160956820 make prune-snapshots
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1 make prune-snapshots
@@ -163,6 +164,8 @@ BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1 ma
 audit proves the deployed backend is pointing at an existing active snapshot.
 `make audit-digitalocean-account` is a separate read-only account cleanup audit
 for known legacy Droplets and old manual snapshots.
+`make audit-backup-storage` is a read-only audit for backup directory size and
+top-level file count.
 
 After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or
 agent reconnect behavior, run the reusable lifecycle smoke from a machine with a

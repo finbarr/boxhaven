@@ -64,6 +64,7 @@ account_audit_fixtures="${tmpdir}/account-audit"
 prune_fixtures="${tmpdir}/prune"
 pagination_dir="${tmpdir}/pagination"
 backup_root="${tmpdir}/backups"
+storage_audit_root="${tmpdir}/storage-audit"
 data_root="${tmpdir}/data"
 good_env="${tmpdir}/good.env"
 bad_env="${tmpdir}/bad.env"
@@ -71,7 +72,7 @@ malicious_env="${tmpdir}/malicious.env"
 malicious_marker="${tmpdir}/malicious-marker"
 release_dir="${tmpdir}/release"
 bad_release_dir="${tmpdir}/bad-release"
-mkdir -p "$audit_fixtures" "$account_audit_fixtures" "$prune_fixtures" "$pagination_dir"
+mkdir -p "$audit_fixtures" "$account_audit_fixtures" "$prune_fixtures" "$pagination_dir" "$storage_audit_root"
 
 cat > "${pagination_dir}/snapshots-page-1.json" <<EOF_JSON
 {
@@ -334,6 +335,23 @@ BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
 BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS=160948396 \
   scripts/digitalocean-account-cleanup-audit.sh > "${tmpdir}/account-audit-good.out"
 assert_contains "${tmpdir}/account-audit-good.out" "DigitalOcean account cleanup audit passed"
+
+mkdir -p "${storage_audit_root}/fundy"
+printf 'backup-one\n' > "${storage_audit_root}/fundy/one.tar.gz"
+printf 'backup-two\n' > "${storage_audit_root}/fundy/two.tar.gz"
+BOXHAVEN_BACKUP_STORAGE_TARGETS="fundy=${storage_audit_root}/fundy" \
+BOXHAVEN_BACKUP_STORAGE_MAX_GIB=1 \
+BOXHAVEN_BACKUP_STORAGE_MAX_FILES=1 \
+  scripts/backup-storage-audit.sh > "${tmpdir}/storage-audit-bad.out" 2> "${tmpdir}/storage-audit-bad.err" && {
+    printf 'backup storage audit unexpectedly accepted too many backups\n' >&2
+    exit 1
+  }
+assert_contains "${tmpdir}/storage-audit-bad.err" "backup path exceeds 1 files"
+BOXHAVEN_BACKUP_STORAGE_TARGETS="fundy=${storage_audit_root}/fundy" \
+BOXHAVEN_BACKUP_STORAGE_MAX_GIB=1 \
+BOXHAVEN_BACKUP_STORAGE_MAX_FILES=3 \
+  scripts/backup-storage-audit.sh > "${tmpdir}/storage-audit-good.out"
+assert_contains "${tmpdir}/storage-audit-good.out" "backup storage audit passed"
 
 cat > "${prune_fixtures}/snapshots.json" <<'JSON'
 {

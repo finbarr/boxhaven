@@ -5,7 +5,7 @@ BINDIR ?= $(PREFIX)/bin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
-.PHONY: build test go-test backend-test backend-build lint production-check validate-production-env validate-production-compose smoke-production-http smoke-remote audit-digitalocean audit-digitalocean-account ensure-uptime ensure-alerts ensure-firewalls prune-snapshots verify-backup dist install uninstall clean
+.PHONY: build test go-test backend-test backend-build lint production-check validate-production-env validate-production-compose smoke-production-http smoke-remote audit-digitalocean audit-digitalocean-account audit-backup-storage ensure-uptime ensure-alerts ensure-firewalls prune-snapshots verify-backup dist install uninstall clean
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) $(CMD_DIR)
@@ -47,6 +47,9 @@ audit-digitalocean:
 
 audit-digitalocean-account:
 	scripts/digitalocean-account-cleanup-audit.sh
+
+audit-backup-storage:
+	scripts/backup-storage-audit.sh
 
 ensure-uptime:
 	scripts/ensure-digitalocean-uptime.sh
