@@ -70,7 +70,7 @@ run ./bh version
 run ./bh help
 run ./bh config
 run env VERSION="$version" make dist
-run sha256sum -c "dist/checksums-${version}.txt"
+run bash -c "cd dist && sha256sum -c checksums-${version}.txt"
 run scripts/install-bh.sh --help
 run python3 .github/scripts/extract-release-notes.py "$version" CHANGELOG.md
 run python3 .github/scripts/extract-release-notes.py v999.999.999 CHANGELOG.md

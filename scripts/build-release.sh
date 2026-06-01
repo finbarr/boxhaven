@@ -67,7 +67,7 @@ for platform in "${platforms[@]}"; do
   cp "${repo_root}/README.md" "${workdir}/README.md"
   cp "${repo_root}/LICENSE" "${workdir}/LICENSE"
   tar -C "$workdir" -czf "${dist_dir}/${name}.tar.gz" bh README.md LICENSE
-  sha256sum "${dist_dir}/${name}.tar.gz" >> "${dist_dir}/checksums-${version}.txt"
+  (cd "$dist_dir" && sha256sum "${name}.tar.gz" >> "checksums-${version}.txt")
   rm -rf "$workdir"
   trap - RETURN
   printf 'built %s\n' "${dist_dir}/${name}.tar.gz"

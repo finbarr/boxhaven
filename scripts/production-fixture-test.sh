@@ -21,6 +21,7 @@ require_command() {
 require_command jq
 require_command bash
 require_command ssh-keygen
+require_command tar
 
 assert_contains() {
   local file="$1"
@@ -49,6 +50,7 @@ backup_root="${tmpdir}/backups"
 data_root="${tmpdir}/data"
 good_env="${tmpdir}/good.env"
 bad_env="${tmpdir}/bad.env"
+release_dir="${tmpdir}/release"
 mkdir -p "$audit_fixtures" "$prune_fixtures"
 
 cat > "$firewalls_fixture" <<'JSON'
@@ -262,5 +264,23 @@ if BOXHAVEN_SMOKE_PRODUCTION=1 scripts/smoke-remote-lifecycle.sh > "${tmpdir}/sm
   exit 1
 fi
 assert_contains "${tmpdir}/smoke-preflight.err" "requires BOXHAVEN_TOKEN"
+
+mkdir -p "${release_dir}/work" "${tmpdir}/install-bin"
+cat > "${release_dir}/work/bh" <<'EOF_BH'
+#!/usr/bin/env sh
+printf 'bh fixture-version\n'
+EOF_BH
+chmod +x "${release_dir}/work/bh"
+tar -C "${release_dir}/work" -czf "${release_dir}/boxhaven-vfixture-linux-amd64.tar.gz" bh
+(cd "$release_dir" && sha256sum boxhaven-vfixture-linux-amd64.tar.gz > checksums-vfixture.txt)
+BOXHAVEN_INSTALL_VERSION=vfixture \
+BOXHAVEN_INSTALL_BASE_URL="file://${release_dir}" \
+BOXHAVEN_INSTALL_OS=linux \
+BOXHAVEN_INSTALL_ARCH=amd64 \
+BOXHAVEN_INSTALL_CHECKSUM_TOOL=shasum \
+BOXHAVEN_INSTALL_DIR="${tmpdir}/install-bin" \
+  scripts/install-bh.sh > "${tmpdir}/install.out"
+assert_contains "${tmpdir}/install.out" "bh fixture-version"
+test -x "${tmpdir}/install-bin/bh"
 
 printf 'production fixture tests passed\n'

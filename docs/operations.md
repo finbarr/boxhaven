@@ -134,7 +134,7 @@ For a CLI release, build archives and checksums from a clean committed checkout:
 ```bash
 make dist VERSION=v0.1.0
 ls -lh dist/
-sha256sum -c dist/checksums-v0.1.0.txt
+(cd dist && sha256sum -c checksums-v0.1.0.txt)
 ```
 
 Pushing a `v*` tag runs the release workflow, uploads the generated archives to
