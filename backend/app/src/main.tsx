@@ -184,6 +184,7 @@ function AccessPanel({ onToken, deviceUserCode }: { onToken: (token: string) => 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const mutation = useMutation({
     mutationFn: async () => {
       const endpoint = mode === "signup" ? "/v1/auth/sign-up/email" : "/v1/auth/sign-in/email";
@@ -192,7 +193,7 @@ function AccessPanel({ onToken, deviceUserCode }: { onToken: (token: string) => 
         body: {
           email,
           password,
-          ...(mode === "signup" ? { name: name || email.split("@")[0] } : {}),
+          ...(mode === "signup" ? { name: name || email.split("@")[0], invite_code: inviteCode || undefined } : {}),
         },
       });
     },
@@ -237,6 +238,12 @@ attic     s-4vcpu-8gb-amd  running`}</pre>
           <label>
             Name
             <input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" />
+          </label>
+        ) : null}
+        {mode === "signup" ? (
+          <label>
+            Invite code
+            <input value={inviteCode} onChange={(event) => setInviteCode(event.target.value)} autoComplete="one-time-code" />
           </label>
         ) : null}
         <label>

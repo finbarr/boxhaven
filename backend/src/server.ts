@@ -15,13 +15,18 @@ export type BackendOptions = {
   provider: MachineProvider;
   store: StateStore;
   sshCA: SSHCertificateAuthority;
+  logger?: boolean;
   appDir?: string;
   apiPublicURL?: string;
   appPublicURL?: string;
   corsOrigins?: string[];
   previewBaseDomain?: string;
   previewTargetPort?: number;
+  previewProxyTimeoutMs?: number;
   machineReadyTimeoutMs?: number;
+  signupPolicy?: SignupPolicy;
+  limits?: BackendLimits;
+  maintenance?: BackendMaintenanceOptions;
 };
 
 type AuthContext = {
@@ -32,6 +37,23 @@ type AuthContext = {
 type PreviewOptions = {
   baseDomain: string;
   targetPort: number;
+};
+
+type SignupPolicy = {
+  mode?: "open" | "invite" | "disabled";
+  allowedEmailDomains?: string[];
+  inviteCodes?: string[];
+};
+
+type BackendLimits = {
+  maxMachinesPerUser?: number;
+  maxMachinesTotal?: number;
+};
+
+type BackendMaintenanceOptions = {
+  intervalMs?: number;
+  idleMachineTTLSeconds?: number;
+  staleCreateTTLSeconds?: number;
 };
 
 type AgentConnection = {
@@ -89,10 +111,11 @@ const agentRPCDefaultTimeout = 60_000;
 const agentRPCSetupTimeout = 30 * 60_000;
 
 export function createBackend(options: BackendOptions): FastifyInstance {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: options.logger === true });
   void app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
   registerCors(app, options.corsOrigins || []);
   const agents = new Map<string, AgentConnection>();
+  registerMaintenance(app, options, agents);
   app.after(() => {
     app.get("/v1/agent/connect", { websocket: true }, async (socket, request) => {
       await handleAgentConnection(options, agents, socket, request);
@@ -100,6 +123,11 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   });
 
   app.get("/healthz", async () => "ok\n");
+
+  app.get("/metrics", async (_request, reply) => {
+    reply.header("content-type", "text/plain; version=0.0.4");
+    return renderMetrics(options, agents);
+  });
 
   app.get("/v1/providers", async () => ({
     providers: [providerInfo(options.provider)],
@@ -131,6 +159,10 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   });
 
   app.all("/v1/auth/*", async (request, reply) => {
+    const signupRejection = validateSignupRequest(options, request);
+    if (signupRejection) {
+      return reply.code(signupRejection.status).send({ id: signupRejection.id, message: signupRejection.message });
+    }
     await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
   });
 
@@ -238,6 +270,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       identity: `boxhaven-${auth.userID}-${normalized.name}`,
       ttlSeconds: request.body?.ttl_seconds,
     });
+    request.log.info({ event: "ssh_cert_issued", user_id: auth.userID, machine: normalized.name, expires_at: signed.expires_at }, "issued ssh certificate");
     return {
       ...signed,
       host: normalized.public_ipv4,
@@ -356,6 +389,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (existing) {
       await options.provider.releaseMachine(existing);
       await options.store.deleteMachine(auth.userID, name);
+      request.log.info({ event: "machine_destroyed", user_id: auth.userID, machine: name, provider_id: existing.provider_id }, "destroyed machine");
     }
     return reply.code(204).send();
   });
@@ -392,6 +426,9 @@ async function createMachine(
     return reply.code(409).send(machineNameConflict(body.name));
   }
 
+  const limitError = await validateMachineLimits(options, auth);
+  if (limitError) return reply.code(403).send({ id: "quota_exceeded", message: limitError });
+
   let provisioned: { machine: RemoteMachine; status?: string };
   try {
     provisioned = await options.provider.createMachine(body);
@@ -423,6 +460,7 @@ async function createMachine(
     }
     throw err;
   }
+  optionsLogger(options).info({ event: "machine_created", user_id: auth.userID, machine: ready.name, provider_id: ready.provider_id, tier: body.tier || "" }, "created machine");
   return reply.code(201).send({ machine: publicMachine(ready), status: provisioned.status || "created" });
 }
 
@@ -522,6 +560,71 @@ function validateMachineTier(tier: string | undefined): string | undefined {
   if (!tier) return undefined;
   if (tier === "small" || tier === "medium" || tier === "large") return undefined;
   return "invalid machine tier; expected small, medium, or large";
+}
+
+async function validateMachineLimits(options: BackendOptions, auth: AuthContext): Promise<string | undefined> {
+  const maxPerUser = positiveInteger(options.limits?.maxMachinesPerUser);
+  const maxTotal = positiveInteger(options.limits?.maxMachinesTotal);
+  if (!maxPerUser && !maxTotal) return undefined;
+  const userMachines = await options.store.listMachinesForUser(auth.userID);
+  if (maxPerUser && userMachines.length >= maxPerUser) {
+    return `machine quota exceeded; this account is limited to ${maxPerUser} active machine${maxPerUser === 1 ? "" : "s"}`;
+  }
+  if (maxTotal) {
+    const allMachines = await options.store.listMachines();
+    if (allMachines.length >= maxTotal) {
+      return `machine quota exceeded; this deployment is limited to ${maxTotal} active machine${maxTotal === 1 ? "" : "s"}`;
+    }
+  }
+  return undefined;
+}
+
+function validateSignupRequest(
+  options: BackendOptions,
+  request: { method: string; url: string; headers: Record<string, string | string[] | undefined>; body?: unknown },
+): { status: number; id: string; message: string } | undefined {
+  if (request.method.toUpperCase() !== "POST" || !request.url.startsWith("/v1/auth/sign-up/email")) return undefined;
+  const policy = normalizeSignupPolicy(options.signupPolicy);
+  if (policy.mode === "disabled") {
+    return { status: 403, id: "signup_disabled", message: "new account signup is disabled" };
+  }
+  const body = objectBody(request.body);
+  const email = String(body.email || "").trim().toLowerCase();
+  if (policy.allowedEmailDomains.length > 0) {
+    const domain = email.split("@").pop() || "";
+    if (!domain || !policy.allowedEmailDomains.includes(domain)) {
+      return { status: 403, id: "signup_domain_denied", message: "email domain is not allowed for signup" };
+    }
+  }
+  if (policy.mode === "invite") {
+    const inviteCode = String(body.invite_code || body.inviteCode || headerValue(request.headers, "x-boxhaven-invite-code")).trim();
+    if (!inviteCode || !policy.inviteCodes.includes(inviteCode)) {
+      return { status: 403, id: "invite_required", message: "a valid invite code is required for signup" };
+    }
+  }
+  return undefined;
+}
+
+function normalizeSignupPolicy(policy: SignupPolicy | undefined): { mode: "open" | "invite" | "disabled"; allowedEmailDomains: string[]; inviteCodes: string[] } {
+  const mode = policy?.mode === "invite" || policy?.mode === "disabled" ? policy.mode : "open";
+  return {
+    mode,
+    allowedEmailDomains: (policy?.allowedEmailDomains || []).map((domain) => domain.trim().toLowerCase()).filter(Boolean),
+    inviteCodes: (policy?.inviteCodes || []).map((code) => code.trim()).filter(Boolean),
+  };
+}
+
+function objectBody(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function headerValue(headers: Record<string, string | string[] | undefined>, name: string): string {
+  const raw = headers[name] || headers[name.toLowerCase()];
+  return Array.isArray(raw) ? raw[0] || "" : raw || "";
+}
+
+function positiveInteger(value: number | undefined): number {
+  return Number.isFinite(value) && Number(value) > 0 ? Math.floor(Number(value)) : 0;
 }
 
 function machineNameConflict(name: string) {
@@ -868,6 +971,101 @@ function sendAgentError(socket: WebSocket, message: string): void {
   sendAgentJSON(socket, { type: "error", message });
 }
 
+function registerMaintenance(app: FastifyInstance, options: BackendOptions, agents: Map<string, AgentConnection>): void {
+  const intervalMs = positiveInteger(options.maintenance?.intervalMs);
+  if (!intervalMs) return;
+  const timer = setInterval(() => {
+    void runMaintenance(options, agents).catch((error) => {
+      app.log.error({ err: error, event: "maintenance_failed" }, "backend maintenance failed");
+    });
+  }, intervalMs);
+  timer.unref();
+  app.addHook("onClose", async () => clearInterval(timer));
+}
+
+async function runMaintenance(options: BackendOptions, agents: Map<string, AgentConnection>): Promise<void> {
+  const idleTTL = positiveInteger(options.maintenance?.idleMachineTTLSeconds);
+  const staleCreateTTL = positiveInteger(options.maintenance?.staleCreateTTLSeconds);
+  if (!idleTTL && !staleCreateTTL) return;
+
+  const now = Date.now();
+  for (const machine of await options.store.listMachines()) {
+    if (!machine.user_id) continue;
+    const connected = Boolean(connectedAgent(agents, machine));
+    if (connected) continue;
+    const reason = maintenanceReleaseReason(machine, now, idleTTL, staleCreateTTL);
+    if (!reason) continue;
+    await options.provider.releaseMachine(machine);
+    await options.store.deleteMachine(machine.user_id, machine.name);
+    optionsLogger(options).info({
+      event: "machine_maintenance_released",
+      reason,
+      user_id: machine.user_id,
+      machine: machine.name,
+      provider_id: machine.provider_id || "",
+    }, "released machine during maintenance");
+  }
+}
+
+function maintenanceReleaseReason(machine: RemoteMachine, now: number, idleTTLSeconds: number, staleCreateTTLSeconds: number): string {
+  if (staleCreateTTLSeconds && !machine.bootstrap_complete) {
+    const createdAt = timestampMs(machine.created_at);
+    if (createdAt && now - createdAt > staleCreateTTLSeconds * 1000) return "stale_create";
+  }
+  if (idleTTLSeconds) {
+    const lastActive = Math.max(
+      timestampMs(machine.agent_last_seen_at),
+      timestampMs(machine.last_synced_at),
+      timestampMs(machine.updated_at),
+      timestampMs(machine.created_at),
+    );
+    if (lastActive && now - lastActive > idleTTLSeconds * 1000) return "idle_ttl";
+  }
+  return "";
+}
+
+function timestampMs(value: string | undefined): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function renderMetrics(options: BackendOptions, agents: Map<string, AgentConnection>): Promise<string> {
+  const machines = await options.store.listMachines();
+  const connectedKeys = new Set([...agents.values()].filter((agent) => agent.socket.readyState === WebSocket.OPEN).map((agent) => agent.machineKey));
+  const lines = [
+    "# HELP boxhaven_machines Number of machines known to the backend.",
+    "# TYPE boxhaven_machines gauge",
+    `boxhaven_machines ${machines.length}`,
+    "# HELP boxhaven_machine_agents_connected Number of currently connected machine agents.",
+    "# TYPE boxhaven_machine_agents_connected gauge",
+    `boxhaven_machine_agents_connected ${connectedKeys.size}`,
+    "# HELP boxhaven_machine_bootstrap_pending Number of machines not yet marked bootstrapped.",
+    "# TYPE boxhaven_machine_bootstrap_pending gauge",
+    `boxhaven_machine_bootstrap_pending ${machines.filter((machine) => !machine.bootstrap_complete).length}`,
+    "# HELP boxhaven_machine_last_seen_seconds Unix time when a machine agent was last seen.",
+    "# TYPE boxhaven_machine_last_seen_seconds gauge",
+  ];
+  for (const machine of machines) {
+    const key = agentMachineKey(machine);
+    const labels = `machine="${escapeMetricLabel(machine.name)}",provider="${escapeMetricLabel(machine.provider || options.provider.name)}",connected="${connectedKeys.has(key) ? "true" : "false"}"`;
+    lines.push(`boxhaven_machine_last_seen_seconds{${labels}} ${Math.floor(timestampMs(machine.agent_last_seen_at) / 1000)}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function escapeMetricLabel(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\n");
+}
+
+function optionsLogger(options: BackendOptions): { info: (obj: unknown, message: string) => void } {
+  return {
+    info(obj, message) {
+      if (options.logger === true) console.error(JSON.stringify({ level: "info", msg: message, ...(obj && typeof obj === "object" ? obj : { data: obj }) }));
+    },
+  };
+}
+
 function toWebRequest(request: { method: string; url: string; headers: Record<string, string | string[] | undefined>; body?: unknown; ip?: string }): Request {
   const headers = toHeaders(request.headers);
   if (request.ip && !headers.has("x-forwarded-for")) {
@@ -1024,6 +1222,7 @@ async function proxyPreviewRequest(
   const init: RequestInit = {
     method: request.method,
     headers,
+    signal: AbortSignal.timeout(positiveInteger(options.previewProxyTimeoutMs) || 30_000),
   };
   if (request.method !== "GET" && request.method !== "HEAD" && request.body !== undefined) {
     init.body = previewProxyBody(request.body);

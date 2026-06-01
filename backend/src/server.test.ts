@@ -338,6 +338,84 @@ test("backend rejects unknown machine tiers", async () => {
   assert.match(response.body, /invalid machine tier/);
 });
 
+test("backend enforces signup invite policy", async () => {
+  const { app } = await createTestBackend("invited@example.com", "password123", {
+    skipSignup: true,
+    signupPolicy: {
+      mode: "invite",
+      allowedEmailDomains: ["example.com"],
+      inviteCodes: ["let-me-in"],
+    },
+  });
+
+  const missingInvite = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-up/email",
+    payload: { email: "blocked@example.com", password: "password123", name: "blocked" },
+  });
+  assert.equal(missingInvite.statusCode, 403);
+  assert.match(missingInvite.body, /valid invite code/);
+
+  const badDomain = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-up/email",
+    payload: { email: "blocked@elsewhere.test", password: "password123", name: "blocked", invite_code: "let-me-in" },
+  });
+  assert.equal(badDomain.statusCode, 403);
+  assert.match(badDomain.body, /email domain/);
+
+  const invited = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-up/email",
+    payload: { email: "allowed@example.com", password: "password123", name: "allowed", invite_code: "let-me-in" },
+  });
+  assert.equal(invited.statusCode, 200, invited.body);
+  assert.equal(typeof invited.json().token, "string");
+});
+
+test("backend enforces machine quotas", async () => {
+  const { app, token } = await createTestBackend("quota@example.com", "password123", {
+    limits: { maxMachinesPerUser: 1, maxMachinesTotal: 1 },
+  });
+  const headers = { authorization: `Bearer ${token}` };
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "first" },
+  });
+  assert.equal(first.statusCode, 201, first.body);
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "second" },
+  });
+  assert.equal(second.statusCode, 403, second.body);
+  assert.match(second.body, /quota exceeded/i);
+});
+
+test("backend exposes production metrics", async () => {
+  const { app, token } = await createTestBackend("metrics@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  const created = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "metricbox" },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+
+  const metrics = await app.inject({ method: "GET", url: "/metrics" });
+  assert.equal(metrics.statusCode, 200);
+  assert.match(metrics.headers["content-type"] as string, /text\/plain/);
+  assert.match(metrics.body, /boxhaven_machines 1/);
+  assert.match(metrics.body, /boxhaven_machine_bootstrap_pending 0/);
+  assert.match(metrics.body, /boxhaven_machine_last_seen_seconds/);
+});
+
 test("backend imports provider machines for the authenticated user", async () => {
   const { app, provider, token } = await createTestBackend();
   const headers = { authorization: `Bearer ${token}` };
@@ -549,7 +627,13 @@ test("backend supports browser-approved CLI device login", async () => {
   assert.equal(whoami.json().user.email, "cli@example.com");
 });
 
-async function createTestBackend(email = "user@example.com", password = "password123", options: { previewTargetPort?: number; machineReadyTimeoutMs?: number } = {}) {
+async function createTestBackend(email = "user@example.com", password = "password123", options: {
+  previewTargetPort?: number;
+  machineReadyTimeoutMs?: number;
+  signupPolicy?: Parameters<typeof createBackend>[0]["signupPolicy"];
+  limits?: Parameters<typeof createBackend>[0]["limits"];
+  skipSignup?: boolean;
+} = {}) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
   const provider = new FakeProvider();
   const store = new StateStore(join(dir, "state.json"), provider.name);
@@ -571,8 +655,10 @@ async function createTestBackend(email = "user@example.com", password = "passwor
     previewBaseDomain: "hosted.test",
     previewTargetPort: options.previewTargetPort,
     machineReadyTimeoutMs: options.machineReadyTimeoutMs ?? 0,
+    signupPolicy: options.signupPolicy,
+    limits: options.limits,
   });
-  const token = await signUp(app, email, password);
+  const token = options.skipSignup ? "" : await signUp(app, email, password);
   return { app, provider, token };
 }
 

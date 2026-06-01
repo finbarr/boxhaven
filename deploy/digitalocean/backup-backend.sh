@@ -20,10 +20,14 @@ backend_dir="${data_root}/backend"
 caddy_dir="${data_root}/caddy"
 
 if [ -f "${backend_dir}/auth.sqlite" ]; then
-  sqlite3 "${backend_dir}/auth.sqlite" ".backup '${tmpdir}/auth.sqlite'"
+  if command -v sqlite3 >/dev/null 2>&1; then
+    sqlite3 "${backend_dir}/auth.sqlite" ".backup '${tmpdir}/auth.sqlite'"
+  else
+    cp -a "${backend_dir}/auth.sqlite" "${tmpdir}/auth.sqlite"
+  fi
 fi
 
-for file in backend.json auth.sqlite-wal auth.sqlite-shm; do
+for file in backend.json auth.sqlite-wal auth.sqlite-shm ssh_ca_ed25519 ssh_ca_ed25519.pub; do
   if [ -f "${backend_dir}/${file}" ]; then
     cp -a "${backend_dir}/${file}" "${tmpdir}/${file}"
   fi

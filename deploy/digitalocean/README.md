@@ -36,10 +36,20 @@ then deletes the account key. Cloud-init configures VMs to trust short-lived
 boxhaven SSH certificates instead. The backend SSH user CA is stored at
 `/opt/boxhaven/data/backend/ssh_ca_ed25519` and is included in the backend data
 backups.
+
+Production Compose requires signup and quota guardrails. Keep
+`BOXHAVEN_SIGNUP_MODE=invite` and set `BOXHAVEN_SIGNUP_INVITE_CODES` before
+deploying, or set `BOXHAVEN_SIGNUP_MODE=disabled` after the initial accounts are
+created. Review `BOXHAVEN_MAX_MACHINES_PER_USER`,
+`BOXHAVEN_MAX_MACHINES_TOTAL`, `BOXHAVEN_IDLE_MACHINE_TTL_HOURS`, and
+`BOXHAVEN_STALE_CREATE_TTL_SECONDS` against the account's expected budget.
+
 Set `BOXHAVEN_PREVIEW_BASE_DOMAIN` to the wildcard domain above. The default
 preview target is port `80` on each remote machine; change
 `BOXHAVEN_PREVIEW_TARGET_PORT` if the machine runtime should receive preview
-traffic somewhere else.
+traffic somewhere else. `BOXHAVEN_PREVIEW_PROXY_TIMEOUT_SECONDS` bounds preview
+upstream requests, and Caddy checks every on-demand preview certificate hostname
+with the backend before issuance.
 
 ## Deploy
 
@@ -119,10 +129,12 @@ and recreating the backend container.
 docker compose --env-file deploy/digitalocean/.env.production \
   -f deploy/digitalocean/docker-compose.yml ps
 curl -fsS https://api.boxhaven.dev/healthz
+curl -fsS https://api.boxhaven.dev/metrics
 curl -fsS https://app.boxhaven.dev/healthz
 sudo systemctl status boxhaven-backend-backup.timer --no-pager
 sudo systemctl start boxhaven-backend-backup.service
 ls -lh /opt/boxhaven/backups
+scripts/verify-backend-backup-restore.sh /opt/boxhaven/backups/<archive>.tar.gz
 ```
 
 After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or

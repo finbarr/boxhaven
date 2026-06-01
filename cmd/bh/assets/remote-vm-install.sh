@@ -265,6 +265,7 @@ set -euo pipefail
 workdir="${1:-${BOXHAVEN_PROJECT_PATH:-$(pwd)}}"
 home_dir="${HOME:-/root}"
 
+export HOME="$home_dir"
 export BOXHAVEN=1
 export BOXHAVEN_REMOTE=1
 export BOXHAVEN_PROJECT_PATH="$workdir"

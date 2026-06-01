@@ -106,9 +106,30 @@ For the hosted DigitalOcean deployment:
 docker compose --env-file deploy/digitalocean/.env.production \
   -f deploy/digitalocean/docker-compose.yml ps
 curl -fsS https://api.boxhaven.dev/healthz
+curl -fsS https://api.boxhaven.dev/metrics
 curl -fsS https://app.boxhaven.dev/healthz
 sudo systemctl status boxhaven-backend-backup.timer --no-pager
 ```
 
 Backups are installed through `deploy/digitalocean/install-backups.sh` and write
-archives under `/opt/boxhaven/backups`.
+archives under `/opt/boxhaven/backups`. Verify restore viability after backup
+changes and during operations drills:
+
+```bash
+scripts/verify-backend-backup-restore.sh /opt/boxhaven/backups/<archive>.tar.gz
+```
+
+Production deployments should keep signup gated and machine creation bounded:
+
+```bash
+BOXHAVEN_SIGNUP_MODE=invite
+BOXHAVEN_SIGNUP_INVITE_CODES=<comma-separated-codes>
+BOXHAVEN_MAX_MACHINES_PER_USER=3
+BOXHAVEN_MAX_MACHINES_TOTAL=100
+BOXHAVEN_IDLE_MACHINE_TTL_HOURS=72
+BOXHAVEN_STALE_CREATE_TTL_SECONDS=1800
+```
+
+Alert on failed health checks, missing metrics, container restarts, backup timer
+failures, high `boxhaven_machines`, nonzero stale bootstrap counts, and
+unexpected DigitalOcean spend.

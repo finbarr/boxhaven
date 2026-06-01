@@ -26,7 +26,9 @@ bh destroy work
 syncs the current project into `/opt/boxhaven/project` by default. `bh run`
 syncs the current project before starting the command on the existing machine.
 Interactive commands attach to the machine's managed tmux session; noninteractive
-commands run over direct SSH.
+commands run over direct SSH. Sync excludes the local root `./bh` build artifact
+so platform-specific CLI binaries are not copied between the workstation and the
+remote box.
 
 ## What It Provides
 
@@ -71,6 +73,11 @@ Environment overrides:
 - `BOXHAVEN_BACKEND_URL`
 - `BOXHAVEN_TOKEN`
 - `GH_TOKEN` or `GITHUB_TOKEN` for GitHub repository access inside remote boxes
+
+Production backends should gate signup with `BOXHAVEN_SIGNUP_MODE=invite` or
+`disabled`, set machine quotas, and expose `/metrics` to monitoring. See
+[backend/README.md](backend/README.md) and
+[deploy/digitalocean/README.md](deploy/digitalocean/README.md).
 
 ## GitHub Repository Access
 

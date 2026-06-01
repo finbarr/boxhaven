@@ -42,12 +42,28 @@ const app = createBackend({
   provider,
   store,
   sshCA,
+  logger: boolEnv(process.env.BOXHAVEN_BACKEND_LOG_REQUESTS),
   appDir: process.env.BOXHAVEN_BACKEND_APP_DIR || defaultAppDir,
   apiPublicURL,
   appPublicURL,
   corsOrigins: splitList(process.env.BOXHAVEN_BACKEND_CORS_ORIGINS || process.env.BETTER_AUTH_TRUSTED_ORIGINS),
   previewBaseDomain: process.env.BOXHAVEN_PREVIEW_BASE_DOMAIN,
   previewTargetPort: Number(process.env.BOXHAVEN_PREVIEW_TARGET_PORT || 80),
+  previewProxyTimeoutMs: positiveIntEnv(process.env.BOXHAVEN_PREVIEW_PROXY_TIMEOUT_SECONDS, 30) * 1000,
+  signupPolicy: {
+    mode: signupMode(process.env.BOXHAVEN_SIGNUP_MODE),
+    allowedEmailDomains: splitList(process.env.BOXHAVEN_SIGNUP_ALLOWED_DOMAINS),
+    inviteCodes: splitList(process.env.BOXHAVEN_SIGNUP_INVITE_CODES),
+  },
+  limits: {
+    maxMachinesPerUser: positiveIntEnv(process.env.BOXHAVEN_MAX_MACHINES_PER_USER),
+    maxMachinesTotal: positiveIntEnv(process.env.BOXHAVEN_MAX_MACHINES_TOTAL),
+  },
+  maintenance: {
+    intervalMs: positiveIntEnv(process.env.BOXHAVEN_MAINTENANCE_INTERVAL_SECONDS, 60) * 1000,
+    idleMachineTTLSeconds: positiveIntEnv(process.env.BOXHAVEN_IDLE_MACHINE_TTL_SECONDS) || positiveIntEnv(process.env.BOXHAVEN_IDLE_MACHINE_TTL_HOURS) * 60 * 60,
+    staleCreateTTLSeconds: positiveIntEnv(process.env.BOXHAVEN_STALE_CREATE_TTL_SECONDS, 30 * 60),
+  },
 });
 
 await app.listen({ host, port });
@@ -77,4 +93,19 @@ function publicOrigin(value: string): string {
 
 function trimURL(value: string | undefined): string {
   return (value || "").trim().replace(/\/+$/, "");
+}
+
+function positiveIntEnv(value: string | undefined, fallback = 0): number {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function boolEnv(value: string | undefined): boolean {
+  return /^(1|true|yes|on)$/i.test(String(value || "").trim());
+}
+
+function signupMode(value: string | undefined): "open" | "invite" | "disabled" {
+  const normalized = String(value || "open").trim().toLowerCase();
+  if (normalized === "invite" || normalized === "disabled") return normalized;
+  return "open";
 }

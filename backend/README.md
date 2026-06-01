@@ -80,6 +80,16 @@ Environment:
 - `BOXHAVEN_BACKEND_CORS_ORIGINS`: comma-separated browser origins allowed to call the API.
 - `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.boxhaven.dev`.
 - `BOXHAVEN_PREVIEW_TARGET_PORT`: machine port that preview hosts proxy to, default `80`.
+- `BOXHAVEN_PREVIEW_PROXY_TIMEOUT_SECONDS`: preview upstream timeout, default `30`.
+- `BOXHAVEN_SIGNUP_MODE`: `open`, `invite`, or `disabled`; production Compose defaults to `invite`.
+- `BOXHAVEN_SIGNUP_ALLOWED_DOMAINS`: optional comma-separated email domains allowed to sign up.
+- `BOXHAVEN_SIGNUP_INVITE_CODES`: comma-separated invite codes required when signup mode is `invite`.
+- `BOXHAVEN_MAX_MACHINES_PER_USER`: optional active machine quota per user.
+- `BOXHAVEN_MAX_MACHINES_TOTAL`: optional deployment-wide active machine quota.
+- `BOXHAVEN_MAINTENANCE_INTERVAL_SECONDS`: background cleanup interval, default `60` in production Compose.
+- `BOXHAVEN_IDLE_MACHINE_TTL_HOURS`: optional idle-machine destroy TTL used by backend maintenance.
+- `BOXHAVEN_STALE_CREATE_TTL_SECONDS`: stale unbootstrapped machine cleanup TTL, default `1800` in production Compose.
+- `BOXHAVEN_BACKEND_LOG_REQUESTS`: set to `1` to enable structured Fastify request logs and audit events.
 - `BOXHAVEN_BACKEND_AUTH_DB`: SQLite auth database path.
 - `BOXHAVEN_BACKEND_LISTEN`: listen address, default `127.0.0.1:8787`.
 - `BOXHAVEN_BACKEND_STATE`: JSON state file path.
@@ -118,6 +128,7 @@ Authorization: Bearer <token>
 Routes:
 
 - `GET /healthz`
+- `GET /metrics`
 - `POST /v1/auth/sign-up/email`
 - `POST /v1/auth/sign-in/email`
 - `POST /v1/auth/sign-out`
@@ -150,7 +161,19 @@ and CLI can see machines already present in the authenticated account. There are
 no multiple backend workspaces or named sessions per machine; the backend and VM
 agent own one project path and one tmux session on the VM. Bootstrap status is
 provider-owned. `POST /v1/machines` creates a new machine and returns `409` when
-the authenticated user already has that name.
+the authenticated user already has that name. It returns `403 quota_exceeded`
+when configured per-user or deployment-wide machine quotas are exhausted.
+
+Production deployments should not leave public signup open. Set
+`BOXHAVEN_SIGNUP_MODE=invite` with at least one `BOXHAVEN_SIGNUP_INVITE_CODES`
+value, or set `BOXHAVEN_SIGNUP_MODE=disabled` after provisioning initial users.
+The browser signup form includes an invite-code field, and API clients may pass
+`invite_code`, `inviteCode`, or `X-BoxHaven-Invite-Code`.
+
+`GET /metrics` returns Prometheus text metrics for total machines, connected
+machine agents, pending bootstrap count, and per-machine last-seen timestamps.
+The maintenance loop can destroy stale unbootstrapped machines and machines past
+the configured idle TTL; connected agents are never destroyed by the idle TTL.
 
 Every machine created by the backend gets a server-generated 48-byte random
 machine-agent token. The backend stores only a hash of that token and passes the

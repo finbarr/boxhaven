@@ -98,6 +98,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  --tier <tier>        Machine size tier for create: small, medium, or large")
 	fmt.Fprintln(os.Stderr, "  --ssh-user <user>    SSH user for create")
 	fmt.Fprintln(os.Stderr, "  --backend-url <url>  Remote backend API URL for create")
+	fmt.Fprintln(os.Stderr, "  sync excludes the local ./bh build artifact")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "EXAMPLES:")
 	fmt.Fprintln(os.Stderr, "  bh login")
@@ -675,6 +676,7 @@ func rsyncPathToRemote(machine remoteMachine, projectPath string, sourcePath str
 		"-az",
 		"--delete",
 		"--human-readable",
+		"--exclude=/bh",
 		source,
 		target,
 	}
@@ -697,6 +699,7 @@ func rsyncPathFromRemote(machine remoteMachine, projectPath string, destinationP
 		"-az",
 		"--delete",
 		"--human-readable",
+		"--exclude=/bh",
 		source,
 		target,
 	}

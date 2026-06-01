@@ -96,6 +96,8 @@ bh sync down work --force
 ```
 
 `sync down` overwrites local files by design, so it requires `--force`.
+Both sync directions exclude the local root `./bh` build artifact so a binary
+built on one platform is not copied into a box or back onto the workstation.
 
 ## Push To GitHub From The Box
 

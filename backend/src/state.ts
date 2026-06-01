@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { BackendState, RemoteMachine, stateVersion } from "./types.js";
 
 export class StateStore {
@@ -67,8 +67,11 @@ export class StateStore {
     fn(state);
     state.version = stateVersion;
     state.updated_at = new Date().toISOString();
-    await mkdir(dirname(this.path), { recursive: true });
-    await writeFile(this.path, `${JSON.stringify(state, null, 2)}\n`);
+    const dir = dirname(this.path);
+    await mkdir(dir, { recursive: true });
+    const tmpPath = join(dir, `.tmp-${Date.now()}-${process.pid}.json`);
+    await writeFile(tmpPath, `${JSON.stringify(state, null, 2)}\n`);
+    await rename(tmpPath, this.path);
     this.state = state;
   }
 
