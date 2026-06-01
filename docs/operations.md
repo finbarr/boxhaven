@@ -25,6 +25,37 @@ npm --prefix backend test
 `make lint` always runs `go vet`. It also runs `golangci-lint` when that binary
 is installed locally.
 
+## Local Compose Backend Smoke
+
+Run the Docker Compose backend after backend, browser, auth, or deployment
+container changes. This verifies the production container build, the served app,
+and basic API reachability without creating cloud machines:
+
+```bash
+export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-$(openssl rand -hex 32)}"
+export DIGITALOCEAN_ACCESS_TOKEN="${DIGITALOCEAN_ACCESS_TOKEN:-dop_v1_local_smoke}"
+export BOXHAVEN_BACKEND_PORT=127.0.0.1:8877
+export BETTER_AUTH_URL=http://127.0.0.1:8877/v1/auth
+export BOXHAVEN_APP_URL=http://127.0.0.1:8877
+export BOXHAVEN_API_URL=http://127.0.0.1:8877
+
+docker compose -f docker-compose.backend.yml up -d --build
+docker compose -f docker-compose.backend.yml ps
+curl -fsS http://127.0.0.1:8877/healthz
+curl -fsS http://127.0.0.1:8877/v1/providers
+curl -fsS -I http://127.0.0.1:8877/
+BOXHAVEN_BACKEND_URL=http://127.0.0.1:8877 ./bh config
+```
+
+Use a real `DIGITALOCEAN_ACCESS_TOKEN` and `bh login --backend-url
+http://127.0.0.1:8877` before running creates or the remote lifecycle smoke
+against the local stack. A dummy token only covers startup and read-only checks.
+When done, stop the stack with:
+
+```bash
+docker compose -f docker-compose.backend.yml down
+```
+
 ## Remote Lifecycle Smoke
 
 Remote VM, SSH, sync, snapshot, preview, and agent changes need a real

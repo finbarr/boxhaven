@@ -35,8 +35,8 @@ in SQLite at `~/.local/state/boxhaven/auth.sqlite`.
 From the repository root:
 
 ```bash
-BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
-DIGITALOCEAN_ACCESS_TOKEN=dop_v1_example \
+export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+export DIGITALOCEAN_ACCESS_TOKEN=dop_v1_example
 docker compose -f docker-compose.backend.yml up --build
 ```
 
@@ -45,6 +45,28 @@ state in the `boxhaven-backend-data` Docker volume. Override the host bind with
 `BOXHAVEN_BACKEND_PORT`, for example `BOXHAVEN_BACKEND_PORT=127.0.0.1:8877`.
 When the public URL changes, also set `BETTER_AUTH_URL`, `BOXHAVEN_APP_URL`, and
 `BOXHAVEN_API_URL` so browser login links point at the reachable host.
+
+Use the local stack as a backend smoke after backend, browser, auth, or compose
+changes:
+
+```bash
+export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-$(openssl rand -hex 32)}"
+export DIGITALOCEAN_ACCESS_TOKEN="${DIGITALOCEAN_ACCESS_TOKEN:-dop_v1_local_smoke}"
+export BOXHAVEN_BACKEND_PORT=127.0.0.1:8877
+export BETTER_AUTH_URL=http://127.0.0.1:8877/v1/auth
+export BOXHAVEN_APP_URL=http://127.0.0.1:8877
+export BOXHAVEN_API_URL=http://127.0.0.1:8877
+
+docker compose -f docker-compose.backend.yml up -d --build
+docker compose -f docker-compose.backend.yml ps
+curl -fsS http://127.0.0.1:8877/healthz
+curl -fsS http://127.0.0.1:8877/v1/providers
+BOXHAVEN_BACKEND_URL=http://127.0.0.1:8877 ./bh config
+```
+
+A dummy `DIGITALOCEAN_ACCESS_TOKEN` is enough for build, startup, health, and
+read-only API checks. Creating boxes from this stack still requires a real
+DigitalOcean token and a CLI login token for the local backend.
 
 ## Production DigitalOcean Deployment
 
