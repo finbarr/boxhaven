@@ -108,6 +108,8 @@ ls -lh dist/
 sha256sum -c dist/checksums-v0.1.0.txt
 ```
 
+Pushing a `v*` tag runs the release workflow, uploads the generated archives to
+a GitHub release, and uses the matching `CHANGELOG.md` section as release notes.
 Create the golden remote image from the same pushed tag or commit so the CLI,
 backend, and VM runtime can be traced to one source revision.
 

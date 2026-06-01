@@ -17,6 +17,12 @@ Install it to `~/.local/bin` when you want `bh` on your shell path:
 make install
 ```
 
+Or install a released CLI archive:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/scripts/install-bh.sh | bash
+```
+
 ## Log In
 
 Use the hosted backend:

@@ -102,3 +102,24 @@ jobs:
         with:
           name: bh-${{ matrix.goos }}-${{ matrix.goarch }}
           path: bh
+
+  scripts:
+    name: Scripts and Release Packaging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Check shell syntax
+        run: bash -n scripts/*.sh deploy/digitalocean/*.sh
+
+      - name: Build release archives
+        run: VERSION=ci make dist
+
+      - name: Verify release checksums
+        run: sha256sum -c dist/checksums-ci.txt

@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build CLI archives
+        run: VERSION="${GITHUB_REF_NAME}" make dist
+
+      - name: Extract release notes
+        run: python3 .github/scripts/extract-release-notes.py "${GITHUB_REF_NAME}" CHANGELOG.md > release-notes.md
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          body_path: release-notes.md
+          files: |
+            dist/*.tar.gz
+            dist/checksums-${{ github.ref_name }}.txt

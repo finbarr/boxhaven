@@ -53,6 +53,14 @@ go build -o bh ./cmd/bh
 ./bh version
 ```
 
+## Install From Release
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/scripts/install-bh.sh | bash
+```
+
+Pin a version with `BOXHAVEN_INSTALL_VERSION=v0.1.0`.
+
 ## Release Archives
 
 Build signed-by-checksum CLI archives for Linux and macOS:
