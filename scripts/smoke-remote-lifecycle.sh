@@ -106,17 +106,33 @@ verify_runtime() {
   local name="$1"
   log "verifying runtime on ${name}"
   run_remote "$name" 'set -euo pipefail
-test "$BOXHAVEN_REMOTE" = "1"
-test "$BOXHAVEN_PROJECT_PATH" = "/opt/boxhaven/project"
-test -d /opt/boxhaven/project/.git
-command -v codex >/dev/null
-command -v claude >/dev/null
-command -v gh >/dev/null
-command -v tmux >/dev/null
-command -v docker >/dev/null
-test "$(tmux -f /etc/tmux.conf start-server \; show-options -gqv mouse)" = "on"
-git config --system --get-all safe.directory | grep -Fx /opt/boxhaven/project >/dev/null
-git -C /opt/boxhaven/project status --short >/dev/null
+check() {
+  label="$1"
+  shift
+  "$@" || {
+    printf "runtime check failed: %s\n" "$label" >&2
+    exit 1
+  }
+}
+
+check "BOXHAVEN_REMOTE env" test "$BOXHAVEN_REMOTE" = "1"
+check "BOXHAVEN_PROJECT_PATH env" test "$BOXHAVEN_PROJECT_PATH" = "/opt/boxhaven/project"
+check "synced project git directory" test -d /opt/boxhaven/project/.git
+check "codex command" command -v codex
+check "claude command" command -v claude
+check "gh command" command -v gh
+check "tmux command" command -v tmux
+check "docker command" command -v docker
+tmux_mouse="$(tmux -f /etc/tmux.conf start-server \; show-options -gqv mouse)" || {
+  printf "runtime check failed: tmux mouse option command\n" >&2
+  exit 1
+}
+check "tmux mouse option" test "$tmux_mouse" = "on"
+git config --system --get-all safe.directory | grep -Fx /opt/boxhaven/project >/dev/null || {
+  printf "runtime check failed: git safe.directory for /opt/boxhaven/project\n" >&2
+  exit 1
+}
+check "synced project git status" git -C /opt/boxhaven/project status --short
 '
 }
 
