@@ -10,6 +10,7 @@ token="${DIGITALOCEAN_ACCESS_TOKEN:-${DIGITALOCEAN_TOKEN:-${DO_API_TOKEN:-}}}"
 fixtures_dir="${BOXHAVEN_DO_AUDIT_FIXTURES:-}"
 boxhaven_tag="${BOXHAVEN_DO_AUDIT_TAG:-boxhaven}"
 required_uptime_targets="${BOXHAVEN_DO_AUDIT_UPTIME_TARGETS:-https://api.boxhaven.dev/healthz,https://app.boxhaven.dev/healthz}"
+required_alert_descriptions="${BOXHAVEN_DO_AUDIT_ALERT_DESCRIPTIONS:-BoxHaven CPU above 80%,BoxHaven memory above 90%,BoxHaven disk above 85%}"
 active_snapshot="${BOXHAVEN_REMOTE_IMAGE:-}"
 snapshot_prefix="${BOXHAVEN_DO_AUDIT_SNAPSHOT_PREFIX:-boxhaven-remote-}"
 snapshot_keep_days="${BOXHAVEN_DO_AUDIT_SNAPSHOT_KEEP_DAYS:-30}"
@@ -34,6 +35,7 @@ containing JSON files named after the API resource:
 Useful env:
   BOXHAVEN_DO_AUDIT_TAG=boxhaven
   BOXHAVEN_DO_AUDIT_UPTIME_TARGETS=https://api.boxhaven.dev/healthz,https://app.boxhaven.dev/healthz
+  BOXHAVEN_DO_AUDIT_ALERT_DESCRIPTIONS=BoxHaven CPU above 80%,BoxHaven memory above 90%,BoxHaven disk above 85%
   BOXHAVEN_DO_AUDIT_SNAPSHOT_PREFIX=boxhaven-remote-
   BOXHAVEN_DO_AUDIT_SNAPSHOT_KEEP_DAYS=30
   BOXHAVEN_DO_AUDIT_FAIL_BROAD_SSH=1
@@ -99,6 +101,7 @@ failures=0
 now_epoch="$(date -u +%s)"
 snapshot_keep_seconds=$((snapshot_keep_days * 24 * 60 * 60))
 required_targets_json="$(printf '%s' "$required_uptime_targets" | csv_to_json_array)"
+required_alerts_json="$(printf '%s' "$required_alert_descriptions" | csv_to_json_array)"
 
 require_command curl
 require_command jq
@@ -154,6 +157,14 @@ if [ "$alert_count" -eq 0 ]; then
   fail "no DigitalOcean monitoring alert policies found"
 else
   log "found ${alert_count} alert policies"
+fi
+missing_alerts="$(printf '%s' "$alerts_json" | jq -r --argjson required "$required_alerts_json" '
+  [(.policies // .alert_policies // .alerts // [])[]?.description] as $descriptions
+  | $required[]
+  | select(($descriptions | index(.)) | not)
+')"
+if [ -n "$missing_alerts" ]; then
+  fail "missing monitoring alert policies: $(printf '%s' "$missing_alerts" | paste -sd, -)"
 fi
 
 log "checking uptime checks"

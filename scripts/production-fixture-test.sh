@@ -231,7 +231,13 @@ cat > "${audit_fixtures}/firewalls.json" <<'JSON'
 }
 JSON
 cat > "${audit_fixtures}/alert_policies.json" <<'JSON'
-{"policies":[{"uuid":"policy-1","description":"BoxHaven CPU above 80%"}]}
+{
+  "policies": [
+    {"uuid":"policy-1","description":"BoxHaven CPU above 80%"},
+    {"uuid":"policy-2","description":"BoxHaven memory above 90%"},
+    {"uuid":"policy-3","description":"BoxHaven disk above 85%"}
+  ]
+}
 JSON
 cat > "${audit_fixtures}/uptime_checks.json" <<'JSON'
 {
