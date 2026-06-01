@@ -1,0 +1,114 @@
+# Operations
+
+This page covers the operational workflows that should be repeatable before
+BoxHaven changes are considered done.
+
+## Local Verification
+
+For CLI or shared behavior changes:
+
+```bash
+make clean && make build && make test
+make lint
+./bh version
+./bh help
+./bh config
+```
+
+For backend or browser app changes:
+
+```bash
+npm --prefix backend run build
+npm --prefix backend test
+```
+
+`make lint` always runs `go vet`. It also runs `golangci-lint` when that binary
+is installed locally.
+
+## Remote Lifecycle Smoke
+
+Remote VM, SSH, sync, snapshot, preview, and agent changes need a real
+production or production-equivalent smoke. The reusable script is:
+
+```bash
+make smoke-remote
+```
+
+Typical hosted production run:
+
+```bash
+BOXHAVEN_TOKEN=... \
+GH_TOKEN=... \
+BOXHAVEN_SMOKE_GIT_REMOTE=https://github.com/<org>/<smoke-repo>.git \
+make smoke-remote
+```
+
+The smoke does the following:
+
+- Builds the `bh` binary if needed.
+- Creates a temporary Git project.
+- Creates two remote boxes.
+- Verifies both boxes appear in `bh list`.
+- Syncs the project into each box.
+- Runs direct commands on both boxes.
+- Verifies expected runtime tools such as `codex`, `claude`, `gh`, `tmux`, and
+  Docker.
+- Starts an HTTP server and fetches each generated preview URL.
+- When `BOXHAVEN_SMOKE_GIT_REMOTE` and `GH_TOKEN` or `GITHUB_TOKEN` are set,
+  verifies GitHub credential forwarding and pushes then deletes temporary smoke
+  branches.
+- Destroys both boxes unless `BOXHAVEN_SMOKE_KEEP=1` is set.
+
+Useful options:
+
+```bash
+BOXHAVEN_SMOKE_BACKEND_URL=https://api.boxhaven.dev
+BOXHAVEN_SMOKE_TIER=small
+BOXHAVEN_SMOKE_PREFIX=my-smoke
+BOXHAVEN_SMOKE_KEEP=1
+BOXHAVEN_SMOKE_REQUIRE_PREVIEW=0
+```
+
+For agent reconnect coverage, pass a backend restart command:
+
+```bash
+BOXHAVEN_SMOKE_RESTART_BACKEND_CMD="ssh root@<control-plane-ip> 'cd /opt/boxhaven/app && docker compose --env-file deploy/digitalocean/.env.production -f deploy/digitalocean/docker-compose.yml restart backend'" \
+make smoke-remote
+```
+
+## Golden Image Rotation
+
+Remote runtime dependencies belong in the golden VM image. After changing
+`cmd/bh/assets/remote-vm-install.sh`, build and activate a new snapshot from a
+clean committed checkout or pushed ref:
+
+```bash
+deploy/digitalocean/build-remote-image.sh \
+  --env-file deploy/digitalocean/.env.production \
+  --set-active
+```
+
+Restart the backend after `BOXHAVEN_REMOTE_IMAGE` changes so new creates use the
+new snapshot:
+
+```bash
+docker compose --env-file deploy/digitalocean/.env.production \
+  -f deploy/digitalocean/docker-compose.yml up -d --build --force-recreate backend
+```
+
+Keep the previous snapshot id until the remote lifecycle smoke passes.
+
+## Production Health Checks
+
+For the hosted DigitalOcean deployment:
+
+```bash
+docker compose --env-file deploy/digitalocean/.env.production \
+  -f deploy/digitalocean/docker-compose.yml ps
+curl -fsS https://api.boxhaven.dev/healthz
+curl -fsS https://app.boxhaven.dev/healthz
+sudo systemctl status boxhaven-backend-backup.timer --no-pager
+```
+
+Backups are installed through `deploy/digitalocean/install-backups.sh` and write
+archives under `/opt/boxhaven/backups`.

@@ -58,7 +58,7 @@ sudo deploy/digitalocean/install-backups.sh
 
 ## Build the Remote VM Image
 
-New remote machines should come from a prebuilt boxhaven snapshot instead of a
+New remote machines should come from a prebuilt BoxHaven snapshot instead of a
 plain Ubuntu image. The image builder creates a temporary Droplet, installs the
 remote VM runtime, cleans cloud-init and SSH host identity, powers it off,
 snapshots it, deletes the builder Droplet, and prints the snapshot id.

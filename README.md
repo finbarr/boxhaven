@@ -1,7 +1,15 @@
 # BoxHaven
 
-BoxHaven gives AI coding agents and developer shells a named Linux machine that
-keeps running after your laptop disconnects.
+BoxHaven gives development teams a standard way to run AI coding agents and
+developer shells on named remote Linux boxes. Each box keeps running after a
+laptop disconnects, has a managed tmux session for long-running Codex, Claude,
+Gemini, or shell work, and can sync the current project to and from the remote
+machine.
+
+BoxHaven is built for the workflow many teams are assembling by hand today:
+remote dev boxes for individual developers, persistent agent sessions, direct
+SSH access, project sync, GitHub pushes from the box, and a self-hostable
+control plane.
 
 The CLI is intentionally small:
 
@@ -19,6 +27,22 @@ syncs the current project into `/opt/boxhaven/project` by default. `bh run`
 syncs the current project before starting the command on the existing machine.
 Interactive commands attach to the machine's managed tmux session; noninteractive
 commands run over direct SSH.
+
+## What It Provides
+
+- Named remote boxes: create, list, inspect, connect, sync, run, and destroy.
+- Project sync to `/opt/boxhaven/project` with explicit sync up/down commands.
+- A managed tmux session per box for long-running AI agent sessions.
+- Direct SSH using backend-signed short-lived user certificates.
+- GitHub HTTPS credential forwarding from local `GH_TOKEN` or `GITHUB_TOKEN`.
+- Optional preview hostnames for HTTP services running on the box.
+- An open-source Fastify/Better Auth backend with a DigitalOcean provider.
+
+## Docs
+
+- [Overview](docs/overview.md)
+- [Getting Started](docs/getting-started.md)
+- [Operations](docs/operations.md)
 
 ## Install From Source
 
