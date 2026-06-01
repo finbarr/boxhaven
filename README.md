@@ -33,6 +33,7 @@ commands run over direct SSH.
 - Named remote boxes: create, list, inspect, connect, sync, run, and destroy.
 - Project sync to `/opt/boxhaven/project` with explicit sync up/down commands.
 - A managed tmux session per box for long-running AI agent sessions.
+- Mouse-wheel scrolling through tmux history in interactive sessions.
 - Direct SSH using backend-signed short-lived user certificates.
 - GitHub HTTPS credential forwarding from local `GH_TOKEN` or `GITHUB_TOKEN`.
 - Git safe-directory configuration for the synced project path.

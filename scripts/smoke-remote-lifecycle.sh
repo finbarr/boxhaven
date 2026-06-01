@@ -114,6 +114,7 @@ command -v claude >/dev/null
 command -v gh >/dev/null
 command -v tmux >/dev/null
 command -v docker >/dev/null
+test "$(tmux show-options -gqv mouse)" = "on"
 git config --system --get-all safe.directory | grep -Fx /opt/boxhaven/project >/dev/null
 git -C /opt/boxhaven/project status --short >/dev/null
 '
