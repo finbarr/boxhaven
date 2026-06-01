@@ -275,6 +275,14 @@ BOXHAVEN_DO_AUDIT_SNAPSHOT_PREFIX=custom-remote- \
     exit 1
   }
 assert_contains "${tmpdir}/audit-missing-image.err" "set BOXHAVEN_REMOTE_IMAGE"
+BOXHAVEN_DO_AUDIT_FIXTURES="$audit_fixtures" \
+BOXHAVEN_DO_AUDIT_SNAPSHOT_PREFIX=custom-remote- \
+BOXHAVEN_REMOTE_IMAGE=other-snap \
+  scripts/digitalocean-production-audit.sh > "${tmpdir}/audit-wrong-image.out" 2> "${tmpdir}/audit-wrong-image.err" && {
+    printf 'DigitalOcean audit unexpectedly accepted non-BoxHaven active image\n' >&2
+    exit 1
+  }
+assert_contains "${tmpdir}/audit-wrong-image.err" "does not match prefix"
 
 cat > "${prune_fixtures}/snapshots.json" <<'JSON'
 {

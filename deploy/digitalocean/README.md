@@ -149,7 +149,7 @@ scripts/verify-backend-backup-restore.sh /opt/boxhaven/backups/<archive>.tar.gz
 make ensure-uptime
 BOXHAVEN_ALERT_EMAILS=<ops-email> make ensure-alerts
 BOXHAVEN_TRUSTED_SSH_CIDRS=<trusted-cidrs> make ensure-firewalls
-make audit-digitalocean
+BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> make audit-digitalocean
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> make prune-snapshots
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_IDS=160948396,160956820 make prune-snapshots
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1 make prune-snapshots

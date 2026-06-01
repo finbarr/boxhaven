@@ -216,17 +216,22 @@ else
 fi
 if [ -z "$active_snapshot" ]; then
   fail "set BOXHAVEN_REMOTE_IMAGE to the active BoxHaven remote snapshot id or name"
-elif ! printf '%s' "$snapshots_json" | jq -e --arg image "$active_snapshot" '
+else
+  active_snapshot_record="$(printf '%s' "$snapshots_json" | jq -c --arg image "$active_snapshot" '
   .snapshots[]?
   | select((.id | tostring) == $image or (.name // "") == $image)
-' >/dev/null; then
-  fail "active BOXHAVEN_REMOTE_IMAGE snapshot ${active_snapshot} was not found by id or name"
+  ' | sed -n '1p')"
+  if [ -z "$active_snapshot_record" ]; then
+    fail "active BOXHAVEN_REMOTE_IMAGE snapshot ${active_snapshot} was not found by id or name"
+  elif ! printf '%s' "$active_snapshot_record" | jq -e --arg prefix "$snapshot_prefix" '(.name // "") | startswith($prefix)' >/dev/null; then
+    fail "active BOXHAVEN_REMOTE_IMAGE snapshot ${active_snapshot} does not match prefix ${snapshot_prefix}"
+  fi
 fi
 
 old_snapshots="$(printf '%s' "$snapshots_json" | jq -r --arg prefix "$snapshot_prefix" --arg active "$active_snapshot" --argjson now "$now_epoch" --argjson keep "$snapshot_keep_seconds" '
   .snapshots[]?
   | select((.name // "") | startswith($prefix))
-  | select((.id | tostring) != $active)
+  | select((.id | tostring) != $active and (.name // "") != $active)
   | select(.created_at)
   | select(($now - ((.created_at | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601))) > $keep)
   | [.id, .name] | @tsv
