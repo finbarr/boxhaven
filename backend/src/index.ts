@@ -43,6 +43,7 @@ const app = createBackend({
   store,
   sshCA,
   logger: boolEnv(process.env.BOXHAVEN_BACKEND_LOG_REQUESTS),
+  trustProxy: boolEnv(process.env.BOXHAVEN_BACKEND_TRUST_PROXY),
   appDir: process.env.BOXHAVEN_BACKEND_APP_DIR || defaultAppDir,
   apiPublicURL,
   appPublicURL,
@@ -58,6 +59,12 @@ const app = createBackend({
   limits: {
     maxMachinesPerUser: positiveIntEnv(process.env.BOXHAVEN_MAX_MACHINES_PER_USER),
     maxMachinesTotal: positiveIntEnv(process.env.BOXHAVEN_MAX_MACHINES_TOTAL),
+  },
+  rateLimits: {
+    authWindowMs: positiveIntEnv(process.env.BOXHAVEN_AUTH_RATE_LIMIT_WINDOW_SECONDS, 60) * 1000,
+    authMaxRequests: positiveIntEnv(process.env.BOXHAVEN_AUTH_RATE_LIMIT_MAX, 30),
+    machineCreateWindowMs: positiveIntEnv(process.env.BOXHAVEN_CREATE_RATE_LIMIT_WINDOW_SECONDS, 10 * 60) * 1000,
+    machineCreateMaxRequests: positiveIntEnv(process.env.BOXHAVEN_CREATE_RATE_LIMIT_MAX, 10),
   },
   maintenance: {
     intervalMs: positiveIntEnv(process.env.BOXHAVEN_MAINTENANCE_INTERVAL_SECONDS, 60) * 1000,

@@ -90,6 +90,11 @@ Environment:
 - `BOXHAVEN_IDLE_MACHINE_TTL_HOURS`: optional idle-machine destroy TTL used by backend maintenance.
 - `BOXHAVEN_STALE_CREATE_TTL_SECONDS`: stale unbootstrapped machine cleanup TTL, default `1800` in production Compose.
 - `BOXHAVEN_BACKEND_LOG_REQUESTS`: set to `1` to enable structured Fastify request logs and audit events.
+- `BOXHAVEN_BACKEND_TRUST_PROXY`: set to `1` when the backend is behind the production Caddy proxy so rate limits use forwarded client IPs.
+- `BOXHAVEN_AUTH_RATE_LIMIT_WINDOW_SECONDS`: auth endpoint rate-limit window, default `60` in production Compose.
+- `BOXHAVEN_AUTH_RATE_LIMIT_MAX`: auth endpoint requests per client per window, default `30` in production Compose.
+- `BOXHAVEN_CREATE_RATE_LIMIT_WINDOW_SECONDS`: machine-create rate-limit window, default `600` in production Compose.
+- `BOXHAVEN_CREATE_RATE_LIMIT_MAX`: machine creates per user per window, default `10` in production Compose.
 - `BOXHAVEN_BACKEND_AUTH_DB`: SQLite auth database path.
 - `BOXHAVEN_BACKEND_LISTEN`: listen address, default `127.0.0.1:8787`.
 - `BOXHAVEN_BACKEND_STATE`: JSON state file path.
@@ -169,6 +174,12 @@ Production deployments should not leave public signup open. Set
 value, or set `BOXHAVEN_SIGNUP_MODE=disabled` after provisioning initial users.
 The browser signup form includes an invite-code field, and API clients may pass
 `invite_code`, `inviteCode`, or `X-BoxHaven-Invite-Code`.
+
+Auth routes and machine creation are rate-limited in memory per backend process.
+For the single-node production Compose deployment this is enough to blunt common
+signup, login, and provisioning abuse. If the backend is later scaled
+horizontally, move these buckets to shared storage before treating the limits as
+global.
 
 `GET /metrics` returns Prometheus text metrics for total machines, connected
 machine agents, pending bootstrap count, and per-machine last-seen timestamps.

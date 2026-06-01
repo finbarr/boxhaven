@@ -133,3 +133,23 @@ BOXHAVEN_STALE_CREATE_TTL_SECONDS=1800
 Alert on failed health checks, missing metrics, container restarts, backup timer
 failures, high `boxhaven_machines`, nonzero stale bootstrap counts, and
 unexpected DigitalOcean spend.
+
+Run the reusable DigitalOcean audit after firewall, snapshot, monitoring, or DNS
+changes:
+
+```bash
+DIGITALOCEAN_ACCESS_TOKEN=... \
+BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> \
+make audit-digitalocean
+```
+
+The audit is read-only. It checks tagged droplets, broad SSH firewall ingress,
+monitoring alert-policy presence, uptime checks for app/API health URLs, active
+BoxHaven snapshot presence, and old non-active BoxHaven snapshots that should be
+reviewed for cleanup.
+
+Create missing app/API uptime checks with:
+
+```bash
+DIGITALOCEAN_ACCESS_TOKEN=... make ensure-uptime
+```

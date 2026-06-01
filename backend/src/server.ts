@@ -16,6 +16,7 @@ export type BackendOptions = {
   store: StateStore;
   sshCA: SSHCertificateAuthority;
   logger?: boolean;
+  trustProxy?: boolean;
   appDir?: string;
   apiPublicURL?: string;
   appPublicURL?: string;
@@ -26,6 +27,7 @@ export type BackendOptions = {
   machineReadyTimeoutMs?: number;
   signupPolicy?: SignupPolicy;
   limits?: BackendLimits;
+  rateLimits?: BackendRateLimits;
   maintenance?: BackendMaintenanceOptions;
 };
 
@@ -50,10 +52,22 @@ type BackendLimits = {
   maxMachinesTotal?: number;
 };
 
+type BackendRateLimits = {
+  authWindowMs?: number;
+  authMaxRequests?: number;
+  machineCreateWindowMs?: number;
+  machineCreateMaxRequests?: number;
+};
+
 type BackendMaintenanceOptions = {
   intervalMs?: number;
   idleMachineTTLSeconds?: number;
   staleCreateTTLSeconds?: number;
+};
+
+type RateLimitBucket = {
+  resetAt: number;
+  count: number;
 };
 
 type AgentConnection = {
@@ -111,10 +125,11 @@ const agentRPCDefaultTimeout = 60_000;
 const agentRPCSetupTimeout = 30 * 60_000;
 
 export function createBackend(options: BackendOptions): FastifyInstance {
-  const app = Fastify({ logger: options.logger === true });
+  const app = Fastify({ logger: options.logger === true, trustProxy: options.trustProxy === true });
   void app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
   registerCors(app, options.corsOrigins || []);
   const agents = new Map<string, AgentConnection>();
+  const rateLimiter = new RateLimiter();
   registerMaintenance(app, options, agents);
   app.after(() => {
     app.get("/v1/agent/connect", { websocket: true }, async (socket, request) => {
@@ -159,6 +174,11 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   });
 
   app.all("/v1/auth/*", async (request, reply) => {
+    const authLimit = rateLimiter.check(`auth:${clientIdentity(request)}`, positiveInteger(options.rateLimits?.authWindowMs), positiveInteger(options.rateLimits?.authMaxRequests));
+    if (authLimit.limited) {
+      reply.header("retry-after", String(Math.max(1, Math.ceil((authLimit.resetAt - Date.now()) / 1000))));
+      return reply.code(429).send({ id: "rate_limited", message: "too many authentication requests; retry later" });
+    }
     const signupRejection = validateSignupRequest(options, request);
     if (signupRejection) {
       return reply.code(signupRejection.status).send({ id: signupRejection.id, message: signupRejection.message });
@@ -189,6 +209,11 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
     const tierError = validateMachineTier(body.tier);
     if (tierError) return reply.code(400).send({ id: "bad_request", message: tierError });
+    const createLimit = rateLimiter.check(`machine-create:${auth.userID}`, positiveInteger(options.rateLimits?.machineCreateWindowMs), positiveInteger(options.rateLimits?.machineCreateMaxRequests));
+    if (createLimit.limited) {
+      reply.header("retry-after", String(Math.max(1, Math.ceil((createLimit.resetAt - Date.now()) / 1000))));
+      return reply.code(429).send({ id: "rate_limited", message: "too many machine create requests; retry later" });
+    }
     return createMachine(options, agents, auth, body, reply);
   });
 
@@ -627,6 +652,34 @@ function positiveInteger(value: number | undefined): number {
   return Number.isFinite(value) && Number(value) > 0 ? Math.floor(Number(value)) : 0;
 }
 
+class RateLimiter {
+  private readonly buckets = new Map<string, RateLimitBucket>();
+
+  check(key: string, windowMs: number, maxRequests: number): { limited: boolean; resetAt: number; remaining: number } {
+    if (!windowMs || !maxRequests) return { limited: false, resetAt: 0, remaining: Number.POSITIVE_INFINITY };
+    const now = Date.now();
+    let bucket = this.buckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      bucket = { resetAt: now + windowMs, count: 0 };
+      this.buckets.set(key, bucket);
+    }
+    bucket.count += 1;
+    this.prune(now);
+    return {
+      limited: bucket.count > maxRequests,
+      resetAt: bucket.resetAt,
+      remaining: Math.max(0, maxRequests - bucket.count),
+    };
+  }
+
+  private prune(now: number): void {
+    if (this.buckets.size < 1000) return;
+    for (const [key, bucket] of this.buckets) {
+      if (bucket.resetAt <= now) this.buckets.delete(key);
+    }
+  }
+}
+
 function machineNameConflict(name: string) {
   return {
     id: "conflict",
@@ -811,6 +864,10 @@ function bearerToken(headers: Record<string, string | string[] | undefined>): st
   const value = Array.isArray(raw) ? raw[0] : raw;
   const match = /^Bearer\s+(.+)$/i.exec(value || "");
   return match ? match[1].trim() : "";
+}
+
+function clientIdentity(request: { ip?: string; headers: Record<string, string | string[] | undefined> }): string {
+  return request.ip || headerValue(request.headers, "x-forwarded-for").split(",")[0]?.trim() || headerValue(request.headers, "x-real-ip") || "unknown";
 }
 
 function generateAgentToken(): string {

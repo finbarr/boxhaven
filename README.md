@@ -75,8 +75,9 @@ Environment overrides:
 - `GH_TOKEN` or `GITHUB_TOKEN` for GitHub repository access inside remote boxes
 
 Production backends should gate signup with `BOXHAVEN_SIGNUP_MODE=invite` or
-`disabled`, set machine quotas, and expose `/metrics` to monitoring. See
-[backend/README.md](backend/README.md) and
+`disabled`, set machine quotas and rate limits, expose `/metrics` to monitoring,
+and run `make audit-digitalocean` against hosted deployments. See
+[backend/README.md](backend/README.md), [docs/operations.md](docs/operations.md), and
 [deploy/digitalocean/README.md](deploy/digitalocean/README.md).
 
 ## GitHub Repository Access

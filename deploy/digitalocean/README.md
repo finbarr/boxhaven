@@ -43,6 +43,8 @@ deploying, or set `BOXHAVEN_SIGNUP_MODE=disabled` after the initial accounts are
 created. Review `BOXHAVEN_MAX_MACHINES_PER_USER`,
 `BOXHAVEN_MAX_MACHINES_TOTAL`, `BOXHAVEN_IDLE_MACHINE_TTL_HOURS`, and
 `BOXHAVEN_STALE_CREATE_TTL_SECONDS` against the account's expected budget.
+Leave `BOXHAVEN_BACKEND_TRUST_PROXY=1` for the Caddy deployment so auth and
+machine-create rate limits use the real client IP from forwarded headers.
 
 Set `BOXHAVEN_PREVIEW_BASE_DOMAIN` to the wildcard domain above. The default
 preview target is port `80` on each remote machine; change
@@ -135,6 +137,8 @@ sudo systemctl status boxhaven-backend-backup.timer --no-pager
 sudo systemctl start boxhaven-backend-backup.service
 ls -lh /opt/boxhaven/backups
 scripts/verify-backend-backup-restore.sh /opt/boxhaven/backups/<archive>.tar.gz
+make ensure-uptime
+make audit-digitalocean
 ```
 
 After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or

@@ -416,6 +416,55 @@ test("backend exposes production metrics", async () => {
   assert.match(metrics.body, /boxhaven_machine_last_seen_seconds/);
 });
 
+test("backend rate limits authentication requests by client", async () => {
+  const { app } = await createTestBackend("limited-auth@example.com", "password123", {
+    skipSignup: true,
+    rateLimits: { authWindowMs: 60_000, authMaxRequests: 1 },
+  });
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-in/email",
+    remoteAddress: "198.51.100.10",
+    payload: { email: "nobody@example.com", password: "wrong" },
+  });
+  assert.notEqual(first.statusCode, 429);
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-in/email",
+    remoteAddress: "198.51.100.10",
+    payload: { email: "nobody@example.com", password: "wrong" },
+  });
+  assert.equal(second.statusCode, 429, second.body);
+  assert.match(second.body, /too many authentication requests/);
+  assert.equal(typeof second.headers["retry-after"], "string");
+});
+
+test("backend rate limits machine creates per user", async () => {
+  const { app, token } = await createTestBackend("limited-create@example.com", "password123", {
+    rateLimits: { machineCreateWindowMs: 60_000, machineCreateMaxRequests: 1 },
+  });
+  const headers = { authorization: `Bearer ${token}` };
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "first" },
+  });
+  assert.equal(first.statusCode, 201, first.body);
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "second" },
+  });
+  assert.equal(second.statusCode, 429, second.body);
+  assert.match(second.body, /too many machine create requests/);
+});
+
 test("backend imports provider machines for the authenticated user", async () => {
   const { app, provider, token } = await createTestBackend();
   const headers = { authorization: `Bearer ${token}` };
@@ -632,6 +681,7 @@ async function createTestBackend(email = "user@example.com", password = "passwor
   machineReadyTimeoutMs?: number;
   signupPolicy?: Parameters<typeof createBackend>[0]["signupPolicy"];
   limits?: Parameters<typeof createBackend>[0]["limits"];
+  rateLimits?: Parameters<typeof createBackend>[0]["rateLimits"];
   skipSignup?: boolean;
 } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -657,6 +707,7 @@ async function createTestBackend(email = "user@example.com", password = "passwor
     machineReadyTimeoutMs: options.machineReadyTimeoutMs ?? 0,
     signupPolicy: options.signupPolicy,
     limits: options.limits,
+    rateLimits: options.rateLimits,
   });
   const token = options.skipSignup ? "" : await signUp(app, email, password);
   return { app, provider, token };
