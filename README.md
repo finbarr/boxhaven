@@ -102,8 +102,9 @@ checks and alerts, restrict SSH ingress with `make ensure-firewalls`, prune old
 non-active remote snapshots after smoke, and run `make smoke-production-http`
 and `make audit-digitalocean` against hosted deployments. Use
 `make audit-digitalocean-account` to track known legacy Droplets and manual
-snapshots until they are retired, and `make audit-backup-storage` to keep backup
-directories within configured size/count thresholds. See
+snapshots until they are retired and to detect DigitalOcean project drift. Use
+`make audit-backup-storage` to keep backup directories within configured
+size/count thresholds. See
 [backend/README.md](backend/README.md), [docs/operations.md](docs/operations.md), and
 [deploy/digitalocean/README.md](deploy/digitalocean/README.md).
 

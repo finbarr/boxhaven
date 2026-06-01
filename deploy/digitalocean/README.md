@@ -151,6 +151,9 @@ BOXHAVEN_ALERT_EMAILS=<ops-email> make ensure-alerts
 BOXHAVEN_TRUSTED_SSH_CIDRS=<trusted-cidrs> make ensure-firewalls
 BOXHAVEN_REMOTE_IMAGE=<active-snapshot-id> make audit-digitalocean
 BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=<expected-droplet-names> \
+  BOXHAVEN_DO_ACCOUNT_EXPECTED_PROJECTS=<expected-project-names> \
+  BOXHAVEN_DO_ACCOUNT_DROPLET_PROJECTS=<droplet=project-pairs> \
+  BOXHAVEN_DO_ACCOUNT_REQUIRE_DEFAULT_PROJECT_EMPTY=1 \
   BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
   BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS=160948396,160956820 \
   make audit-digitalocean-account
