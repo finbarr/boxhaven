@@ -96,6 +96,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  Global:  ~/.config/boxhaven/config.toml")
 	fmt.Fprintln(os.Stderr, "  Project: .boxhaven.toml")
 	fmt.Fprintln(os.Stderr, "  Env:     BOXHAVEN_BACKEND_URL, BOXHAVEN_TOKEN, GH_TOKEN, GITHUB_TOKEN")
+	fmt.Fprintln(os.Stderr, "  GitHub:  GH_TOKEN/GITHUB_TOKEN or local `gh auth login` for HTTPS repo pushes")
 }
 
 func printVersion() {

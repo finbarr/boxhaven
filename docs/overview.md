@@ -32,8 +32,8 @@ BoxHaven standardizes that stack:
 - Developers connect over direct SSH using short-lived certificates.
 - Project bytes sync to `/opt/boxhaven/project`.
 - Interactive work runs in a managed tmux session.
-- GitHub HTTPS pushes work when a local `GH_TOKEN` or `GITHUB_TOKEN` is
-  forwarded.
+- GitHub HTTPS pushes work when local `GH_TOKEN`, `GITHUB_TOKEN`, or GitHub CLI
+  auth is forwarded.
 
 ## Architecture
 
@@ -63,10 +63,11 @@ signs temporary CLI public keys for the authenticated machine owner, and the VM
 trusts the backend user CA.
 
 GitHub repository access is separate from BoxHaven auth. When the local project
-is a GitHub repo and `GH_TOKEN` or `GITHUB_TOKEN` is set, the CLI writes those
-values over direct SSH to `/run/boxhaven/session.env` on the VM. The file is
-root-only, lives in tmpfs, and is sourced by the machine agent before setup,
-direct commands, or tmux session launches.
+is a GitHub repo, the CLI writes GitHub auth over direct SSH to
+`/run/boxhaven/session.env` on the VM. `GH_TOKEN` or `GITHUB_TOKEN` are used when
+set; otherwise the CLI falls back to `gh auth token` from the local GitHub CLI.
+The file is root-only, lives in tmpfs, and is sourced by the machine agent before
+setup, direct commands, or tmux session launches.
 
 ## Current Provider
 

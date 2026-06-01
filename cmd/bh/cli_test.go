@@ -107,6 +107,26 @@ func TestRemoteGitAuthEnvForGitHubRepos(t *testing.T) {
 	}
 }
 
+func TestRemoteGitAuthEnvFallsBackToGitHubCLI(t *testing.T) {
+	temp := t.TempDir()
+	ghPath := filepath.Join(temp, "gh")
+	script := "#!/usr/bin/env sh\nif [ \"$1\" = auth ] && [ \"$2\" = token ]; then echo gh-cli-token; exit 0; fi\nexit 1\n"
+	if err := os.WriteFile(ghPath, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", temp+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	env := remoteGitAuthEnv("https://github.com/finbarr/boxhaven.git")
+	if env["GH_TOKEN"] != "gh-cli-token" {
+		t.Fatalf("GH_TOKEN = %q, want GitHub CLI token", env["GH_TOKEN"])
+	}
+	if env["GITHUB_TOKEN"] != "gh-cli-token" {
+		t.Fatalf("GITHUB_TOKEN = %q, want GitHub CLI token", env["GITHUB_TOKEN"])
+	}
+}
+
 func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stderr

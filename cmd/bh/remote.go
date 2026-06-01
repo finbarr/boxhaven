@@ -968,6 +968,12 @@ func remoteGitAuthEnv(repoURL string) map[string]string {
 	if token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); token != "" {
 		env["GITHUB_TOKEN"] = token
 	}
+	if env["GH_TOKEN"] == "" && env["GITHUB_TOKEN"] == "" {
+		if token := githubAuthTokenFromCLI(); token != "" {
+			env["GH_TOKEN"] = token
+			env["GITHUB_TOKEN"] = token
+		}
+	}
 	if env["GH_TOKEN"] == "" && env["GITHUB_TOKEN"] != "" {
 		env["GH_TOKEN"] = env["GITHUB_TOKEN"]
 	}
@@ -975,6 +981,19 @@ func remoteGitAuthEnv(repoURL string) map[string]string {
 		env["GITHUB_TOKEN"] = env["GH_TOKEN"]
 	}
 	return env
+}
+
+func githubAuthTokenFromCLI() string {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return ""
+	}
+	cmd := exec.Command("gh", "auth", "token")
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }
 
 func isGitHubRepoURL(repoURL string) bool {
