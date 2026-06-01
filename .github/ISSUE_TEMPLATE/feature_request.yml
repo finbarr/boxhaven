@@ -1,0 +1,18 @@
+name: Feature request
+description: Suggest an idea
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the use case, not just the feature. What are you doing when you hit this limitation?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How do you think this should work? (Optional but helpful)
+    validations:
+      required: false

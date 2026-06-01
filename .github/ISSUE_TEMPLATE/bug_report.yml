@@ -1,0 +1,36 @@
+name: Bug report
+description: Something isn't working
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: bh version
+      description: Output of `bh version`
+      placeholder: "v0.6.0"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: "OS, shell, and backend URL or deployment"
+      placeholder: "macOS 15.3, zsh, https://api.boxhaven.dev"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the command you ran and the full error output.
+      placeholder: |
+        $ bh run work codex
+        error: ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: false
