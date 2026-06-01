@@ -289,9 +289,9 @@ assert_contains "${tmpdir}/audit-wrong-image.err" "does not match prefix"
 cat > "${account_audit_fixtures}/droplets.json" <<'JSON'
 {
   "droplets": [
-    {"id":101,"name":"boxhaven-control-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z"},
-    {"id":102,"name":"fundy-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z"},
-    {"id":103,"name":"web","status":"active","created_at":"2015-01-01T00:00:00Z"}
+    {"id":101,"name":"boxhaven-control-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z","tags":["boxhaven"]},
+    {"id":102,"name":"fundy-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z","tags":["fundy"]},
+    {"id":103,"name":"web","status":"active","created_at":"2015-01-01T00:00:00Z","tags":[]}
   ]
 }
 JSON
@@ -325,6 +325,13 @@ JSON
 cat > "${account_audit_fixtures}/project_resources_legacy.json" <<'JSON'
 {"resources":[]}
 JSON
+cat > "${account_audit_fixtures}/firewalls.json" <<'JSON'
+{
+  "firewalls": [
+    {"id":"fw-1","name":"baseline-public-web-ssh","droplet_ids":[101],"tags":[]}
+  ]
+}
+JSON
 BOXHAVEN_DO_ACCOUNT_AUDIT_FIXTURES="$account_audit_fixtures" \
 BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=boxhaven-control-prod-nyc3-01,fundy-prod-nyc3-01 \
 BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
@@ -332,6 +339,7 @@ BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS=160948396 \
 BOXHAVEN_DO_ACCOUNT_EXPECTED_PROJECTS=boxhaven,fundy,legacy \
 BOXHAVEN_DO_ACCOUNT_DROPLET_PROJECTS=boxhaven-control-prod-nyc3-01=boxhaven,fundy-prod-nyc3-01=fundy,web=legacy \
 BOXHAVEN_DO_ACCOUNT_REQUIRE_DEFAULT_PROJECT_EMPTY=1 \
+BOXHAVEN_DO_ACCOUNT_REQUIRE_FIREWALL_COVERAGE=1 \
   scripts/digitalocean-account-cleanup-audit.sh > "${tmpdir}/account-audit-bad.out" 2> "${tmpdir}/account-audit-bad.err" && {
     printf 'DigitalOcean account cleanup audit unexpectedly accepted cleanup fixtures\n' >&2
     exit 1
@@ -341,11 +349,12 @@ assert_contains "${tmpdir}/account-audit-bad.err" "cleanup droplets still exist:
 assert_contains "${tmpdir}/account-audit-bad.err" "cleanup snapshots still exist: 160948396"
 assert_contains "${tmpdir}/account-audit-bad.err" "droplets are not in expected projects: web->legacy"
 assert_contains "${tmpdir}/account-audit-bad.err" "default project still has droplets: web"
+assert_contains "${tmpdir}/account-audit-bad.err" "droplets have no firewall coverage: fundy-prod-nyc3-01"
 cat > "${account_audit_fixtures}/droplets.json" <<'JSON'
 {
   "droplets": [
-    {"id":101,"name":"boxhaven-control-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z"},
-    {"id":102,"name":"fundy-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z"}
+    {"id":101,"name":"boxhaven-control-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z","tags":["boxhaven"]},
+    {"id":102,"name":"fundy-prod-nyc3-01","status":"active","created_at":"2026-06-01T00:00:00Z","tags":["fundy"]}
   ]
 }
 JSON
@@ -359,6 +368,13 @@ JSON
 cat > "${account_audit_fixtures}/project_resources_Default.json" <<'JSON'
 {"resources":[]}
 JSON
+cat > "${account_audit_fixtures}/firewalls.json" <<'JSON'
+{
+  "firewalls": [
+    {"id":"fw-1","name":"baseline-public-web-ssh","droplet_ids":[101,102],"tags":[]}
+  ]
+}
+JSON
 BOXHAVEN_DO_ACCOUNT_AUDIT_FIXTURES="$account_audit_fixtures" \
 BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=boxhaven-control-prod-nyc3-01,fundy-prod-nyc3-01 \
 BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
@@ -366,6 +382,7 @@ BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS=160948396 \
 BOXHAVEN_DO_ACCOUNT_EXPECTED_PROJECTS=boxhaven,fundy,legacy \
 BOXHAVEN_DO_ACCOUNT_DROPLET_PROJECTS=boxhaven-control-prod-nyc3-01=boxhaven,fundy-prod-nyc3-01=fundy \
 BOXHAVEN_DO_ACCOUNT_REQUIRE_DEFAULT_PROJECT_EMPTY=1 \
+BOXHAVEN_DO_ACCOUNT_REQUIRE_FIREWALL_COVERAGE=1 \
   scripts/digitalocean-account-cleanup-audit.sh > "${tmpdir}/account-audit-good.out"
 assert_contains "${tmpdir}/account-audit-good.out" "DigitalOcean account cleanup audit passed"
 

@@ -211,6 +211,7 @@ BOXHAVEN_DO_ACCOUNT_EXPECTED_DROPLETS=boxhaven-control-prod-nyc3-01,fundy-prod-n
 BOXHAVEN_DO_ACCOUNT_EXPECTED_PROJECTS=boxhaven,fundy,calmbox,electric-monk \
 BOXHAVEN_DO_ACCOUNT_DROPLET_PROJECTS=boxhaven-control-prod-nyc3-01=boxhaven,fundy-prod-nyc3-01=fundy,calmbox-prod-nyc3-01=calmbox,electric-monk-prod-nyc3-01=electric-monk \
 BOXHAVEN_DO_ACCOUNT_REQUIRE_DEFAULT_PROJECT_EMPTY=1 \
+BOXHAVEN_DO_ACCOUNT_REQUIRE_FIREWALL_COVERAGE=1 \
 BOXHAVEN_DO_ACCOUNT_CLEANUP_DROPLETS=web \
 BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS=160948396,160956820 \
 make audit-digitalocean-account
@@ -218,7 +219,8 @@ make audit-digitalocean-account
 
 This audit is read-only and fails while named cleanup droplets or snapshots
 still exist, when the live active Droplet inventory differs from the expected
-list, or when configured project membership has drifted.
+list, when configured project membership has drifted, or when expected active
+Droplets are not covered by any DigitalOcean cloud firewall.
 
 Audit backup storage after retention or cleanup changes, including adjacent
 production services with large backup directories:

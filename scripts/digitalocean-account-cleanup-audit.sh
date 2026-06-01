@@ -14,6 +14,7 @@ cleanup_snapshot_ids="${BOXHAVEN_DO_ACCOUNT_CLEANUP_SNAPSHOT_IDS:-}"
 expected_projects="${BOXHAVEN_DO_ACCOUNT_EXPECTED_PROJECTS:-}"
 droplet_projects="${BOXHAVEN_DO_ACCOUNT_DROPLET_PROJECTS:-}"
 require_default_project_empty="${BOXHAVEN_DO_ACCOUNT_REQUIRE_DEFAULT_PROJECT_EMPTY:-0}"
+require_firewall_coverage="${BOXHAVEN_DO_ACCOUNT_REQUIRE_FIREWALL_COVERAGE:-0}"
 
 usage() {
   cat <<'EOF'
@@ -32,6 +33,7 @@ Env:
   BOXHAVEN_DO_ACCOUNT_EXPECTED_PROJECTS=boxhaven,fundy,legacy
   BOXHAVEN_DO_ACCOUNT_DROPLET_PROJECTS=boxhaven-control-prod-nyc3-01=boxhaven,web=legacy
   BOXHAVEN_DO_ACCOUNT_REQUIRE_DEFAULT_PROJECT_EMPTY=1
+  BOXHAVEN_DO_ACCOUNT_REQUIRE_FIREWALL_COVERAGE=1
   BOXHAVEN_DO_ACCOUNT_AUDIT_FIXTURES=dir        # local tests; expects droplets.json, snapshots.json, and optional project fixtures
 EOF
 }
@@ -217,6 +219,29 @@ EOF_PROJECTS
     if [ -n "$default_project_droplets" ]; then
       fail "default project still has droplets: $(printf '%s' "$default_project_droplets" | paste -sd, -)"
     fi
+  fi
+fi
+
+if [ "$require_firewall_coverage" = "1" ]; then
+  firewalls_json="$(api_get firewalls firewalls "/v2/firewalls?per_page=200")"
+  log "checking DigitalOcean firewall coverage"
+  uncovered_droplets="$(jq -rn \
+    --argjson droplets "$droplets_json" \
+    --argjson firewalls "$firewalls_json" \
+    --argjson expected "$expected_droplets_json" '
+    ($droplets.droplets // [])[]
+    | select((.status // "") != "archive")
+    | . as $droplet
+    | select(($expected | length) == 0 or ($expected | index($droplet.name)))
+    | ($droplet.tags // []) as $droplet_tags
+    | select(any(($firewalls.firewalls // [])[]?;
+        ((.droplet_ids // []) | index($droplet.id)) or
+        ((.tags // []) | any(. as $tag | $droplet_tags | index($tag)))
+      ) | not)
+    | $droplet.name
+  ')"
+  if [ -n "$uncovered_droplets" ]; then
+    fail "droplets have no firewall coverage: $(printf '%s' "$uncovered_droplets" | paste -sd, -)"
   fi
 fi
 
