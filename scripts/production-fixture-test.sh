@@ -20,6 +20,7 @@ require_command() {
 
 require_command jq
 require_command bash
+require_command ssh-keygen
 
 assert_contains() {
   local file="$1"
@@ -44,6 +45,8 @@ alerts_fixture="${tmpdir}/alert_policies.json"
 uptime_fixture="${tmpdir}/uptime_checks.json"
 audit_fixtures="${tmpdir}/audit"
 prune_fixtures="${tmpdir}/prune"
+backup_root="${tmpdir}/backups"
+data_root="${tmpdir}/data"
 mkdir -p "$audit_fixtures" "$prune_fixtures"
 
 cat > "$firewalls_fixture" <<'JSON'
@@ -184,5 +187,25 @@ if BOXHAVEN_DO_SNAPSHOT_PRUNE_APPLY=1 \
   exit 1
 fi
 assert_contains "${tmpdir}/prune-apply.err" "set BOXHAVEN_REMOTE_IMAGE"
+
+mkdir -p "${data_root}/backend" "${data_root}/caddy/data"
+printf '{"machines":[]}\n' > "${data_root}/backend/backend.json"
+if command -v sqlite3 >/dev/null 2>&1; then
+  sqlite3 "${data_root}/backend/auth.sqlite" 'CREATE TABLE users (id TEXT PRIMARY KEY);'
+else
+  printf 'sqlite unavailable in fixture environment\n' > "${data_root}/backend/auth.sqlite"
+fi
+ssh-keygen -q -t ed25519 -N '' -f "${data_root}/backend/ssh_ca_ed25519"
+printf 'caddy fixture\n' > "${data_root}/caddy/data/fixture.txt"
+
+archive="$(
+  BOXHAVEN_BACKUP_ROOT="$backup_root" \
+  BOXHAVEN_DATA_ROOT="$data_root" \
+  deploy/digitalocean/backup-backend.sh
+)"
+test -f "$archive"
+test "$(stat -c '%a' "$archive" 2>/dev/null || stat -f '%Lp' "$archive")" = "600"
+scripts/verify-backend-backup-restore.sh "$archive" > "${tmpdir}/backup.out"
+assert_contains "${tmpdir}/backup.out" "backup restore verification passed"
 
 printf 'production fixture tests passed\n'
