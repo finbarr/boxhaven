@@ -120,11 +120,12 @@ check "BOXHAVEN_PROJECT_PATH env" test "$BOXHAVEN_PROJECT_PATH" = "/opt/boxhaven
 check "preview target port env" test "${BOXHAVEN_PREVIEW_TARGET_PORT:-}" = "80"
 check "web bind env" test "${BOXHAVEN_WEB_BIND:-}" = "0.0.0.0"
 if command -v jq >/dev/null 2>&1 && [ -f "${BOXHAVEN_CONTEXT_FILE:-/run/boxhaven/context.json}" ]; then
+  filter=".preview.url == \$preview_url and .preview.bind_host == \$bind_host and .preview.target_port == \$target_port"
   jq -e \
     --arg preview_url "${BOXHAVEN_PREVIEW_URL:-}" \
     --arg bind_host "${BOXHAVEN_WEB_BIND:-0.0.0.0}" \
     --argjson target_port "${BOXHAVEN_PREVIEW_TARGET_PORT:-80}" \
-    '.preview.url == $preview_url and .preview.bind_host == $bind_host and .preview.target_port == $target_port' \
+    "$filter" \
     "${BOXHAVEN_CONTEXT_FILE:-/run/boxhaven/context.json}" >/dev/null || {
       printf "runtime check failed: BoxHaven preview context\n" >&2
       exit 1
