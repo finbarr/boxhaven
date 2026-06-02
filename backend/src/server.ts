@@ -298,7 +298,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return { result: { skipped: true } };
     }
     const result = await callAgentRPC(context.agent, "run_setup", {
-      ...machineRuntimePayload(context.machine),
+      ...machineRuntimePayload(options, context.machine),
       commands,
     }, agentRPCSetupTimeout);
     return { result };
@@ -333,7 +333,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const attach = request.body?.attach === true;
     try {
       const result = await callAgentRPC(context.agent, "prepare_session", {
-        ...machineRuntimePayload(context.machine),
+        ...machineRuntimePayload(options, context.machine),
         command,
         attach,
       }, agentRPCDefaultTimeout);
@@ -361,7 +361,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!context) return;
     const command = normalizeStringArray(request.body?.command);
     const result = await callAgentRPC(context.agent, "direct_command", {
-      ...machineRuntimePayload(context.machine),
+      ...machineRuntimePayload(options, context.machine),
       command,
     }, agentRPCDefaultTimeout);
     return { machine: publicMachine(context.machine), result };
@@ -661,7 +661,7 @@ async function ensureMachineSSHCertificateTrust(
   ].join(" && ");
 
   await callAgentRPC(agent, "run_setup", {
-    ...machineRuntimePayload(normalized),
+    ...machineRuntimePayload(options, normalized),
     run_as_root: true,
     commands: [command],
   }, timeoutMs);
@@ -730,14 +730,18 @@ function normalizeStringArray(value: unknown): string[] {
   return value.map((item) => String(item).trim()).filter(Boolean);
 }
 
-function machineRuntimePayload(machine: RemoteMachine): Record<string, unknown> {
+function machineRuntimePayload(options: BackendOptions, machine: RemoteMachine): Record<string, unknown> {
   const projectPath = normalizeAbsoluteRemotePath(machine.project_path || defaultProjectPath) || defaultProjectPath;
+  const preview = previewOptions(options);
+  const previewTargetPort = preview?.targetPort || 80;
   return {
     name: machine.name,
     ssh_user: machine.ssh_user || defaultSSHUser,
     project_path: projectPath,
     preview_url: machine.preview_url || "",
     preview_hostname: machine.preview_hostname || "",
+    preview_target_port: previewTargetPort,
+    preview_bind_host: "0.0.0.0",
   };
 }
 

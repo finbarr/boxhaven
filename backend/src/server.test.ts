@@ -273,6 +273,10 @@ test("backend delegates session lifecycle to the machine agent", async () => {
   assert.equal(sessionRPC.action, "prepare_session");
   assert.deepEqual(sessionRPC.payload.command, ["codex"]);
   assert.equal(sessionRPC.payload.ssh_user, defaultSSHUser);
+  assert.equal(sessionRPC.payload.preview_url, created.json().machine.preview_url);
+  assert.equal(sessionRPC.payload.preview_hostname, created.json().machine.preview_hostname);
+  assert.equal(sessionRPC.payload.preview_target_port, 80);
+  assert.equal(sessionRPC.payload.preview_bind_host, "0.0.0.0");
   assert.equal(sessionRPC.payload.attach, true);
   agent.send(JSON.stringify({
     type: "rpc_result",

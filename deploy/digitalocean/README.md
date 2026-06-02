@@ -41,6 +41,14 @@ preview target is port `80` on each remote machine; change
 `BOXHAVEN_PREVIEW_TARGET_PORT` if the machine runtime should receive preview
 traffic somewhere else.
 
+Remote apps do not need to manage public TLS for the preview URL. Caddy
+terminates HTTPS on the control-plane Droplet, the backend maps the preview
+hostname back to the owning machine, and the backend fetches
+`http://<machine-public-ip>:BOXHAVEN_PREVIEW_TARGET_PORT`. Inside the box,
+agents and shells can read the public URL and target-port details from
+`BOXHAVEN_PREVIEW_URL`, `BOXHAVEN_WEB_PORT`, `BOXHAVEN_WEB_BIND`, and
+`/run/boxhaven/context.json`.
+
 ## Deploy
 
 From the repository root on your workstation:
