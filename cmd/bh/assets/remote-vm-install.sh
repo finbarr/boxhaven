@@ -306,6 +306,8 @@ export BOXHAVEN_REMOTE=1
 export BOXHAVEN_PROJECT_PATH="$workdir"
 export BOXHAVEN_CONTEXT_FILE="${BOXHAVEN_CONTEXT_FILE:-/run/boxhaven/context.json}"
 export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-${home_dir}/.npm-global}"
+export BOXHAVEN_PREVIEW_TARGET_PORT="${BOXHAVEN_PREVIEW_TARGET_PORT:-80}"
+export BOXHAVEN_PREVIEW_BIND_HOST="${BOXHAVEN_PREVIEW_BIND_HOST:-0.0.0.0}"
 
 runtime_dir="$(dirname "$BOXHAVEN_CONTEXT_FILE")"
 if [ ! -d "$runtime_dir" ] || [ ! -w "$runtime_dir" ]; then
@@ -324,10 +326,18 @@ if command -v jq >/dev/null 2>&1; then
   if [ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]; then
     gh_token_forwarded=true
   fi
+  preview_target_port="${BOXHAVEN_PREVIEW_TARGET_PORT:-80}"
+  case "$preview_target_port" in
+    ""|*[!0-9]*) preview_target_port=80 ;;
+  esac
   jq -n \
     --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg workdir "$workdir" \
     --arg home "$home_dir" \
+    --arg preview_url "${BOXHAVEN_PREVIEW_URL:-}" \
+    --arg preview_hostname "${BOXHAVEN_PREVIEW_HOSTNAME:-}" \
+    --arg preview_bind_host "${BOXHAVEN_PREVIEW_BIND_HOST:-0.0.0.0}" \
+    --argjson preview_target_port "$preview_target_port" \
     --argjson gh_token_forwarded "$gh_token_forwarded" \
     '{
       schema_version: 1,
@@ -335,6 +345,15 @@ if command -v jq >/dev/null 2>&1; then
       remote: true,
       boxhaven_version: "remote-vm",
       generated_at: $generated_at,
+      preview: {
+        enabled: ($preview_url != ""),
+        url: $preview_url,
+        hostname: $preview_hostname,
+        external_scheme: "https",
+        upstream_scheme: "http",
+        bind_host: $preview_bind_host,
+        target_port: $preview_target_port
+      },
       runtime: {
         configured: "remote-vm",
         selected: "remote-vm",
@@ -409,6 +428,53 @@ if [ -f "$home_dir/.claude.json" ] || command -v jq >/dev/null 2>&1; then
 fi
 EOF
   chmod +x /usr/local/bin/boxhaven-remote-session
+}
+
+install_boxhaven_skills() {
+  step "installing boxhaven skills"
+  install -d -m 0755 /etc/skel/.codex/skills/boxhaven-web-preview
+  cat > /etc/skel/.codex/skills/boxhaven-web-preview/SKILL.md <<'EOF'
+---
+name: boxhaven-web-preview
+description: Use when working inside a BoxHaven remote machine on an app with a web UI, preview URL, public HTTP/HTTPS access, server binding, or port configuration.
+---
+
+# BoxHaven Web Preview
+
+BoxHaven exposes one public preview URL for this machine. Read it from
+`$BOXHAVEN_PREVIEW_URL`; do not guess it.
+
+Runtime details:
+
+- Browser traffic reaches `https://$BOXHAVEN_PREVIEW_HOSTNAME`.
+- TLS terminates at the BoxHaven control plane.
+- The control plane proxies to this machine over plain HTTP on
+  `$BOXHAVEN_PREVIEW_TARGET_PORT`, normally `80`.
+- Bind web servers to `$BOXHAVEN_WEB_BIND`, normally `0.0.0.0`, not `localhost`.
+- Serve the public app on `$BOXHAVEN_WEB_PORT`, normally `80`.
+- `/run/boxhaven/context.json` contains the same preview information under
+  `.preview`.
+
+If a framework's dev server normally uses a high port, either configure it to
+listen on `$BOXHAVEN_WEB_BIND:$BOXHAVEN_WEB_PORT` or run a small reverse proxy
+on `$BOXHAVEN_WEB_PORT` to the framework port. Binding to port 80 may need
+`sudo`; the default `boxhaven` user has sudo access.
+
+Examples:
+
+```bash
+npm run dev -- --host "$BOXHAVEN_WEB_BIND" --port "$BOXHAVEN_WEB_PORT"
+```
+
+```bash
+sudo python3 -m http.server "$BOXHAVEN_WEB_PORT" --bind "$BOXHAVEN_WEB_BIND"
+```
+
+When reporting success, show `$BOXHAVEN_PREVIEW_URL`.
+EOF
+  install -d -o boxhaven -g boxhaven -m 0755 /home/boxhaven/.codex/skills
+  cp -R /etc/skel/.codex/skills/boxhaven-web-preview /home/boxhaven/.codex/skills/
+  chown -R boxhaven:boxhaven /home/boxhaven/.codex
 }
 
 install_boxhaven_agent() {
@@ -611,6 +677,8 @@ function tmuxAttachCommand() {
 
 function remoteCommandPrefix(payload) {
   const workPath = remoteWorkPath(payload);
+  const previewPort = previewTargetPort(payload);
+  const previewBindHost = previewBindHostForPayload(payload);
   const parts = [
     "export PATH=\"/opt/boxhaven/bin:/root/.npm-global/bin:/home/boxhaven/.npm-global/bin:/root/.local/bin:/home/boxhaven/.local/bin:/usr/local/go/bin:$PATH\"",
     "export NPM_CONFIG_PREFIX=\"${NPM_CONFIG_PREFIX:-$HOME/.npm-global}\"",
@@ -621,10 +689,15 @@ function remoteCommandPrefix(payload) {
     "export BOXHAVEN_REMOTE=1",
     `export BOXHAVEN_PROJECT_PATH=${shellQuote(workPath)}`,
     `export BOXHAVEN_CONTEXT_FILE=${shellQuote(boxhavenContextFile)}`,
+    `export BOXHAVEN_PREVIEW_TARGET_PORT=${shellQuote(String(previewPort))}`,
+    `export BOXHAVEN_PREVIEW_BIND_HOST=${shellQuote(previewBindHost)}`,
+    `export BOXHAVEN_WEB_PORT=${shellQuote(String(previewPort))}`,
+    `export BOXHAVEN_WEB_BIND=${shellQuote(previewBindHost)}`,
   ];
   parts.push(`if [ -r ${shellQuote(sessionEnvFile)} ]; then . ${shellQuote(sessionEnvFile)}; fi`);
-  if (String(payload.preview_url || "").trim()) {
-    parts.push(`export BOXHAVEN_PREVIEW_URL=${shellQuote(String(payload.preview_url).trim())}`);
+  const previewURL = String(payload.preview_url || "").trim();
+  if (previewURL) {
+    parts.push(`export BOXHAVEN_PREVIEW_URL=${shellQuote(previewURL)}`);
   }
   if (String(payload.preview_hostname || "").trim()) {
     parts.push(`export BOXHAVEN_PREVIEW_HOSTNAME=${shellQuote(String(payload.preview_hostname).trim())}`);
@@ -636,6 +709,17 @@ function remoteCommandPrefix(payload) {
 
 function remoteWorkPath(payload) {
   return cleanAbsolutePath(payload.project_path) || defaultProjectPath;
+}
+
+function previewTargetPort(payload) {
+  const port = Number(payload.preview_target_port || 80);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) return 80;
+  return port;
+}
+
+function previewBindHostForPayload(payload) {
+  const host = String(payload.preview_bind_host || "0.0.0.0").trim();
+  return host || "0.0.0.0";
 }
 
 function runProcessForPayload(payload, command, args, options = {}) {
@@ -789,6 +873,7 @@ install_wrappers
 install_tmux_config
 install_git_credential_helper
 install_remote_session
+install_boxhaven_skills
 install_boxhaven_agent
 write_profile
 

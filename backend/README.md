@@ -179,6 +179,16 @@ Routes:
 - `POST /v1/machines/:name/commands/record`
 - `DELETE /v1/machines/:name`
 
+Preview requests arrive at Caddy over HTTPS for
+`*.BOXHAVEN_PREVIEW_BASE_DOMAIN`, are rewritten through the backend preview
+proxy, and then are fetched from the machine over plain HTTP on
+`BOXHAVEN_PREVIEW_TARGET_PORT`. The VM runtime exposes this configuration to
+agent sessions through `BOXHAVEN_PREVIEW_URL`, `BOXHAVEN_PREVIEW_HOSTNAME`,
+`BOXHAVEN_PREVIEW_TARGET_PORT`, `BOXHAVEN_WEB_PORT`, `BOXHAVEN_WEB_BIND`, and
+`/run/boxhaven/context.json`. The remote image also installs a Codex skill named
+`boxhaven-web-preview` that describes how web apps should bind and report their
+public URL.
+
 Machines are scoped to the authenticated Better Auth user and are one-to-one with
 a remote VM. The backend imports provider-owned machines when listing, so the UI
 and CLI can see machines already present in the authenticated account. There are

@@ -99,6 +99,27 @@ Those commands also forward the effective local Git author identity for the
 current project by setting `user.name` and `user.email` in the remote SSH user's
 global Git config. BoxHaven does not copy the full local Git config.
 
+## Web Preview
+
+Each hosted box receives a public preview URL when the backend is configured
+with a preview base domain. Public HTTPS traffic terminates at the BoxHaven
+control plane, then the backend proxies plain HTTP to the machine's
+`BOXHAVEN_PREVIEW_TARGET_PORT`, default `80`.
+
+Inside the box, commands receive:
+
+- `BOXHAVEN_PREVIEW_URL`: the browser URL to share.
+- `BOXHAVEN_PREVIEW_HOSTNAME`: the public hostname.
+- `BOXHAVEN_PREVIEW_TARGET_PORT` / `BOXHAVEN_WEB_PORT`: the machine port to
+  serve, normally `80`.
+- `BOXHAVEN_WEB_BIND`: the bind address to use, normally `0.0.0.0`.
+- `/run/boxhaven/context.json`: structured runtime context with the same
+  preview details under `.preview`.
+
+Apps should bind HTTP to `0.0.0.0:$BOXHAVEN_WEB_PORT` or run a reverse proxy on
+that port to the app's internal dev-server port. The default `boxhaven` user has
+sudo access if binding to port 80 is required.
+
 ## Backend
 
 The open-source backend in [backend](backend) provides:
