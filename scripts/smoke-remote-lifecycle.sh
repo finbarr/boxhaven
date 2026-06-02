@@ -206,12 +206,16 @@ printf "boxhaven preview smoke\n" > /tmp/boxhaven-preview/index.html
 if [ -f /tmp/boxhaven-preview.pid ]; then
   old_pid="$(cat /tmp/boxhaven-preview.pid 2>/dev/null || true)"
   if [ -n "$old_pid" ]; then
-    kill "$old_pid" >/dev/null 2>&1 || true
+    sudo -n kill "$old_pid" >/dev/null 2>&1 || kill "$old_pid" >/dev/null 2>&1 || true
   fi
 fi
-cd /tmp/boxhaven-preview
-nohup python3 -m http.server 80 --bind 0.0.0.0 >/tmp/boxhaven-preview.log 2>&1 &
-echo "$!" > /tmp/boxhaven-preview.pid
+sudo -n sh -c "cd /tmp/boxhaven-preview && nohup python3 -m http.server 80 --bind 0.0.0.0 >/tmp/boxhaven-preview.log 2>&1 & echo \$! > /tmp/boxhaven-preview.pid"
+sleep 1
+server_pid="$(cat /tmp/boxhaven-preview.pid 2>/dev/null || true)"
+if [ -z "$server_pid" ] || ! sudo -n kill -0 "$server_pid" >/dev/null 2>&1; then
+  cat /tmp/boxhaven-preview.log >&2 || true
+  exit 1
+fi
 '
   local url
   url="$(preview_url_for "$name")"
