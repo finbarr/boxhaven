@@ -88,10 +88,11 @@ Caddy data.
 Deploy the hosted production stack from the repository root:
 
 ```bash
-npm run deploy:production
+npm run deploy:app
 ```
 
-By default the command SSHes to `root@app.boxhaven.dev`, fast-forwards
+`npm run deploy:production` is a compatibility alias for the same fast app/API
+deploy. By default the command SSHes to `root@app.boxhaven.dev`, fast-forwards
 `/opt/boxhaven/app` on `master`, runs the Compose deploy on the Droplet, and
 checks both public health endpoints. It forwards your SSH agent so the Droplet
 can fetch the private GitHub repo without storing a GitHub token. On the Droplet
@@ -134,11 +135,11 @@ provider password emails, then deletes the account key. SSH access still goes
 through short-lived backend-signed certificates and VM trust of the matching
 user CA.
 
-Use `deploy/digitalocean/build-remote-image.sh` to build and rotate the
-DigitalOcean golden snapshot. The normal release flow is: commit the runtime
-change, build a snapshot from that commit or a pushed tag with `--set-active`,
-restart the backend, smoke create a temporary remote, then keep the previous
-snapshot id available for rollback until the smoke passes.
+Use `npm run deploy:runtime` to build, activate, and verify a DigitalOcean
+golden snapshot after changing the VM runtime or image-builder code. The normal
+runtime release flow is: commit the runtime change, run the runtime deploy from
+that commit or a pushed tag, smoke create a temporary remote, then keep the
+previous snapshot id available for rollback until the smoke passes.
 
 ## API
 

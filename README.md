@@ -155,15 +155,29 @@ Production deployment and golden-image tooling live in
 from the repository root with:
 
 ```bash
-npm run deploy:production
+npm run deploy:app
 ```
 
-The command SSHes to `root@app.boxhaven.dev`, fast-forwards
-`/opt/boxhaven/app` on `master`, runs the DigitalOcean Compose deploy, and
-checks the production app and API health endpoints. It forwards your SSH agent
-so the Droplet can fetch the private GitHub repo without storing a GitHub token.
-Override the target with `BOXHAVEN_DEPLOY_TARGET` or `-- --target user@host` for
-self-hosted installs.
+`npm run deploy:production` is kept as a compatibility alias for the same fast
+app/API deploy. These commands SSH to `root@app.boxhaven.dev`, fast-forward
+`/opt/boxhaven/app` on `master`, run the DigitalOcean Compose deploy, and check
+the production app and API health endpoints. They do not rebuild the remote VM
+snapshot.
+
+After changing the VM runtime or image-builder code, explicitly rebuild and
+activate the remote VM image:
+
+```bash
+npm run deploy:runtime
+```
+
+The runtime deploy creates and snapshots a temporary DigitalOcean builder
+Droplet, updates `BOXHAVEN_REMOTE_IMAGE`, then restarts and verifies the backend
+so new boxes use the image.
+
+Both deploy commands forward your SSH agent so the Droplet can fetch the private
+GitHub repo without storing a GitHub token. Override the target with
+`BOXHAVEN_DEPLOY_TARGET` or `-- --target user@host` for self-hosted installs.
 
 ## Production Smoke
 
