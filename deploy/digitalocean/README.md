@@ -54,15 +54,29 @@ agents and shells can read the public URL and target-port details from
 From the repository root on your workstation:
 
 ```bash
-npm run deploy:production
+npm run deploy:app
 ```
 
-The command SSHes to `root@app.boxhaven.dev`, fast-forwards
-`/opt/boxhaven/app` on `master`, runs the Docker Compose deploy on the Droplet,
-and checks `https://api.boxhaven.dev/healthz` plus
-`https://app.boxhaven.dev/healthz`. It forwards your SSH agent so the Droplet can
-fetch the private GitHub repo without storing a GitHub token. For self-hosted
-installs, override the SSH target or checkout path:
+`npm run deploy:production` is kept as a compatibility alias for the same fast
+app/API deploy. These commands SSH to `root@app.boxhaven.dev`, fast-forward
+`/opt/boxhaven/app` on `master`, run the Docker Compose deploy on the Droplet,
+and check `https://api.boxhaven.dev/healthz` plus
+`https://app.boxhaven.dev/healthz`. They do not rebuild the remote VM image.
+
+After changing the VM runtime or image-builder code, explicitly rebuild and
+activate the remote VM image:
+
+```bash
+npm run deploy:runtime
+```
+
+The runtime deploy creates a temporary builder Droplet, snapshots it, updates
+`BOXHAVEN_REMOTE_IMAGE` in `.env.production`, and restarts/verifies the backend
+so future boxes use the new image.
+
+Both remote deploy commands forward your SSH agent so the Droplet can fetch the
+private GitHub repo without storing a GitHub token. For self-hosted installs,
+override the SSH target or checkout path:
 
 ```bash
 BOXHAVEN_DEPLOY_TARGET=root@<control-plane-ip> \

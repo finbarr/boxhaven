@@ -2,8 +2,10 @@
   "name": "boxhaven",
   "private": true,
   "scripts": {
+    "deploy:app": "deploy/digitalocean/deploy-production.sh",
     "deploy:production": "deploy/digitalocean/deploy-production.sh",
     "deploy:production:local": "deploy/digitalocean/deploy-production.sh --local",
-    "deploy:production:verify": "deploy/digitalocean/deploy-production.sh --verify-only"
+    "deploy:production:verify": "deploy/digitalocean/deploy-production.sh --verify-only",
+    "deploy:runtime": "deploy/digitalocean/deploy-runtime-image.sh"
   }
 }
