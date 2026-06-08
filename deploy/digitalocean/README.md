@@ -72,7 +72,9 @@ npm run deploy:runtime
 
 The runtime deploy creates a temporary builder Droplet, snapshots it, updates
 `BOXHAVEN_REMOTE_IMAGE` in `.env.production`, and restarts/verifies the backend
-so future boxes use the new image.
+so future boxes use the new image. By default, it builds from the current active
+`BOXHAVEN_REMOTE_IMAGE` snapshot when one exists, so runtime script changes do
+not reinstall the full OS/toolchain from Ubuntu.
 
 Both remote deploy commands forward your SSH agent so the Droplet can fetch the
 private GitHub repo without storing a GitHub token. For self-hosted installs,
@@ -117,12 +119,24 @@ commands, and tmux sessions. Rebuild and activate a new snapshot after changing
 `cmd/bh/assets/remote-vm-install.sh`; otherwise newly created boxes will keep
 the previous runtime behavior.
 
+When `BOXHAVEN_REMOTE_IMAGE` is already set in the env file, the builder starts
+from that active snapshot by default. This keeps dependency-heavy image builds
+incremental: changing BoxHaven runtime scripts updates the existing image instead
+of reinstalling Node, Docker, Go, Bun, uv, Codex, Claude, gh, and related
+packages from Ubuntu. Use `--full-base-image` only when changing base OS or
+toolchain dependencies, or when the active snapshot is intentionally being
+replaced from scratch.
+
 From a clean, committed checkout:
 
 ```bash
-deploy/digitalocean/build-remote-image.sh \
-  --env-file deploy/digitalocean/.env.production \
-  --set-active
+npm run deploy:runtime
+```
+
+Force a full Ubuntu/base rebuild:
+
+```bash
+npm run deploy:runtime -- --full-base-image
 ```
 
 The builder Droplet still needs an SSH key for the temporary image build. Use

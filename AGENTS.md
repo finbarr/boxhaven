@@ -103,6 +103,9 @@ multiple-machine behavior needs coverage.
 - Golden remote VM snapshots must be built from committed source or a pushed
   release ref. Before snapshotting, clean cloud-init state, machine identity,
   authorized keys, and SSH host keys.
+- Runtime image rebuilds should be incremental from the active
+  `BOXHAVEN_REMOTE_IMAGE` snapshot by default. Use `--full-base-image` only for
+  base OS or heavyweight toolchain dependency changes.
 - User VMs must not receive account-level cloud SSH keys. Use backend-issued
   short-lived SSH certificates for user access.
 - VM agents must reconnect on WebSocket `error` as well as `close`, and should

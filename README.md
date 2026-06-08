@@ -173,7 +173,10 @@ npm run deploy:runtime
 
 The runtime deploy creates and snapshots a temporary DigitalOcean builder
 Droplet, updates `BOXHAVEN_REMOTE_IMAGE`, then restarts and verifies the backend
-so new boxes use the image.
+so new boxes use the image. When an active `BOXHAVEN_REMOTE_IMAGE` exists, the
+builder starts from that snapshot by default instead of reinstalling the full
+OS/toolchain from Ubuntu. Use `npm run deploy:runtime -- --full-base-image` only
+for base OS or runtime dependency rebuilds.
 
 Both deploy commands forward your SSH agent so the Droplet can fetch the private
 GitHub repo without storing a GitHub token. Override the target with

@@ -139,7 +139,10 @@ Use `npm run deploy:runtime` to build, activate, and verify a DigitalOcean
 golden snapshot after changing the VM runtime or image-builder code. The normal
 runtime release flow is: commit the runtime change, run the runtime deploy from
 that commit or a pushed tag, smoke create a temporary remote, then keep the
-previous snapshot id available for rollback until the smoke passes.
+previous snapshot id available for rollback until the smoke passes. Runtime
+deploys build from the active `BOXHAVEN_REMOTE_IMAGE` snapshot by default; pass
+`-- --full-base-image` only when changing base OS or heavyweight toolchain
+dependencies.
 
 ## API
 
