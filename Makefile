@@ -5,7 +5,7 @@ BINDIR ?= $(PREFIX)/bin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
-.PHONY: build test go-test backend-test backend-build lint smoke-remote install uninstall clean
+.PHONY: build test go-test backend-test backend-build lint smoke-remote smoke-remote-fast smoke-remote-full smoke-remote-two-box install uninstall clean
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) $(CMD_DIR)
@@ -27,8 +27,16 @@ lint:
 	go vet ./...
 	@which golangci-lint > /dev/null && golangci-lint run || echo "golangci-lint not installed, skipping"
 
-smoke-remote: build
-	scripts/smoke-remote-lifecycle.sh
+smoke-remote: smoke-remote-fast
+
+smoke-remote-fast: build
+	BOXHAVEN_SMOKE_MODE=fast scripts/smoke-remote-lifecycle.sh
+
+smoke-remote-full: build
+	BOXHAVEN_SMOKE_MODE=full scripts/smoke-remote-lifecycle.sh
+
+smoke-remote-two-box: build
+	BOXHAVEN_SMOKE_MODE=two-box scripts/smoke-remote-lifecycle.sh
 
 install: build
 	mkdir -p $(BINDIR)

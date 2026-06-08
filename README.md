@@ -177,9 +177,11 @@ BOXHAVEN_SMOKE_GIT_REMOTE=https://github.com/<org>/<smoke-repo>.git \
 make smoke-remote
 ```
 
-The smoke creates two boxes, syncs a temporary Git project, verifies runtime
-tools on both boxes, fetches their preview URLs, optionally pushes and deletes
-temporary GitHub smoke branches, and destroys both boxes unless
-`BOXHAVEN_SMOKE_KEEP=1` is set. Set `BOXHAVEN_SMOKE_RESTART_BACKEND_CMD` to a
-shell command that restarts the backend when the agent reconnect path needs to
-be exercised.
+The default smoke is intentionally fast: it creates one box from the active
+snapshot, syncs a temporary Git project, verifies runtime tools, fetches the
+preview URL, optionally pushes and deletes a temporary GitHub smoke branch, and
+destroys the box unless `BOXHAVEN_SMOKE_KEEP=1` is set.
+
+Use `make smoke-remote-full` with `BOXHAVEN_SMOKE_RESTART_BACKEND_CMD` when the
+agent reconnect path needs coverage. Use `make smoke-remote-two-box` only for
+concurrency, provider import, or multiple-machine behavior.

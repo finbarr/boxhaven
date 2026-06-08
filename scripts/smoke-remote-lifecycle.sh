@@ -9,6 +9,7 @@ backend_url="${BOXHAVEN_SMOKE_BACKEND_URL:-${BOXHAVEN_BACKEND_URL:-https://api.b
 tier="${BOXHAVEN_SMOKE_TIER:-small}"
 keep="${BOXHAVEN_SMOKE_KEEP:-0}"
 require_preview="${BOXHAVEN_SMOKE_REQUIRE_PREVIEW:-1}"
+mode="${BOXHAVEN_SMOKE_MODE:-fast}"
 git_remote="${BOXHAVEN_SMOKE_GIT_REMOTE:-}"
 restart_backend_cmd="${BOXHAVEN_SMOKE_RESTART_BACKEND_CMD:-}"
 agent_reconnect_sleep="${BOXHAVEN_SMOKE_AGENT_RECONNECT_SLEEP:-20}"
@@ -19,7 +20,24 @@ if [ -z "$prefix" ]; then
   prefix="smoke"
 fi
 
-boxes=("${prefix}-a" "${prefix}-b")
+case "$mode" in
+  fast|full)
+    boxes=("${prefix}-a")
+    ;;
+  two-box)
+    boxes=("${prefix}-a" "${prefix}-b")
+    ;;
+  *)
+    printf 'invalid BOXHAVEN_SMOKE_MODE: %s; expected fast, full, or two-box\n' "$mode" >&2
+    exit 1
+    ;;
+esac
+
+if [ "$mode" = "full" ] && [ -z "$restart_backend_cmd" ]; then
+  printf 'BOXHAVEN_SMOKE_MODE=full requires BOXHAVEN_SMOKE_RESTART_BACKEND_CMD\n' >&2
+  exit 1
+fi
+
 created=()
 project_dir=""
 
@@ -252,6 +270,7 @@ ensure_bh
 init_project
 
 log "backend URL: ${backend_url}"
+log "mode: ${mode}"
 log "box names: ${boxes[*]}"
 create_boxes
 for name in "${boxes[@]}"; do

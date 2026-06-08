@@ -39,7 +39,9 @@ make build          # Build the bh binary
 make test           # Run Go and backend tests
 make lint           # Run go vet and golangci-lint when available
 make backend-build  # Build the TypeScript backend and web app
-make smoke-remote   # Run the reusable production/prod-equivalent remote smoke
+make smoke-remote   # Run the fast one-box production/prod-equivalent remote smoke
+make smoke-remote-full  # Run the remote smoke with backend restart/reconnect
+make smoke-remote-two-box  # Run two-box production/prod-equivalent coverage
 npm run deploy:production  # Deploy and verify the hosted DigitalOcean stack
 make install        # Install bh to ~/.local/bin
 make clean          # Remove built binary
@@ -65,10 +67,14 @@ npm --prefix backend test
 ```
 
 For remote VM, SSH, sync, snapshot, or agent changes, unit tests are not enough.
-Run a production or production-equivalent smoke before calling the change done:
-create a machine from the active snapshot, sync a project, run a command over
-direct SSH, restart the backend, run another command after the agent reconnect
-window, then destroy the machine and verify provider cleanup.
+Run a production or production-equivalent smoke before calling the change done.
+For ordinary remote-path changes, `make smoke-remote` creates one machine from
+the active snapshot, syncs a project, runs direct SSH/runtime/preview checks, and
+destroys the machine. For agent reconnect or backend restart changes, run
+`make smoke-remote-full` with `BOXHAVEN_SMOKE_RESTART_BACKEND_CMD` set so it
+also restarts the backend and runs another command after the reconnect window.
+Use `make smoke-remote-two-box` only when concurrency, provider import, or
+multiple-machine behavior needs coverage.
 
 ## Code Map
 

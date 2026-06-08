@@ -166,9 +166,14 @@ BOXHAVEN_SMOKE_GIT_REMOTE=https://github.com/<org>/<smoke-repo>.git \
 make smoke-remote
 ```
 
+`make smoke-remote` is the fast one-box smoke. It creates one machine from the
+active snapshot, syncs a temporary project, verifies direct SSH/runtime/preview
+behavior, and destroys the machine. Use `make smoke-remote-two-box` only when
+concurrency, provider import, or multiple-machine behavior needs coverage.
+
 For reconnect coverage, pass a backend restart command:
 
 ```bash
 BOXHAVEN_SMOKE_RESTART_BACKEND_CMD="ssh root@<control-plane-ip> 'cd /opt/boxhaven/app && docker compose --env-file deploy/digitalocean/.env.production -f deploy/digitalocean/docker-compose.yml restart backend'" \
-make smoke-remote
+make smoke-remote-full
 ```
