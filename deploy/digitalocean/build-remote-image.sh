@@ -20,10 +20,15 @@ Options:
   --name <snapshot-name>  Snapshot name (default includes commit/ref + timestamp)
   --size <slug>           Builder Droplet size (default: DIGITALOCEAN_SIZE or small tier)
   --region <slug>         Builder Droplet region (default: DIGITALOCEAN_REGION or nyc3)
-  --base-image <slug>     Builder base image (default: DIGITALOCEAN_IMAGE or Ubuntu 24.04)
+  --base-image <slug|id>  Builder base image override
+  --full-base-image       Build from DIGITALOCEAN_IMAGE or Ubuntu 24.04 instead
+                           of the active BOXHAVEN_REMOTE_IMAGE snapshot
   --ssh-key <path>        Private key for SSH to the builder Droplet
   --set-active            Write BOXHAVEN_REMOTE_IMAGE=<snapshot-id> to the env file
   --keep-builder          Keep the builder Droplet instead of deleting it
+  --shutdown-grace-seconds <seconds>
+                          How long to wait for graceful shutdown before
+                          DigitalOcean power_off (default: 60)
   --allow-dirty           Allow a dirty local checkout; only committed HEAD is archived
   -h, --help              Show this help
 
@@ -62,10 +67,13 @@ snapshot_name=""
 builder_size=""
 builder_region=""
 builder_base_image=""
+builder_base_image_explicit=0
+full_base_image=0
 ssh_private_key=""
 set_active=0
 keep_builder=0
 allow_dirty=0
+shutdown_grace_seconds="${BOXHAVEN_IMAGE_BUILDER_SHUTDOWN_GRACE_SECONDS:-60}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -126,10 +134,16 @@ while [ "$#" -gt 0 ]; do
     --base-image)
       [ "$#" -ge 2 ] || die "--base-image requires a value"
       builder_base_image="$2"
+      builder_base_image_explicit=1
       shift 2
       ;;
     --base-image=*)
       builder_base_image="${1#--base-image=}"
+      builder_base_image_explicit=1
+      shift
+      ;;
+    --full-base-image)
+      full_base_image=1
       shift
       ;;
     --ssh-key)
@@ -147,6 +161,15 @@ while [ "$#" -gt 0 ]; do
       ;;
     --keep-builder)
       keep_builder=1
+      shift
+      ;;
+    --shutdown-grace-seconds)
+      [ "$#" -ge 2 ] || die "--shutdown-grace-seconds requires a value"
+      shutdown_grace_seconds="$2"
+      shift 2
+      ;;
+    --shutdown-grace-seconds=*)
+      shutdown_grace_seconds="${1#--shutdown-grace-seconds=}"
       shift
       ;;
     --allow-dirty)
@@ -178,12 +201,22 @@ require_command git
 
 token="${DIGITALOCEAN_ACCESS_TOKEN:-${DIGITALOCEAN_TOKEN:-${DO_API_TOKEN:-}}}"
 [ -n "$token" ] || die "set DIGITALOCEAN_ACCESS_TOKEN, DIGITALOCEAN_TOKEN, or DO_API_TOKEN"
+case "$shutdown_grace_seconds" in
+  ""|*[!0-9]*) die "--shutdown-grace-seconds must be a non-negative integer" ;;
+esac
 
 api_url="${BOXHAVEN_DIGITALOCEAN_API_URL:-https://api.digitalocean.com}"
 api_url="${api_url%/}"
 builder_region="${builder_region:-${DIGITALOCEAN_REGION:-nyc3}}"
 builder_size="${builder_size:-${DIGITALOCEAN_SIZE:-s-2vcpu-4gb-amd}}"
-builder_base_image="${builder_base_image:-${DIGITALOCEAN_IMAGE:-ubuntu-24-04-x64}}"
+active_remote_image="${BOXHAVEN_REMOTE_IMAGE:-}"
+if [ "$builder_base_image_explicit" -eq 0 ]; then
+  if [ "$full_base_image" -eq 0 ] && [ -n "$active_remote_image" ]; then
+    builder_base_image="$active_remote_image"
+  else
+    builder_base_image="${DIGITALOCEAN_IMAGE:-ubuntu-24-04-x64}"
+  fi
+fi
 image_ref="$arg_ref"
 source_dir="$(cd "$source_dir" && pwd)"
 timestamp="$(date -u +%Y%m%d%H%M%S)"
@@ -318,6 +351,9 @@ snapshot_name="${snapshot_name:-${snapshot_prefix}-${safe_label}-${timestamp}}"
 snapshot_name="${snapshot_name:0:255}"
 
 log "building ${snapshot_name} from ${build_source}"
+if [ "$builder_base_image_explicit" -eq 0 ] && [ "$full_base_image" -eq 0 ] && [ -n "$active_remote_image" ]; then
+  log "using active remote image ${builder_base_image} as incremental builder base"
+fi
 log "creating builder Droplet in ${builder_region} (${builder_size}, ${builder_base_image})"
 
 ssh_keys_json="$(resolve_ssh_keys_json)"
@@ -336,7 +372,7 @@ droplet_body="$(jq -cn \
     name: $name,
     region: $region,
     size: $size,
-    image: $image,
+    image: (if ($image | test("^[0-9]+$")) then ($image | tonumber) else $image end),
     ssh_keys: $ssh_keys,
     tags: $tags,
     monitoring: true
@@ -429,8 +465,10 @@ ssh "${ssh_opts[@]}" "$ssh_target" "sync && shutdown -h now" >/dev/null 2>&1 || 
 
 wait_for_status() {
   local want="$1"
+  local timeout_seconds="${2:-600}"
   local status=""
-  for _ in $(seq 1 120); do
+  local deadline=$(( $(date +%s) + timeout_seconds ))
+  while [ "$(date +%s)" -le "$deadline" ]; do
     status="$(do_api GET "/v2/droplets/${builder_id}" | jq -r '.droplet.status')"
     if [ "$status" = "$want" ]; then
       return 0
@@ -440,7 +478,7 @@ wait_for_status() {
   return 1
 }
 
-if ! wait_for_status "off"; then
+if ! wait_for_status "off" "$shutdown_grace_seconds"; then
   log "builder did not shut down cleanly; requesting power_off"
   power_action_id="$(do_api POST "/v2/droplets/${builder_id}/actions" '{"type":"power_off"}' | jq -r '.action.id')"
   for _ in $(seq 1 120); do
@@ -449,7 +487,7 @@ if ! wait_for_status "off"; then
     [ "$power_status" = "errored" ] && die "power_off action failed"
     sleep 5
   done
-  wait_for_status "off" || die "builder did not reach off status"
+  wait_for_status "off" 600 || die "builder did not reach off status"
 fi
 
 log "snapshotting builder Droplet"
