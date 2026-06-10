@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Activity, Check, LogOut, Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch, sectionKey, tokenKey, WhoamiResponse } from "./api";
 import { AccessPanel } from "./access";
 import logoURL from "./assets/boxhaven-logo.png";
@@ -18,6 +18,9 @@ type InvitationDetail = {
 
 export function InvitePanel({ invitationId }: { invitationId: string }) {
   const [token, setToken] = useState(() => localStorage.getItem(tokenKey) || "");
+  useEffect(() => {
+    document.title = "Team invite — BoxHaven";
+  }, []);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const session = useQuery({

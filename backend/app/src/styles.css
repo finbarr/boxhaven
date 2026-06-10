@@ -820,6 +820,189 @@ button:disabled {
   margin-bottom: 0;
 }
 
+.welcome-panel.landing {
+  grid-template-columns: minmax(220px, 0.66fr) minmax(320px, 1fr);
+}
+
+.landing-side {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.landing-copy h1 {
+  margin: 0;
+  color: #22342d;
+  font-size: 30px;
+  line-height: 1.12;
+}
+
+.landing-copy p {
+  margin: 8px 0 0;
+  color: #4f625a;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.landing .terminal-card pre {
+  padding: 22px;
+  font-size: 16px;
+}
+
+.landing-install {
+  display: grid;
+  gap: 10px;
+}
+
+.landing-install .command-block {
+  margin-bottom: 0;
+}
+
+.landing-docs {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-self: start;
+  color: #2f6f5c;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.forgot-link {
+  justify-self: start;
+  margin-top: -6px;
+  font-size: 13px;
+}
+
+.getting-started {
+  display: grid;
+  gap: 14px;
+  padding: 18px 16px;
+}
+
+.steps {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.steps li > div {
+  min-width: 0;
+}
+
+.step-num {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(47, 111, 92, 0.28);
+  border-radius: 999px;
+  background: rgba(47, 111, 92, 0.12);
+  color: #2f6f5c;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.steps strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #24352f;
+}
+
+.steps .command-block {
+  margin-bottom: 8px;
+}
+
+.billing-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  max-width: 640px;
+  margin: 0 auto;
+  padding-top: min(6vh, 64px);
+}
+
+.billing-layout .badge {
+  vertical-align: middle;
+}
+
+.badge.warn {
+  border-color: rgba(194, 132, 38, 0.4);
+  background: rgba(224, 178, 75, 0.2);
+  color: #8a611a;
+}
+
+.usage-meter {
+  display: grid;
+  gap: 8px;
+}
+
+.usage-meter > span {
+  color: #6a776f;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.meter-track {
+  overflow: hidden;
+  height: 10px;
+  border: 1px solid rgba(96, 75, 53, 0.14);
+  border-radius: 999px;
+  background: rgba(96, 75, 53, 0.1);
+}
+
+.meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #2f6f5c;
+}
+
+.meter-fill.over {
+  background: #c2503c;
+}
+
+.billing-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.warning-banner {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(194, 132, 38, 0.42);
+  border-radius: 8px;
+  background: rgba(224, 178, 75, 0.18);
+  color: #6e4e12;
+}
+
+.warning-banner strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.warning-banner p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.warning-banner .link-button {
+  justify-self: start;
+  color: #6e4e12;
+}
+
 @media (max-width: 1120px) {
   .dashboard,
   .dashboard.two-col {
@@ -834,7 +1017,8 @@ button:disabled {
 
 @media (max-width: 900px) {
   .access-layout,
-  .welcome-panel {
+  .welcome-panel,
+  .welcome-panel.landing {
     grid-template-columns: 1fr;
   }
 
@@ -872,7 +1056,12 @@ button:disabled {
     font-size: 30px;
   }
 
-  pre {
+  .landing-copy h1 {
+    font-size: 25px;
+  }
+
+  pre,
+  .landing .terminal-card pre {
     padding: 22px;
     font-size: 15px;
   }
