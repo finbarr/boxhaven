@@ -11,10 +11,17 @@ remote dev boxes for individual developers, persistent agent sessions, direct
 SSH access, project sync, GitHub pushes from the box, and a self-hostable
 control plane.
 
-The CLI is intentionally small:
+The CLI is intentionally small. The fastest path is one command from your
+project directory:
 
 ```bash
 bh login
+bh dev claude          # box named after the project, created on first use
+```
+
+Or manage boxes explicitly:
+
+```bash
 bh create work
 bh list
 bh run work codex
@@ -25,9 +32,18 @@ bh image ls
 bh team create acme
 ```
 
+`bh dev` derives the box name from `remote_name` in `.boxhaven.toml` (or the
+project directory name), creates the box if it does not exist, syncs the
+project, and runs the given command — or the `command` configured in
+`.boxhaven.toml`, or a shell — in the managed session.
+
 `bh create` asks the backend for a machine, waits for it to be reachable, and
 syncs the current project into `/opt/boxhaven/project` by default. `bh run`
 syncs the current project before starting the command on the existing machine.
+Local files are the source of truth during sync: `bh run` mirrors the local
+project to the box (including deletions), so pass `--no-sync` when an agent or
+editor session on the box has changes you have not pulled back yet, and use
+`bh sync down` to retrieve remote work.
 Interactive commands attach to the machine's managed tmux session; noninteractive
 commands run over direct SSH.
 

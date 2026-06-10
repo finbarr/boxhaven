@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Added `bh dev`: one command that derives the box name from the project
+  (or `remote_name` in `.boxhaven.toml`), creates the box on first use, syncs
+  the project, and runs the given or configured command in the managed
+  session.
+- Added `bh run --no-sync` to skip the local-to-remote project mirror so
+  remote edits (for example from an agent session on the box) are not
+  overwritten, and documented the sync model.
+- Shell commands with arguments (`bash -lc '...'`) now run over direct SSH
+  instead of being treated as interactive sessions, and starting an already
+  running session from a non-terminal prints a hint instead of failing.
+- `bh list` gained a STATUS column (`online`/`offline`/`creating`) from the
+  machine agent heartbeat, and `bh status` shows `agent_last_seen`.
+- Added `bh team destroy <box> --force` so team owners and admins can remove
+  a teammate's box from the CLI, and referencing a teammate's box by name now
+  explains who owns it instead of "machine does not exist".
+- CLI backend errors now print the server's message instead of a raw JSON
+  body, and session auth forwarding uses one SSH round trip instead of three,
+  roughly halving `bh run` latency.
+
 - Made box ownership team-centric: every account automatically gets a personal
   team, every box belongs to a team, and new boxes land in the session's
   active team (`bh login` pins it; accepting an invite switches it for that

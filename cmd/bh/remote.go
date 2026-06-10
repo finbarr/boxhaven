@@ -28,6 +28,7 @@ const (
 
 type remoteMachine struct {
 	Name               string    `json:"name"`
+	UserID             string    `json:"user_id,omitempty"`
 	TeamID             string    `json:"team_id,omitempty"`
 	TeamSlug           string    `json:"team_slug,omitempty"`
 	TeamName           string    `json:"team_name,omitempty"`
@@ -48,6 +49,7 @@ type remoteMachine struct {
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 	LastSyncedAt       time.Time `json:"last_synced_at,omitempty"`
+	AgentLastSeenAt    time.Time `json:"agent_last_seen_at,omitempty"`
 	BootstrapComplete  bool      `json:"bootstrap_complete,omitempty"`
 	SSHKeyPath         string    `json:"-"`
 	SSHCertificatePath string    `json:"-"`
@@ -98,8 +100,9 @@ func runRemote(args []string, projectDir string) error {
 
 func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "USAGE:")
+	fmt.Fprintln(os.Stderr, "  bh dev [options] [cmd...]")
 	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--tier <tier>] [--region <region>] [--image <image>] [--team <team>] [--no-sync]")
-	fmt.Fprintln(os.Stderr, "  bh run <name> <cmd...>")
+	fmt.Fprintln(os.Stderr, "  bh run <name> [--no-sync] <cmd...>")
 	fmt.Fprintln(os.Stderr, "  bh connect <name>")
 	fmt.Fprintln(os.Stderr, "  bh sync up <name>")
 	fmt.Fprintln(os.Stderr, "  bh sync down <name> --force")
@@ -110,7 +113,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  bh destroy <name>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "OPTIONS:")
-	fmt.Fprintln(os.Stderr, "  --no-sync            Skip the create command's initial project sync")
+	fmt.Fprintln(os.Stderr, "  --no-sync            Skip the project sync (create: initial sync; run/dev: keep remote edits)")
 	fmt.Fprintln(os.Stderr, "  --provider <name>    Cloud provider for create (defaults to config or backend default)")
 	fmt.Fprintln(os.Stderr, "  --tier <tier>        Machine size tier for create: small, medium, or large")
 	fmt.Fprintln(os.Stderr, "  --region <region>    Provider region for create")
@@ -121,6 +124,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "EXAMPLES:")
 	fmt.Fprintln(os.Stderr, "  bh login")
+	fmt.Fprintln(os.Stderr, "  bh dev claude        # box named after this project, created on first use")
 	fmt.Fprintln(os.Stderr, "  bh create foo")
 	fmt.Fprintln(os.Stderr, "  bh run foo codex")
 	fmt.Fprintln(os.Stderr, "  bh connect foo")
@@ -155,10 +159,15 @@ func runRemoteRun(args []string, projectDir string) error {
 	if err != nil {
 		return err
 	}
+	syncProject := true
+	for len(commandArgs) > 0 && commandArgs[0] == "--no-sync" {
+		syncProject = false
+		commandArgs = commandArgs[1:]
+	}
 	if len(commandArgs) == 0 {
 		return fmt.Errorf("bh run requires a command")
 	}
-	machine, cleanup, err := readyExistingRemoteMachine(cfg, projectDir, name, true)
+	machine, cleanup, err := readyExistingRemoteMachine(cfg, projectDir, name, syncProject)
 	if err != nil {
 		return err
 	}
@@ -401,11 +410,12 @@ func runRemoteList(args []string, projectDir string) error {
 		return machines[i].Name < machines[j].Name
 	})
 	table := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(table, "NAME\tTEAM\tPROVIDER\tSIZE\tURL"); err != nil {
+	if _, err := fmt.Fprintln(table, "NAME\tSTATUS\tTEAM\tPROVIDER\tSIZE\tURL"); err != nil {
 		return err
 	}
+	now := time.Now()
 	for _, m := range machines {
-		if _, err := fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\n", m.Name, remoteMachineTeamLabel(m), valueOrDash(m.Provider), configValueOrNotSet(m.Size), remoteListURL(m)); err != nil {
+		if _, err := fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\t%s\n", m.Name, remoteMachineStatusLabel(m, now), remoteMachineTeamLabel(m), valueOrDash(m.Provider), configValueOrNotSet(m.Size), remoteListURL(m)); err != nil {
 			return err
 		}
 	}
@@ -414,6 +424,21 @@ func runRemoteList(args []string, projectDir string) error {
 
 func remoteMachineTeamLabel(machine remoteMachine) string {
 	return valueOrDash(firstNonEmpty(machine.TeamSlug, machine.TeamName))
+}
+
+// remoteMachineStatusLabel reports box liveness from the machine agent's
+// last heartbeat; the agent pings continuously while the box is up.
+func remoteMachineStatusLabel(machine remoteMachine, now time.Time) string {
+	if !machine.BootstrapComplete {
+		return "creating"
+	}
+	if machine.AgentLastSeenAt.IsZero() {
+		return "-"
+	}
+	if now.Sub(machine.AgentLastSeenAt) <= 5*time.Minute {
+		return "online"
+	}
+	return "offline"
 }
 
 func remoteListURL(machine remoteMachine) string {
@@ -461,6 +486,7 @@ func runRemoteStatus(args []string, projectDir string) error {
 	fmt.Printf("%sproject_path:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.ProjectPath))
 	fmt.Printf("%swork_path:%s %s\n", colorBold, colorReset, configValueOrNotSet(remoteWorkPath(machine)))
 	fmt.Printf("%slast_synced_at:%s %s\n", colorBold, colorReset, displayTime(machine.LastSyncedAt))
+	fmt.Printf("%sagent_last_seen:%s %s (%s)\n", colorBold, colorReset, displayTime(machine.AgentLastSeenAt), remoteMachineStatusLabel(machine, time.Now()))
 	fmt.Printf("%sbootstrap_complete:%s %t\n", colorBold, colorReset, machine.BootstrapComplete)
 	return nil
 }
@@ -613,7 +639,6 @@ func readyExistingRemoteMachine(cfg Config, projectDir string, name string, sync
 			return machine, func() {}, err
 		}
 	}
-	printRemoteReady(machine)
 	return machine, cleanup, nil
 }
 
@@ -879,6 +904,10 @@ func runRemoteMachineCommand(cfg Config, machine remoteMachine, commandArgs []st
 			return runSSHCommand(machine, result.AttachCommand, true, false)
 		} else {
 			if _, _, err := prepareRemoteBackendSession(cfg, machine, commandArgs, false); err != nil {
+				if remoteBackendErrorCode(err) == "session_exists" {
+					info("Remote session %s is already running; run `bh connect %s` from a terminal to attach", machine.Name, machine.Name)
+					return nil
+				}
 				return err
 			}
 			info("Starting detached remote session %s via direct SSH; run from a terminal to connect", machine.Name)
@@ -1051,50 +1080,61 @@ func shouldForwardSSHAgent(repoURL string) bool {
 	return strings.HasPrefix(repoURL, "git@") || strings.HasPrefix(repoURL, "ssh://")
 }
 
+// syncRemoteAuthState forwards GitHub auth, Git identity, and agent auth
+// files in one SSH round trip; each previously cost its own connection.
 func syncRemoteAuthState(machine remoteMachine, projectDir string) error {
-	if err := syncRemoteGitAuthEnvironment(machine); err != nil {
-		return err
-	}
-	if err := syncRemoteGitIdentity(machine, projectDir); err != nil {
-		return err
-	}
-	files := localRemoteAuthFiles(machine.SSHUser)
-	if len(files) == 0 {
-		return nil
-	}
-	info("Forwarding local agent auth files to remote %s", machine.Name)
-	return writeRemoteAuthFiles(machine, files)
+	var script strings.Builder
+	script.WriteString("set -euo pipefail\numask 077\n")
+	script.WriteString(remoteSessionEnvScript(remoteGitAuthEnv(machine.RepoURL)))
+	script.WriteString(remoteGitIdentityScript(currentGitIdentity(projectDir)))
+	script.WriteString(remoteAuthFilesScript(machine, localRemoteAuthFiles(machine.SSHUser)))
+	info("Syncing session auth to remote %s", machine.Name)
+	return runSSHCommand(machine, script.String(), false, false)
 }
 
-func syncRemoteGitAuthEnvironment(machine remoteMachine) error {
-	env := remoteGitAuthEnv(machine.RepoURL)
+func remoteSessionEnvScript(env map[string]string) string {
 	if len(env) == 0 {
-		return runSSHCommand(machine, removeRemoteSessionEnvCommand(), false, false)
+		return strings.Join([]string{
+			"if [ \"$(id -u)\" -eq 0 ]; then",
+			"  rm -f " + shellQuote(remoteSessionEnvFile),
+			"else",
+			"  sudo rm -f " + shellQuote(remoteSessionEnvFile),
+			"fi",
+		}, "\n") + "\n"
 	}
-	info("Forwarding GitHub auth environment to remote %s", machine.Name)
-	return writeRemoteSessionEnv(machine, env)
-}
-
-func syncRemoteGitIdentity(machine remoteMachine, projectDir string) error {
-	identity := currentGitIdentity(projectDir)
-	if identity.Name == "" && identity.Email == "" {
-		return nil
+	var contents strings.Builder
+	contents.WriteString("# Generated by BoxHaven. Stored in tmpfs and replaced by the CLI.\n")
+	for _, key := range []string{"GH_TOKEN", "GITHUB_TOKEN"} {
+		value := strings.TrimSpace(env[key])
+		if value == "" {
+			continue
+		}
+		contents.WriteString("export ")
+		contents.WriteString(key)
+		contents.WriteString("=")
+		contents.WriteString(shellQuote(value))
+		contents.WriteString("\n")
 	}
-	info("Forwarding local Git identity to remote %s", machine.Name)
-	return writeRemoteGitIdentity(machine, identity)
-}
-
-func writeRemoteGitIdentity(machine remoteMachine, identity gitIdentity) error {
-	script := remoteGitIdentityScript(identity)
-	if strings.TrimSpace(script) == "" {
-		return nil
-	}
-	return runSSHCommand(machine, script, false, false)
+	encoded := base64.StdEncoding.EncodeToString([]byte(contents.String()))
+	return strings.Join([]string{
+		"bh_env_tmp=$(mktemp)",
+		"printf %s " + shellQuote(encoded) + " | base64 -d > \"$bh_env_tmp\"",
+		"chmod 0600 \"$bh_env_tmp\"",
+		"bh_uid=$(id -u)",
+		"bh_gid=$(id -g)",
+		"if [ \"$bh_uid\" -eq 0 ]; then",
+		"  install -d -o \"$bh_uid\" -g \"$bh_gid\" -m 0700 /run/boxhaven",
+		"  install -o \"$bh_uid\" -g \"$bh_gid\" -m 0600 \"$bh_env_tmp\" " + shellQuote(remoteSessionEnvFile),
+		"else",
+		"  sudo install -d -o \"$bh_uid\" -g \"$bh_gid\" -m 0700 /run/boxhaven",
+		"  sudo install -o \"$bh_uid\" -g \"$bh_gid\" -m 0600 \"$bh_env_tmp\" " + shellQuote(remoteSessionEnvFile),
+		"fi",
+		"rm -f \"$bh_env_tmp\"",
+	}, "\n") + "\n"
 }
 
 func remoteGitIdentityScript(identity gitIdentity) string {
 	var script strings.Builder
-	script.WriteString("set -euo pipefail\n")
 	if identity.Name != "" {
 		script.WriteString("git config --global user.name ")
 		script.WriteString(shellQuote(identity.Name))
@@ -1104,9 +1144,6 @@ func remoteGitIdentityScript(identity gitIdentity) string {
 		script.WriteString("git config --global user.email ")
 		script.WriteString(shellQuote(identity.Email))
 		script.WriteString("\n")
-	}
-	if script.Len() == len("set -euo pipefail\n") {
-		return ""
 	}
 	return script.String()
 }
@@ -1222,9 +1259,8 @@ func readRemoteAuthFile(path string) (string, error) {
 	return string(data), nil
 }
 
-func writeRemoteAuthFiles(machine remoteMachine, files []remoteAuthFile) error {
+func remoteAuthFilesScript(machine remoteMachine, files []remoteAuthFile) string {
 	var script strings.Builder
-	script.WriteString("set -euo pipefail\numask 077\n")
 	remoteHome := remoteHomeDir(machine.SSHUser)
 	for _, file := range files {
 		target := filepath.Clean(strings.TrimSpace(file.Target))
@@ -1241,51 +1277,7 @@ func writeRemoteAuthFiles(machine remoteMachine, files []remoteAuthFile) error {
 		script.WriteString(shellQuote(target))
 		script.WriteString("\n")
 	}
-	return runSSHCommand(machine, script.String(), false, false)
-}
-
-func writeRemoteSessionEnv(machine remoteMachine, env map[string]string) error {
-	var contents strings.Builder
-	contents.WriteString("# Generated by BoxHaven. Stored in tmpfs and replaced by the CLI.\n")
-	for _, key := range []string{"GH_TOKEN", "GITHUB_TOKEN"} {
-		value := strings.TrimSpace(env[key])
-		if value == "" {
-			continue
-		}
-		contents.WriteString("export ")
-		contents.WriteString(key)
-		contents.WriteString("=")
-		contents.WriteString(shellQuote(value))
-		contents.WriteString("\n")
-	}
-	remoteCommand := strings.Join([]string{
-		"set -euo pipefail",
-		"tmp=$(mktemp)",
-		"trap 'rm -f \"$tmp\"' EXIT",
-		"cat > \"$tmp\"",
-		"chmod 0600 \"$tmp\"",
-		"uid=$(id -u)",
-		"gid=$(id -g)",
-		"if [ \"$uid\" -eq 0 ]; then",
-		"  install -d -o \"$uid\" -g \"$gid\" -m 0700 /run/boxhaven",
-		"  install -o \"$uid\" -g \"$gid\" -m 0600 \"$tmp\" " + shellQuote(remoteSessionEnvFile),
-		"else",
-		"  sudo install -d -o \"$uid\" -g \"$gid\" -m 0700 /run/boxhaven",
-		"  sudo install -o \"$uid\" -g \"$gid\" -m 0600 \"$tmp\" " + shellQuote(remoteSessionEnvFile),
-		"fi",
-	}, "\n")
-	return runSSHCommand(machine, remoteCommand, false, false, strings.NewReader(contents.String()))
-}
-
-func removeRemoteSessionEnvCommand() string {
-	return strings.Join([]string{
-		"set -euo pipefail",
-		"if [ \"$(id -u)\" -eq 0 ]; then",
-		"  rm -f " + shellQuote(remoteSessionEnvFile),
-		"else",
-		"  sudo rm -f " + shellQuote(remoteSessionEnvFile),
-		"fi",
-	}, "\n")
+	return script.String()
 }
 
 func remoteHomeDir(user string) string {

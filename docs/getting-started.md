@@ -117,8 +117,25 @@ bh connect work
 ```
 
 Interactive commands such as `codex`, `claude`, `gemini`, `opencode`,
-`copilot`, `pi`, `bash`, and `shell` use the managed tmux session. Other
-commands run directly over SSH.
+`copilot`, `pi`, and a bare `bash` or `shell` use the managed tmux session.
+Shells with arguments (`bash -lc '...'`) and other commands run directly over
+SSH.
+
+`bh run` mirrors the local project to the box first, including deletions.
+When an agent or editor session on the box has changes you have not synced
+back yet, pass `--no-sync`:
+
+```bash
+bh run work --no-sync bash -lc 'go test ./...'
+```
+
+The shortest loop is `bh dev`, which picks the box name from the project
+(or `remote_name` in `.boxhaven.toml`), creates it on first use, syncs, and
+runs your command or configured default:
+
+```bash
+bh dev claude
+```
 
 ## Sync Files
 
