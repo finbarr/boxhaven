@@ -5,6 +5,7 @@ import { BillingRecord } from "./types.js";
 const stripeAPIBaseURL = "https://api.stripe.com";
 const webhookToleranceSeconds = 300;
 export const defaultFreeMachines = 1;
+export const defaultTeamFreeMachines = 0;
 export const defaultMeterEventName = "boxhaven_box_hours";
 
 export type BillingServiceOptions = {
@@ -13,6 +14,7 @@ export type BillingServiceOptions = {
   webhookSecret: string;
   meterEventName?: string;
   freeMachines?: number;
+  teamFreeMachines?: number;
   apiURL?: string;
 };
 
@@ -29,11 +31,13 @@ type StripeSubscription = {
   status?: string;
 };
 
-// Pricing model: every account gets `freeMachines` boxes for free. An active
-// subscription unlocks additional boxes, which are usage-billed per box-hour
-// through Stripe Billing Meters.
+// Pricing model: billing attaches to teams, never users. Every team gets a
+// free allowance (`freeMachines` boxes on personal teams, `teamFreeMachines`
+// on shared teams), and an active subscription unlocks additional boxes,
+// which are usage-billed per box-hour through Stripe Billing Meters.
 export class BillingService {
   readonly freeMachines: number;
+  readonly teamFreeMachines: number;
   private readonly apiURL: string;
   private readonly meterEventName: string;
 
@@ -44,30 +48,41 @@ export class BillingService {
     this.apiURL = (options.apiURL || stripeAPIBaseURL).replace(/\/+$/, "");
     this.meterEventName = options.meterEventName || defaultMeterEventName;
     this.freeMachines = options.freeMachines ?? defaultFreeMachines;
+    this.teamFreeMachines = options.teamFreeMachines ?? defaultTeamFreeMachines;
   }
 
-  async ensureCustomer(userID: string, email: string): Promise<BillingRecord> {
-    const existing = await this.store.getBillingRecord(userID);
-    if (existing?.customer_id) return existing;
+  freeAllowance(personal: boolean): number {
+    return personal ? this.freeMachines : this.teamFreeMachines;
+  }
+
+  async ensureCustomer(orgID: string, email: string, teamName: string, personal: boolean): Promise<BillingRecord> {
+    const existing = await this.store.getBillingRecord(orgID);
+    if (existing?.customer_id) {
+      if (existing.personal === personal) return existing;
+      const refreshed: BillingRecord = { ...existing, personal, updated_at: new Date().toISOString() };
+      await this.store.putBillingRecord(orgID, refreshed);
+      return refreshed;
+    }
     const customer = await this.request<{ id: string }>("POST", "/v1/customers", {
       email,
-      "metadata[boxhaven_user_id]": userID,
+      name: teamName,
+      "metadata[boxhaven_org_id]": orgID,
     });
-    const record: BillingRecord = { ...existing, customer_id: customer.id, updated_at: new Date().toISOString() };
-    await this.store.putBillingRecord(userID, record);
+    const record: BillingRecord = { ...existing, customer_id: customer.id, personal, updated_at: new Date().toISOString() };
+    await this.store.putBillingRecord(orgID, record);
     return record;
   }
 
-  async createCheckoutSession(userID: string, customerID: string, successURL: string, cancelURL: string): Promise<string> {
+  async createCheckoutSession(orgID: string, customerID: string, successURL: string, cancelURL: string): Promise<string> {
     const session = await this.request<{ url?: string }>("POST", "/v1/checkout/sessions", {
       mode: "subscription",
       customer: customerID,
-      client_reference_id: userID,
+      client_reference_id: orgID,
       // Metered prices must not carry a quantity in Checkout line items.
       "line_items[0][price]": this.options.priceID,
       success_url: successURL,
       cancel_url: cancelURL,
-      "subscription_data[metadata][boxhaven_user_id]": userID,
+      "subscription_data[metadata][boxhaven_org_id]": orgID,
     });
     if (!session.url) throw new Error("Stripe checkout session response did not include a url");
     return session.url;
@@ -113,10 +128,10 @@ export class BillingService {
       case "checkout.session.completed": {
         const customerID = recordString(object.customer);
         const subscriptionID = recordString(object.subscription);
-        const userID = recordString(object.client_reference_id) || (await this.findUserByCustomer(customerID));
-        if (!userID || !subscriptionID) return;
+        const orgID = recordString(object.client_reference_id) || (await this.findOrgByCustomer(customerID));
+        if (!orgID || !subscriptionID) return;
         const status = await this.subscriptionStatus(subscriptionID);
-        await this.mergeBillingRecord(userID, {
+        await this.mergeBillingRecord(orgID, {
           customer_id: customerID,
           subscription_id: subscriptionID,
           status,
@@ -128,10 +143,10 @@ export class BillingService {
         const subscriptionID = recordString(object.id);
         const customerID = recordString(object.customer);
         const metadata = (object.metadata || {}) as Record<string, unknown>;
-        const userID = recordString(metadata.boxhaven_user_id) || (await this.findUserByCustomer(customerID));
-        if (!userID || !subscriptionID) return;
+        const orgID = recordString(metadata.boxhaven_org_id) || (await this.findOrgByCustomer(customerID));
+        if (!orgID || !subscriptionID) return;
         const status = event.type === "customer.subscription.deleted" ? "canceled" : recordString(object.status) || "canceled";
-        await this.mergeBillingRecord(userID, {
+        await this.mergeBillingRecord(orgID, {
           customer_id: customerID,
           subscription_id: subscriptionID,
           status,
@@ -153,17 +168,19 @@ export class BillingService {
     });
   }
 
-  // Reports (boxes - freeMachines) meter units for every subscribed user, at
-  // most once per started hour. The hour key is persisted per user so a
-  // backend restart inside the same hour does not double-bill, and the Stripe
-  // meter event identifier deduplicates retries on the Stripe side too.
+  // Reports (team boxes - free allowance) meter units for every subscribed
+  // team, at most once per started hour. The hour key is persisted per team
+  // so a backend restart inside the same hour does not double-bill, and the
+  // Stripe meter event identifier deduplicates retries on the Stripe side
+  // too. The allowance comes from the record's `personal` snapshot, so no
+  // session is needed here.
   async reportUsage(now = new Date()): Promise<void> {
     const hour = usageHourKey(now);
     const records = await this.store.listBillingRecords();
-    for (const [userID, record] of Object.entries(records)) {
+    for (const [orgID, record] of Object.entries(records)) {
       if (!record.customer_id || !billingRecordAllowsPaidBoxes(record)) continue;
       if (record.last_reported_hour === hour) continue;
-      const extra = (await this.store.listMachinesForUser(userID)).length - this.freeMachines;
+      const extra = (await this.store.listMachinesForOrg(orgID)).length - this.freeAllowance(record.personal === true);
       if (extra <= 0) continue;
       try {
         await this.reportBoxHours(record.customer_id, extra, now, `boxhaven-${record.customer_id}-${hour}`);
@@ -171,8 +188,8 @@ export class BillingService {
         console.error(`billing: usage report for customer ${record.customer_id} failed: ${(error as Error).message}`);
         continue;
       }
-      const current = (await this.store.getBillingRecord(userID)) || record;
-      await this.store.putBillingRecord(userID, { ...current, last_reported_hour: hour });
+      const current = (await this.store.getBillingRecord(orgID)) || record;
+      await this.store.putBillingRecord(orgID, { ...current, last_reported_hour: hour });
       console.error(`billing: reported ${extra} box-hour(s) for customer ${record.customer_id} (hour ${hour})`);
     }
   }
@@ -202,15 +219,15 @@ export class BillingService {
     }
   }
 
-  private async findUserByCustomer(customerID: string): Promise<string> {
+  private async findOrgByCustomer(customerID: string): Promise<string> {
     if (!customerID) return "";
     const records = await this.store.listBillingRecords();
-    return Object.keys(records).find((userID) => records[userID].customer_id === customerID) || "";
+    return Object.keys(records).find((orgID) => records[orgID].customer_id === customerID) || "";
   }
 
-  private async mergeBillingRecord(userID: string, update: Partial<BillingRecord> & { customer_id: string }): Promise<void> {
-    const existing = await this.store.getBillingRecord(userID);
-    await this.store.putBillingRecord(userID, {
+  private async mergeBillingRecord(orgID: string, update: Partial<BillingRecord> & { customer_id: string }): Promise<void> {
+    const existing = await this.store.getBillingRecord(orgID);
+    await this.store.putBillingRecord(orgID, {
       ...existing,
       ...update,
       customer_id: update.customer_id || existing?.customer_id || "",
@@ -266,15 +283,16 @@ export function billingServiceFromEnv(store: StateStore, env = process.env): Bil
     priceID: env.STRIPE_PRICE_ID || "",
     webhookSecret: env.STRIPE_WEBHOOK_SECRET || "",
     meterEventName: env.STRIPE_METER_EVENT_NAME || defaultMeterEventName,
-    freeMachines: parseFreeMachines(env.BOXHAVEN_FREE_MACHINES),
+    freeMachines: parseMachineCount(env.BOXHAVEN_FREE_MACHINES, defaultFreeMachines),
+    teamFreeMachines: parseMachineCount(env.BOXHAVEN_TEAM_FREE_MACHINES, defaultTeamFreeMachines),
     apiURL: env.BOXHAVEN_STRIPE_API_URL,
   }, store);
 }
 
-function parseFreeMachines(value: string | undefined): number {
-  if (value === undefined || value.trim() === "") return defaultFreeMachines;
+function parseMachineCount(value: string | undefined, fallback: number): number {
+  if (value === undefined || value.trim() === "") return fallback;
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : defaultFreeMachines;
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function usageHourKey(now: Date): string {

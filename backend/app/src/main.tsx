@@ -142,6 +142,7 @@ function ConsoleRoute() {
   const [token, setToken] = useState(() => localStorage.getItem(tokenKey) || "");
   const [deviceUserCode, setDeviceUserCode] = useState(() => readDeviceUserCode());
   const [section, setSection] = useState<Section>(() => readInitialSection());
+  const [billingTeam, setBillingTeam] = useState("");
   const session = useQuery({
     queryKey: ["session", token],
     enabled: token.length > 0,
@@ -173,6 +174,11 @@ function ConsoleRoute() {
     setToken("");
     setSection("boxes");
     queryClient.clear();
+  }
+
+  function showBilling(teamRef?: string) {
+    setBillingTeam(teamRef || "");
+    setSection("billing");
   }
 
   function clearDevicePrompt() {
@@ -229,13 +235,13 @@ function ConsoleRoute() {
         deviceUserCode ? (
           <DeviceGrantPanel token={token} user={session.data?.user} userCode={deviceUserCode} onDone={clearDevicePrompt} />
         ) : activeSection === "team" ? (
-          <TeamView token={token} user={session.data?.user} activeTeamId={session.data?.team?.id} />
+          <TeamView token={token} user={session.data?.user} activeTeamId={session.data?.team?.id} onShowBilling={showBilling} />
         ) : activeSection === "images" ? (
           <ImagesView token={token} />
         ) : activeSection === "billing" ? (
-          <BillingView token={token} />
+          <BillingView token={token} teams={session.data?.teams || []} activeTeam={session.data?.team || undefined} initialTeam={billingTeam} />
         ) : (
-          <Dashboard token={token} user={session.data?.user} teams={session.data?.teams || []} activeTeam={session.data?.team || undefined} onShowBilling={() => setSection("billing")} />
+          <Dashboard token={token} user={session.data?.user} teams={session.data?.teams || []} activeTeam={session.data?.team || undefined} onShowBilling={showBilling} />
         )
       ) : (
         <AccessPanel onToken={handleToken} deviceUserCode={deviceUserCode} />
@@ -320,7 +326,7 @@ function Dashboard({ token, user, teams, activeTeam, onShowBilling }: {
   user?: AuthUser;
   teams: TeamInfo[];
   activeTeam?: TeamInfo;
-  onShowBilling: () => void;
+  onShowBilling: (teamRef?: string) => void;
 }) {
   const [name, setName] = useState("");
   const [tier, setTier] = useState<MachineTier>("small");
@@ -438,7 +444,7 @@ function Dashboard({ token, user, teams, activeTeam, onShowBilling }: {
               {paymentRequired ? (
                 <>
                   {" "}
-                  <button className="link-button" type="button" onClick={onShowBilling}>Upgrade</button>
+                  <button className="link-button" type="button" onClick={() => onShowBilling(team || defaultTeam)}>Upgrade</button>
                 </>
               ) : null}
             </p>

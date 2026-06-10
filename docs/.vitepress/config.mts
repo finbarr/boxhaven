@@ -23,6 +23,10 @@ const pageSeo: Record<string, { title: string, description: string, noindex?: bo
     title: 'Teams',
     description: 'Share boxes with teammates using team-owned boxes, owner/admin/member roles, shareable invite links, and per-team visibility.',
   },
+  '/billing': {
+    title: 'Billing',
+    description: 'How hosted BoxHaven billing works: per-team subscriptions, one free box on personal teams, per-box-hour metering, and the operator configuration.',
+  },
   '/images': {
     title: 'Golden Images',
     description: 'Manage the golden VM images that new boxes boot from: list, snapshot, activate, deactivate, and remove images with bh image.',
@@ -187,6 +191,7 @@ export default defineConfig({
         text: 'Boxes & Teams',
         items: [
           { text: 'Teams', link: '/teams' },
+          { text: 'Billing', link: '/billing' },
           { text: 'Golden Images', link: '/images' },
           { text: 'Cloud Providers', link: '/providers' },
         ]

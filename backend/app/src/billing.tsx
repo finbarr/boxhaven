@@ -1,41 +1,36 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowUpRight, CreditCard } from "lucide-react";
-import { apiFetch, BillingResponse } from "./api";
+import { useState } from "react";
+import { apiFetch, BillingResponse, BillingStatus, TeamInfo } from "./api";
 
-export function BillingView({ token }: { token: string }) {
+export function BillingView({ token, teams, activeTeam, initialTeam }: {
+  token: string;
+  teams: TeamInfo[];
+  activeTeam?: TeamInfo;
+  initialTeam?: string;
+}) {
+  const [team, setTeam] = useState("");
+  const defaultTeam = initialTeam || (activeTeam ? activeTeam.slug || activeTeam.id : teams[0]?.slug || teams[0]?.id || "");
+  const selectedTeam = team || defaultTeam;
   const billing = useQuery({
-    queryKey: ["billing", token],
-    queryFn: () => apiFetch<BillingResponse>("/v1/billing", token),
+    queryKey: ["billing", selectedTeam, token],
+    queryFn: () => apiFetch<BillingResponse>(selectedTeam ? `/v1/billing?team=${encodeURIComponent(selectedTeam)}` : "/v1/billing", token),
   });
   const checkout = useMutation({
-    mutationFn: () => apiFetch<{ url: string }>("/v1/billing/checkout", token, { method: "POST", body: {} }),
+    mutationFn: (teamRef: string) => apiFetch<{ url: string }>("/v1/billing/checkout", token, { method: "POST", body: { team: teamRef } }),
     onSuccess: (data) => {
       window.location.href = data.url;
     },
   });
   const portal = useMutation({
-    mutationFn: () => apiFetch<{ url: string }>("/v1/billing/portal", token, { method: "POST", body: {} }),
+    mutationFn: (teamRef: string) => apiFetch<{ url: string }>("/v1/billing/portal", token, { method: "POST", body: { team: teamRef } }),
     onSuccess: (data) => {
       window.location.href = data.url;
     },
   });
 
-  if (billing.isLoading) {
-    return (
-      <section className="billing-layout">
-        <div className="panel"><p className="hint">Loading billing</p></div>
-      </section>
-    );
-  }
-  if (billing.error) {
-    return (
-      <section className="billing-layout">
-        <div className="panel"><p className="error">{(billing.error as Error).message}</p></div>
-      </section>
-    );
-  }
   const info = billing.data;
-  if (!info || !info.enabled) {
+  if (info && !info.enabled) {
     return (
       <section className="billing-layout">
         <div className="panel">
@@ -49,54 +44,101 @@ export function BillingView({ token }: { token: string }) {
     );
   }
 
-  const free = info.free_machines;
-  const used = info.machines_used;
-  const freeBoxes = `${free} box${free === 1 ? "" : "es"}`;
-  const subscribed = info.status === "active" || info.status === "past_due";
-  const meterPercent = free > 0 ? Math.min(100, (used / free) * 100) : 100;
-
   return (
     <section className="billing-layout">
+      {teams.length > 1 ? (
+        <div className="panel">
+          <div className="panel-heading small">
+            <span>billing</span>
+            <h2>Team billing</h2>
+          </div>
+          <p className="hint">Billing is per team: your personal team carries your free allowance, shared teams subscribe separately.</p>
+          <label>
+            Team
+            <select value={selectedTeam} onChange={(event) => setTeam(event.target.value)}>
+              {teams.map((option) => (
+                <option value={option.slug || option.id} key={option.id}>{option.name}{option.id === activeTeam?.id ? " (active)" : ""}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
+
+      {billing.isLoading ? (
+        <div className="panel"><p className="hint">Loading billing</p></div>
+      ) : null}
+      {billing.error ? (
+        <div className="panel"><p className="error">{(billing.error as Error).message}</p></div>
+      ) : null}
+
+      {info?.enabled ? <TeamBillingPanel info={info} teamRef={selectedTeam || info.team.slug || info.team.id} checkout={checkout} portal={portal} /> : null}
+    </section>
+  );
+}
+
+function TeamBillingPanel({ info, teamRef, checkout, portal }: {
+  info: Extract<BillingResponse, { enabled: true }>;
+  teamRef: string;
+  checkout: { mutate: (teamRef: string) => void; isPending: boolean; error: unknown };
+  portal: { mutate: (teamRef: string) => void; isPending: boolean; error: unknown };
+}) {
+  const free = info.free_machines;
+  const used = info.machines_used;
+  const teamName = info.team.name;
+  const freeBoxes = `${free} box${free === 1 ? "" : "es"}`;
+  const subscribed = info.status === "active" || info.status === "past_due";
+  const meterPercent = free > 0 ? Math.min(100, (used / free) * 100) : used > 0 ? 100 : 0;
+  const portalButton = info.can_manage && info.portal_available ? (
+    <button className="link-button" type="button" onClick={() => portal.mutate(teamRef)} disabled={portal.isPending}>
+      Open the billing portal
+    </button>
+  ) : null;
+
+  return (
+    <>
       {info.status === "past_due" ? (
         <div className="warning-banner">
           <strong><AlertTriangle size={15} /> Payment past due</strong>
-          <p>Your last payment failed. Update your payment method to keep extra boxes running.</p>
-          {info.portal_available ? (
-            <button className="link-button" type="button" onClick={() => portal.mutate()} disabled={portal.isPending}>
-              Open the billing portal
-            </button>
-          ) : null}
+          <p>The last payment for {teamName} failed. Update the payment method to keep its extra boxes running.</p>
+          {portalButton}
         </div>
       ) : null}
       {info.status === "canceled" ? (
         <div className="warning-banner">
           <strong><AlertTriangle size={15} /> Subscription canceled</strong>
-          <p>You are back on the free tier ({freeBoxes}). Upgrade again to run more boxes.</p>
-          {info.portal_available ? (
-            <button className="link-button" type="button" onClick={() => portal.mutate()} disabled={portal.isPending}>
-              Open the billing portal
-            </button>
-          ) : null}
+          <p>
+            {free > 0
+              ? `${teamName} is back on the free tier (${freeBoxes}). Upgrade again to run more boxes.`
+              : `${teamName} no longer has a subscription, so it cannot run boxes. Subscribe again to keep using it.`}
+          </p>
+          {portalButton}
         </div>
       ) : null}
 
       <div className="panel">
         <div className="panel-heading small">
-          <span>plan</span>
+          <span>plan / {info.team.personal ? "personal team" : "shared team"}</span>
           <h2>
-            {info.status === "active" ? "Subscribed" : `Free — ${freeBoxes} included`}
+            {teamName}
             <span className={info.status === "past_due" ? "badge warn" : "badge"}>{statusLabel(info.status)}</span>
           </h2>
         </div>
         <p className="hint">
           {subscribed
-            ? `Your first ${free === 1 ? "box is" : `${free} boxes are`} free; boxes beyond that are usage-billed per box-hour.`
-            : `Your account includes ${free === 1 ? "1 free box" : `${free} free boxes`}. Upgrade to run more — additional boxes are usage-billed per box-hour.`}
+            ? free > 0
+              ? `The first ${free === 1 ? "box is" : `${free} boxes are`} free; boxes beyond that are usage-billed per box-hour.`
+              : `Boxes in ${teamName} are usage-billed per box-hour.`
+            : info.team.personal
+              ? `Your personal team includes ${free === 1 ? "1 free box" : `${free} free boxes`}. Upgrade to run more — additional boxes are usage-billed per box-hour.`
+              : free > 0
+                ? `${teamName} includes ${free === 1 ? "1 free box" : `${free} free boxes`}. Upgrade to run more — additional boxes are usage-billed per box-hour.`
+                : "Shared teams need a subscription to run boxes — boxes in shared teams are usage-billed from the first box."}
         </p>
         <div className="usage-meter">
           <span>
-            {used} of {freeBoxes} free in use
-            {subscribed && used > free ? ` — ${used - free} usage-billed` : ""}
+            {free > 0
+              ? `${used} of ${freeBoxes} free in use${subscribed && used > free ? ` — ${used - free} usage-billed` : ""}`
+              : `${used} box${used === 1 ? "" : "es"} in use${subscribed && used > 0 ? " — all usage-billed" : ""}`}
           </span>
           <div className="meter-track">
             <div className={used > free ? "meter-fill over" : "meter-fill"} style={{ width: `${meterPercent}%` }} />
@@ -104,25 +146,33 @@ export function BillingView({ token }: { token: string }) {
         </div>
         <div className="billing-actions">
           {subscribed ? (
-            <button className="primary-button" type="button" onClick={() => portal.mutate()} disabled={portal.isPending || !info.portal_available}>
-              <CreditCard size={16} />
-              {portal.isPending ? "Opening" : "Manage billing"}
-            </button>
-          ) : (
-            <button className="primary-button" type="button" onClick={() => checkout.mutate()} disabled={checkout.isPending}>
+            info.can_manage ? (
+              <button className="primary-button" type="button" onClick={() => portal.mutate(teamRef)} disabled={portal.isPending || !info.portal_available}>
+                <CreditCard size={16} />
+                {portal.isPending ? "Opening" : "Manage billing"}
+              </button>
+            ) : (
+              <p className="hint">Billing for this team is managed by its owners and admins.</p>
+            )
+          ) : info.can_manage ? (
+            <button className="primary-button" type="button" onClick={() => checkout.mutate(teamRef)} disabled={checkout.isPending}>
               <ArrowUpRight size={16} />
               {checkout.isPending ? "Redirecting" : "Upgrade"}
             </button>
+          ) : (
+            <p className="hint">Ask a team owner or admin to subscribe.</p>
           )}
         </div>
         {checkout.error ? <p className="error">{(checkout.error as Error).message}</p> : null}
         {portal.error ? <p className="error">{(portal.error as Error).message}</p> : null}
       </div>
-    </section>
+    </>
   );
 }
 
-function statusLabel(status: BillingResponse["status"]): string {
+export function statusLabel(status: BillingStatus): string {
+  if (status === "active") return "subscribed";
   if (status === "past_due") return "past due";
+  if (status === "free") return "free tier";
   return status;
 }

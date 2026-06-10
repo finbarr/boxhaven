@@ -942,6 +942,16 @@ button:disabled {
   color: #8a611a;
 }
 
+.billing-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.billing-hint .badge {
+  margin-left: 0;
+}
+
 .usage-meter {
   display: grid;
   gap: 8px;

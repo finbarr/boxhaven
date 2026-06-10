@@ -91,10 +91,14 @@ export type ActiveImage = {
   activated_at?: string;
 };
 
+// Billing records are keyed by organization (team) id. `personal` snapshots
+// whether the team is a personal team so the usage reporter can compute the
+// free allowance without a session.
 export type BillingRecord = {
   customer_id: string;
   subscription_id?: string;
   status?: string;
+  personal?: boolean;
   last_reported_hour?: string;
   updated_at?: string;
 };
