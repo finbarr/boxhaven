@@ -37,10 +37,10 @@
             </div>
             <div class="term-body">
               <div class="term-line"><span class="prompt">$</span> bh create work <span class="comment"># provisions the box and syncs this project once</span></div>
-              <div class="term-line"><span class="prompt">$</span> bh run work claude --continue <span class="comment"># resume your local claude session on the box</span></div>
-              <div class="term-line"><span class="output">Claude&gt; Picking up where we left off...</span></div>
-              <div class="term-line"><span class="prompt">$</span> <span class="comment"># close the laptop — the agent keeps running in tmux</span></div>
-              <div class="term-line"><span class="prompt">$</span> bh connect work <span class="comment"># reattach to the tmux session any time</span></div>
+              <div class="term-line"><span class="prompt">$</span> bh run work claude <span class="comment"># claude starts in the box's tmux session</span></div>
+              <div class="term-line"><span class="output">Claude&gt; On it.</span></div>
+              <div class="term-line"><span class="prompt">$</span> <span class="comment"># close the laptop — the agent keeps working</span></div>
+              <div class="term-line"><span class="prompt">$</span> bh connect work <span class="comment"># reattach any time</span></div>
             </div>
           </div>
         </div>

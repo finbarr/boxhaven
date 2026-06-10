@@ -11,12 +11,25 @@ This file is the working agreement for changes in this repository.
    on their own.
 
 When behavior, commands, defaults, docs, backend contracts, deployment scripts,
-or VM runtime behavior change, update the matching user-facing surfaces:
+or VM runtime behavior change, check EVERY user-facing surface and update the
+ones that mention the changed behavior:
 
 - [README.md](README.md)
+- the docs site in [docs](docs) (deploys to docs.boxhaven.dev; pay special
+  attention to the homepage hero and getting-started examples)
+- the web console in [backend/app](backend/app), especially the logged-out
+  landing, the onboarding card, and any copy that demonstrates CLI commands
 - [backend/README.md](backend/README.md)
 - [deploy/digitalocean/README.md](deploy/digitalocean/README.md)
-- the CLI in [cmd/bh](cmd/bh)
+- the CLI usage/help text in [cmd/bh](cmd/bh)
+
+Example commands shown on these surfaces must demonstrate the canonical
+workflow (create, run an agent, disconnect, connect to reattach) and must
+stay runnable as written. When console or docs UI/copy changes, screenshot
+the affected pages headlessly (Playwright; log in by setting the
+boxhaven.backend.token localStorage key to a session token) and actually
+look at the screenshots before calling the change done — text wrapping,
+column overflow, and stale examples are only visible by looking.
 
 Do not stop at unit tests when behavior can be exercised for real. If full
 end-to-end verification is blocked by the environment, state exactly what was

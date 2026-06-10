@@ -873,6 +873,18 @@ a.primary-button {
 
 .welcome-panel.landing {
   grid-template-columns: minmax(220px, 0.66fr) minmax(320px, 1fr);
+  align-items: center;
+  padding: 18px;
+  border: 1px solid rgba(96, 75, 53, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 252, 243, 0.88);
+  box-shadow: 0 20px 60px rgba(90, 67, 41, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+.welcome-panel.landing .logo-stage {
+  align-self: stretch;
+  box-shadow: none;
 }
 
 .landing-side {
@@ -915,8 +927,9 @@ a.primary-button {
   gap: 5px;
   justify-self: start;
   color: #2f6f5c;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: underline;
 }
 
 .forgot-link {
