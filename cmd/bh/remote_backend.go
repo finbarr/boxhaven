@@ -29,6 +29,9 @@ type remoteBackendCreateRequest struct {
 	Name       string `json:"name"`
 	SSHUser    string `json:"ssh_user,omitempty"`
 	Tier       string `json:"tier,omitempty"`
+	Provider   string `json:"provider,omitempty"`
+	Region     string `json:"region,omitempty"`
+	Image      string `json:"image,omitempty"`
 	SourcePath string `json:"source_path,omitempty"`
 	RepoURL    string `json:"repo_url,omitempty"`
 	Branch     string `json:"branch,omitempty"`
@@ -105,6 +108,9 @@ func createRemoteBackendMachine(cfg Config, projectDir string, opts remoteProvis
 		Name:       opts.Name,
 		SSHUser:    firstNonEmpty(opts.SSHUser, cfg.Remote.SSHUser, remoteDefaultSSHUser),
 		Tier:       opts.Tier,
+		Provider:   opts.Provider,
+		Region:     opts.Region,
+		Image:      opts.Image,
 		SourcePath: sourcePath,
 		RepoURL:    repo.URL,
 		Branch:     repo.Branch,

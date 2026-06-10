@@ -54,6 +54,10 @@ func runCmd(args []string) error {
 	switch args[0] {
 	case "create", "run", "connect", "sync", "list", "status", "rename", "destroy":
 		return runRemote(args, projectDir)
+	case "image":
+		return runImage(args[1:], projectDir)
+	case "team":
+		return runTeam(args[1:], projectDir)
 	case "login":
 		return runLogin(args[1:])
 	case "logout":
@@ -78,7 +82,7 @@ func runCmd(args []string) error {
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "%sBoxHaven%s %s\n\n", colorBold, colorReset, Version)
 	fmt.Fprintf(os.Stderr, "%sUSAGE:%s\n", colorBold, colorReset)
-	fmt.Fprintln(os.Stderr, "  bh create <name> [--tier small|medium|large] [--no-sync]")
+	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--tier small|medium|large] [--region <region>] [--image <image>] [--no-sync]")
 	fmt.Fprintln(os.Stderr, "  bh list")
 	fmt.Fprintln(os.Stderr, "  bh destroy <name>")
 	fmt.Fprintln(os.Stderr, "  bh rename <old-name> <new-name>")
@@ -87,6 +91,8 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  bh sync up <name>")
 	fmt.Fprintln(os.Stderr, "  bh sync down <name> --force")
 	fmt.Fprintln(os.Stderr, "  bh status <name>")
+	fmt.Fprintln(os.Stderr, "  bh image ls|create|activate|deactivate|rm [...]")
+	fmt.Fprintln(os.Stderr, "  bh team list|create|members|invite|boxes [...]")
 	fmt.Fprintln(os.Stderr, "  bh login [--backend-url <url>] [--no-open]")
 	fmt.Fprintln(os.Stderr, "  bh logout")
 	fmt.Fprintln(os.Stderr, "  bh config")
@@ -126,6 +132,13 @@ func errorf(format string, args ...interface{}) {
 func configValueOrNotSet(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return "(not set)"
+	}
+	return value
+}
+
+func valueOrDash(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "-"
 	}
 	return value
 }
