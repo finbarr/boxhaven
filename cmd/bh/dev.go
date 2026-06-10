@@ -79,6 +79,9 @@ func parseRemoteDevArgs(args []string, cfg Config) (remoteProvisionOptions, bool
 		switch {
 		case len(command) > 0:
 			command = append(command, arg)
+		case arg == "-h" || arg == "--help" || arg == "help":
+			printRemoteUsage()
+			return opts, noSync, nil, errHelp
 		case arg == "--no-sync":
 			noSync = true
 		case arg == "--provider" || strings.HasPrefix(arg, "--provider="):
