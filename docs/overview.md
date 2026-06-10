@@ -92,6 +92,10 @@ CLI use.
 ## Teams
 
 Teams are Better Auth organizations with `owner`, `admin`, and `member` roles.
-Members see the team's boxes and owners, and owners and admins can destroy
-team members' boxes. Invitations are shared as manual links from the console or
-`bh team invite <email>`; the backend does not send email.
+Every account gets a personal team automatically, and every box belongs to a
+team: new boxes land in the session's active team, `bh create --team` targets
+a team explicitly, `bh team switch <team>` changes the CLI default, and
+`bh move <name> <team>` moves a box between the owner's teams. Members see
+exactly the boxes in a team — not every box of every member — and owners and
+admins can destroy team boxes. Invitations are shared as manual links from the
+console or `bh team invite <email>`; the backend does not send email.

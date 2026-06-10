@@ -72,6 +72,34 @@ Skip the initial sync only when you intentionally want an empty project path:
 bh create work --no-sync
 ```
 
+Every account automatically gets a personal team, and your first box lands
+there: new boxes go to your session's active team, which `bh login` pins to
+your personal team until you join or switch to another one.
+
+## Work In A Team
+
+To share boxes with teammates, create a shared team and invite them:
+
+```bash
+bh team create acme
+bh team invite teammate@example.com
+```
+
+The invite is a shareable link; the teammate signs in with the invited email
+address and accepts it, which also switches that session's active team to the
+new team. When you belong to more than one team, control where boxes go
+explicitly:
+
+```bash
+bh create work --team acme   # create a box directly in a team
+bh team switch acme          # change the CLI default team for new boxes
+bh move work acme            # move one of your boxes into the team
+```
+
+Team members see exactly the boxes in that team; boxes in your other teams
+stay invisible to them. Owners and admins can destroy team boxes; members can
+only destroy their own.
+
 ## Run Commands
 
 Run a noninteractive command:

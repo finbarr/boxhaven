@@ -120,6 +120,7 @@ Environment:
 - `BOXHAVEN_BACKEND_STATE`: JSON state file path.
 - `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_BACKEND_STATE`.
 - `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
+- `BOXHAVEN_MAX_MACHINES_PER_USER`: per-user cap on concurrently existing boxes; `0` or unset means unlimited. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. The hosted control plane sets this; self-hosted deployments normally leave it unset.
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
 - `DIGITALOCEAN_ACCESS_TOKEN`: DigitalOcean token; setting it enables the DigitalOcean provider.
 - `DIGITALOCEAN_REGION`: default `nyc3`.
@@ -191,7 +192,12 @@ Routes:
 - `POST /v1/machines/:name/sessions/boxhaven/prepare`
 - `POST /v1/machines/:name/commands/ssh`
 - `POST /v1/machines/:name/commands/record`
+- `POST /v1/machines/:name/move`
 - `DELETE /v1/machines/:name`
+
+`GET /v1/auth/whoami` returns the authenticated user plus the session's teams:
+`team` is the session's active team (`{id, name, slug}`, or `null` before the
+personal team exists) and `teams` lists every team the user belongs to.
 
 Image management routes (admin-only, gated by `BOXHAVEN_ADMIN_EMAILS`):
 
@@ -213,16 +219,22 @@ Team routes (Better Auth organization plugin, mounted under `/v1/auth`):
 - `POST /v1/auth/organization/cancel-invitation`
 - `POST /v1/auth/organization/remove-member`
 - `POST /v1/auth/organization/update-member-role`
+- `POST /v1/auth/organization/set-active`
 - `POST /v1/auth/organization/leave`
 
 Roles are `owner`, `admin`, and `member`. The backend does not send invitation
 emails; invite links are shared manually as `<app_url>/invite?id=<invitation-id>`
 and accepted by the signed-in user whose email matches the invitation.
 
+Each session has an active team. `POST /v1/auth/organization/set-active`
+switches it for that session only — CLI login sessions and browser sessions
+are independent — and accepting an invitation also switches that session's
+active team to the joined team.
+
 Org-scoped machine routes:
 
-- `GET /v1/orgs/:orgID/machines` — list team boxes with owner email/name plus the caller's role; available to any member.
-- `DELETE /v1/orgs/:orgID/machines/:userID/:name` — destroy a team member's box; owners and admins only.
+- `GET /v1/orgs/:orgID/machines` — list the boxes that belong to that team with owner email/name plus the caller's role; available to any member. Boxes a member owns in other teams are not included.
+- `DELETE /v1/orgs/:orgID/machines/:userID/:name` — destroy a team box; owners and admins only (`403` for members), and `404` when the box does not belong to that team.
 
 Preview requests arrive at Caddy over HTTPS for
 `*.BOXHAVEN_PREVIEW_BASE_DOMAIN`, are rewritten through the backend preview
@@ -234,8 +246,16 @@ agent sessions through `BOXHAVEN_PREVIEW_URL`, `BOXHAVEN_PREVIEW_HOSTNAME`,
 `boxhaven-web-preview` that describes how web apps should bind and report their
 public URL.
 
-Machines are scoped to the authenticated Better Auth user and are one-to-one with
-a remote VM. The backend imports provider-owned machines when listing, so the UI
+Machines are owned by the authenticated Better Auth user, belong to exactly one
+team, and are one-to-one with a remote VM. Every account automatically gets a
+personal team on its first authenticated request, and machine JSON carries
+`org_id` plus `team_id`, `team_slug`, and `team_name` decorations on list
+items, single-machine and connect responses, the create response, and the move
+response. `POST /v1/machines` accepts an optional `team` (slug, id, or name of
+a team the caller belongs to; `400` otherwise) and defaults to the session's
+active team. `POST /v1/machines/:name/move` with `{ "team": ... }` moves the
+caller's box to another of their teams and returns the updated machine.
+The backend imports provider-owned machines when listing, so the UI
 and CLI can see machines already present in the authenticated account. There are
 no multiple backend workspaces or named sessions per machine; the backend and VM
 agent own one project path and one tmux session on the VM. Bootstrap status is
