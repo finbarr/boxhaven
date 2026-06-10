@@ -553,6 +553,24 @@ if [ "$set_active" -eq 1 ]; then
   set_env_var "$env_file" "BOXHAVEN_REMOTE_IMAGE_BUILT_AT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 fi
 
+# Old golden snapshots pile up in the provider account otherwise; keep the
+# newest BOXHAVEN_IMAGE_KEEP (default 2: the new image plus one rollback).
+image_keep="${BOXHAVEN_IMAGE_KEEP:-2}"
+if [ "$image_keep" -gt 0 ] 2>/dev/null; then
+  log "pruning ${snapshot_prefix}-* snapshots beyond the newest ${image_keep}"
+  prune_ids="$(do_api GET "/v2/snapshots?resource_type=droplet&per_page=200" \
+    | jq -r --arg prefix "${snapshot_prefix}-" --arg keep "$image_keep" --arg current "$snapshot_id" '
+        [.snapshots[] | select(.name | startswith($prefix))]
+        | sort_by(.created_at) | reverse
+        | .[($keep | tonumber):]
+        | map(select((.id | tostring) != $current) | .id)
+        | .[]')"
+  for prune_id in $prune_ids; do
+    log "deleting old snapshot ${prune_id}"
+    do_api DELETE "/v2/images/${prune_id}" >/dev/null || log "could not delete snapshot ${prune_id}; remove it manually"
+  done
+fi
+
 cat <<EOF
 Snapshot ready.
   id:   ${snapshot_id}
