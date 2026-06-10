@@ -18,6 +18,7 @@ export type BackendOptions = {
   store: StateStore;
   sshCA: SSHCertificateAuthority;
   adminEmails?: string[];
+  maxMachinesPerUser?: number;
   appDir?: string;
   apiPublicURL?: string;
   appPublicURL?: string;
@@ -30,6 +31,19 @@ export type BackendOptions = {
 type AuthContext = {
   userID: string;
   email: string;
+  orgID: string;
+};
+
+type TeamInfo = {
+  id: string;
+  name: string;
+  slug?: string;
+};
+
+type TeamMachine = RemoteMachine & {
+  team_id?: string;
+  team_slug?: string;
+  team_name?: string;
 };
 
 type PreviewOptions = {
@@ -153,12 +167,15 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   app.get("/v1/auth/whoami", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
+    const teams = await listUserTeams(options, toHeaders(request.headers));
     return {
       authenticated: true,
       provider: options.providers.defaultName,
       providers: options.providers.names(),
       admin: isAdmin(options, auth),
       app_url: options.appPublicURL || "",
+      team: teams.find((team) => team.id === auth.orgID) || null,
+      teams,
       user: {
         id: auth.userID,
         email: auth.email,
@@ -201,15 +218,36 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (imageError) return reply.code(400).send({ id: "bad_request", message: imageError });
     const regionError = validateCreateOverride("region", body.region);
     if (regionError) return reply.code(400).send({ id: "bad_request", message: regionError });
-    return createMachine(options, agents, auth, provider, body, reply);
+    const limit = options.maxMachinesPerUser || 0;
+    if (limit > 0 && (await options.store.listMachinesForUser(auth.userID)).length >= limit) {
+      return reply.code(403).send({
+        id: "limit_reached",
+        message: `you have reached the limit of ${limit} boxes; destroy one with bh destroy <name> first`,
+      });
+    }
+    const teams = await listUserTeams(options, toHeaders(request.headers));
+    let orgID = auth.orgID;
+    if (body.team) {
+      const team = findTeam(teams, body.team);
+      if (!team) {
+        return reply.code(400).send({ id: "bad_request", message: `you are not a member of team ${body.team}` });
+      }
+      orgID = team.id;
+    }
+    return createMachine(options, agents, auth, provider, body, orgID, teams, reply);
   });
 
   app.get("/v1/machines", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
-    return {
-      machines: await listAccountMachines(options, auth),
-    };
+    const teams = await listUserTeams(options, toHeaders(request.headers));
+    await syncProviderMachines(options, auth);
+    const machines: TeamMachine[] = [];
+    for (const machine of await options.store.listMachinesForUser(auth.userID)) {
+      const healed = await healMachineTeam(options, auth, teams, machine);
+      machines.push(decorateTeam(publicMachine(normalizeMachine(options, healed)), teams));
+    }
+    return { machines };
   });
 
   app.get<{ Params: { name: string } }>("/v1/machines/:name", async (request, reply) => {
@@ -226,10 +264,12 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
+    const teams = await listUserTeams(options, toHeaders(request.headers));
     const refreshed = await provider.getMachine(existing);
     const machine = normalizeMachine(options, { ...existing, ...refreshed.machine, name, user_id: auth.userID });
     await options.store.putMachine(machine);
-    return { machine: publicMachine(machine), status: refreshed.status || "leased" };
+    const healed = await healMachineTeam(options, auth, teams, machine);
+    return { machine: decorateTeam(publicMachine(healed), teams), status: refreshed.status || "leased" };
   });
 
   app.get<{ Params: { name: string } }>("/v1/machines/:name/connect", async (request, reply) => {
@@ -246,11 +286,13 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
+    const teams = await listUserTeams(options, toHeaders(request.headers));
     const refreshed = await provider.getMachine(existing);
     const machine = normalizeMachine(options, { ...existing, ...refreshed.machine, name, user_id: auth.userID });
     await options.store.putMachine(machine);
+    const healed = await healMachineTeam(options, auth, teams, machine);
     return {
-      machine: publicMachine(machine),
+      machine: decorateTeam(publicMachine(healed), teams),
       status: refreshed.status || "leased",
       connect: {
         transport: "direct_ssh_certificate",
@@ -555,16 +597,16 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   app.get<{ Params: { orgID: string } }>("/v1/orgs/:orgID/machines", async (request, reply) => {
     const context = await requireOrgMembership(options, request, reply, request.params.orgID);
     if (!context) return;
+    const ownerByID = new Map(context.members.map((member) => [member.userId, member.user]));
     const machines: OrgMachine[] = [];
-    for (const member of context.members) {
-      const owned = await options.store.listMachinesForUser(member.userId);
-      for (const machine of owned) {
-        machines.push({
-          ...publicMachine(normalizeMachine(options, machine)),
-          owner_email: member.user?.email,
-          owner_name: member.user?.name,
-        });
-      }
+    for (const machine of await options.store.listMachines()) {
+      if (machine.org_id !== request.params.orgID) continue;
+      const owner = machine.user_id ? ownerByID.get(machine.user_id) : undefined;
+      machines.push({
+        ...publicMachine(normalizeMachine(options, machine)),
+        owner_email: owner?.email,
+        owner_name: owner?.name,
+      });
     }
     return { machines, role: context.role };
   });
@@ -576,20 +618,38 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return reply.code(403).send({ id: "forbidden", message: "destroying team machines requires the owner or admin role" });
     }
     const targetUserID = request.params.userID;
-    if (!context.members.some((member) => member.userId === targetUserID)) {
-      return reply.code(404).send({ id: "not_found", message: "machine owner is not a member of this team" });
-    }
     const name = normalizeMachineName(request.params.name);
     const error = validateName(name);
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
     const existing = await options.store.getMachine(targetUserID, name);
-    if (existing) {
-      const provider = providerForMachine(options, existing, reply);
-      if (!provider) return;
-      await provider.releaseMachine(existing);
-      await options.store.deleteMachine(targetUserID, name);
+    if (existing?.org_id !== request.params.orgID) {
+      return reply.code(404).send({ id: "not_found", message: "machine does not belong to this team" });
     }
+    const provider = providerForMachine(options, existing, reply);
+    if (!provider) return;
+    await provider.releaseMachine(existing);
+    await options.store.deleteMachine(targetUserID, name);
     return reply.code(204).send();
+  });
+
+  app.post<{ Params: { name: string }; Body: { team?: string } }>("/v1/machines/:name/move", async (request, reply) => {
+    const auth = await requireAuth(options, request, reply);
+    if (!auth) return;
+    const name = normalizeMachineName(request.params.name);
+    const error = validateName(name);
+    if (error) return reply.code(400).send({ id: "bad_request", message: error });
+    const reference = bodyString(request.body?.team).trim();
+    if (!reference) return reply.code(400).send({ id: "bad_request", message: "target team is required" });
+    const machine = await options.store.getMachine(auth.userID, name);
+    if (!machine) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+    const teams = await listUserTeams(options, toHeaders(request.headers));
+    const team = findTeam(teams, reference);
+    if (!team) {
+      return reply.code(400).send({ id: "bad_request", message: `you are not a member of team ${reference}` });
+    }
+    const moved = normalizeMachine(options, { ...machine, org_id: team.id, updated_at: new Date().toISOString() });
+    await options.store.putMachine(moved);
+    return { machine: decorateTeam(publicMachine(moved), teams) };
   });
 
   if (options.appDir) {
@@ -605,6 +665,8 @@ async function createMachine(
   auth: AuthContext,
   provider: MachineProvider,
   body: CreateMachineRequest,
+  orgID: string,
+  teams: TeamInfo[],
   reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
 ) {
   body.provider_name = providerMachineName(auth.userID, body.name);
@@ -646,6 +708,7 @@ async function createMachine(
     ...provisioned.machine,
     name: body.name,
     user_id: auth.userID,
+    org_id: orgID || undefined,
     provider_name: body.provider_name,
     source_path: body.source_path,
     repo_url: body.repo_url,
@@ -660,16 +723,11 @@ async function createMachine(
     ready = await waitForCreatedMachineReady(options, agents, machine);
   } catch (err) {
     if (err instanceof AgentRPCError) {
-      return reply.code(504).send({ id: err.code, message: err.message, machine: publicMachine(machine) });
+      return reply.code(504).send({ id: err.code, message: err.message, machine: decorateTeam(publicMachine(machine), teams) });
     }
     throw err;
   }
-  return reply.code(201).send({ machine: publicMachine(ready), status: provisioned.status || "created" });
-}
-
-async function listAccountMachines(options: BackendOptions, auth: AuthContext): Promise<RemoteMachine[]> {
-  await syncProviderMachines(options, auth);
-  return (await options.store.listMachinesForUser(auth.userID)).map((machine) => publicMachine(normalizeMachine(options, machine)));
+  return reply.code(201).send({ machine: decorateTeam(publicMachine({ ...ready, org_id: ready.org_id || orgID || undefined }), teams), status: provisioned.status || "created" });
 }
 
 async function syncProviderMachines(options: BackendOptions, auth: AuthContext): Promise<void> {
@@ -726,6 +784,7 @@ function normalizeCreateRequest(body: CreateMachineRequest | undefined, provider
     name: normalizeMachineName(bodyString(input.name)),
     provider: bodyString(input.provider).trim().toLowerCase() || providerName,
     provider_name: bodyString(input.provider_name).trim() || undefined,
+    team: bodyString(input.team).trim() || undefined,
     tier: bodyString(input.tier).trim().toLowerCase() || undefined,
     region: bodyString(input.region).trim().toLowerCase() || undefined,
     image: bodyString(input.image).trim() || undefined,
@@ -1078,15 +1137,107 @@ function agentResultRecordCommand(result: unknown): boolean {
 }
 
 async function requireAuth(options: BackendOptions, request: { headers: Record<string, string | string[] | undefined> }, reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } }): Promise<AuthContext | undefined> {
-  const session = await options.auth.api.getSession({ headers: toHeaders(request.headers) });
+  const headers = toHeaders(request.headers);
+  const session = await options.auth.api.getSession({ headers });
   if (!session) {
     reply.code(401).send({ id: "unauthorized", message: "missing or invalid bearer token" });
     return undefined;
   }
+  const activeOrgID = (session.session as { activeOrganizationId?: string | null }).activeOrganizationId || "";
   return {
     userID: session.user.id,
     email: session.user.email,
+    orgID: activeOrgID || await ensureActiveTeam(options, headers, session.user),
   };
+}
+
+function orgAPI(options: BackendOptions) {
+  return options.auth.api as unknown as {
+    listOrganizations: (input: { headers: Headers }) => Promise<Array<{ id: string; name: string; slug?: string }> | null>;
+    createOrganization: (input: { headers: Headers; body: { name: string; slug: string } }) => Promise<
+      { id?: string; organization?: { id?: string } } | null
+    >;
+    setActiveOrganization: (input: { headers: Headers; body: { organizationId: string } }) => Promise<unknown>;
+  };
+}
+
+// Every account gets a team: boxes always belong to one. The first request of
+// a session without an active team creates the personal team if needed and
+// pins the session's active team, so both fresh signups and pre-team accounts
+// are migrated transparently.
+async function ensureActiveTeam(
+  options: BackendOptions,
+  headers: Headers,
+  user: { id: string; email: string; name?: string | null },
+): Promise<string> {
+  const api = orgAPI(options);
+  let orgID = (await api.listOrganizations({ headers }))?.[0]?.id || "";
+  if (!orgID) {
+    try {
+      const created = await api.createOrganization({
+        headers,
+        body: { name: defaultTeamName(user), slug: defaultTeamSlug(user) },
+      });
+      orgID = created?.id || created?.organization?.id || "";
+    } catch {
+      // A concurrent request may have created the team; fall through to re-list.
+    }
+    if (!orgID) {
+      orgID = (await api.listOrganizations({ headers }))?.[0]?.id || "";
+    }
+  }
+  if (orgID) {
+    try {
+      await api.setActiveOrganization({ headers, body: { organizationId: orgID } });
+    } catch {
+      // The team still exists; the next request will retry pinning it.
+    }
+  }
+  return orgID;
+}
+
+function defaultTeamName(user: { email: string; name?: string | null }): string {
+  const base = user.name?.trim() || user.email.split("@")[0] || "personal";
+  return `${base}'s team`;
+}
+
+function defaultTeamSlug(user: { id: string; email: string }): string {
+  const base = (user.email.split("@")[0] || "team").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "team";
+  return `${base}-${createHash("sha256").update(user.id).digest("hex").slice(0, 6)}`;
+}
+
+async function listUserTeams(options: BackendOptions, headers: Headers): Promise<TeamInfo[]> {
+  const orgs = await orgAPI(options).listOrganizations({ headers });
+  return (orgs || []).map((org) => ({ id: org.id, name: org.name, slug: org.slug }));
+}
+
+function findTeam(teams: TeamInfo[], reference: string): TeamInfo | undefined {
+  const want = reference.trim().toLowerCase();
+  if (!want) return undefined;
+  return teams.find((team) =>
+    team.id.toLowerCase() === want
+    || team.slug?.toLowerCase() === want
+    || team.name.toLowerCase() === want);
+}
+
+function decorateTeam(machine: RemoteMachine, teams: TeamInfo[]): TeamMachine {
+  const team = teams.find((candidate) => candidate.id === machine.org_id);
+  return {
+    ...machine,
+    team_id: machine.org_id,
+    team_slug: team?.slug,
+    team_name: team?.name,
+  };
+}
+
+// Boxes whose team the owner can no longer see (the team was deleted, or the
+// owner left it) follow the owner back to their active team.
+async function healMachineTeam(options: BackendOptions, auth: AuthContext, teams: TeamInfo[], machine: RemoteMachine): Promise<RemoteMachine> {
+  if (machine.org_id && teams.some((team) => team.id === machine.org_id)) return machine;
+  if (!auth.orgID) return machine;
+  const healed = { ...machine, org_id: auth.orgID };
+  await options.store.putMachine(healed);
+  return healed;
 }
 
 async function requireAgentMachine(options: BackendOptions, request: { headers: Record<string, string | string[] | undefined> }, reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } }): Promise<RemoteMachine | undefined> {

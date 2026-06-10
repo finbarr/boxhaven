@@ -40,6 +40,7 @@ const app = createBackend({
   store,
   sshCA,
   adminEmails: splitList(process.env.BOXHAVEN_ADMIN_EMAILS),
+  maxMachinesPerUser: Number(process.env.BOXHAVEN_MAX_MACHINES_PER_USER || 0) || undefined,
   appDir: process.env.BOXHAVEN_BACKEND_APP_DIR || defaultAppDir,
   apiPublicURL,
   appPublicURL,

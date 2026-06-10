@@ -1,6 +1,7 @@
 export type RemoteMachine = {
   name: string;
   user_id?: string;
+  org_id?: string;
   provider_label?: string;
   provider_name?: string;
   provider?: string;
@@ -30,6 +31,7 @@ export type CreateMachineRequest = {
   name: string;
   provider?: string;
   provider_name?: string;
+  team?: string;
   tier?: string;
   region?: string;
   image?: string;
