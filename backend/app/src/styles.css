@@ -155,7 +155,8 @@ label,
 
 .access-layout {
   grid-template-columns: minmax(0, 1.12fr) minmax(320px, 430px);
-  align-items: stretch;
+  gap: 26px;
+  align-items: start;
   padding-top: min(7vh, 78px);
 }
 
@@ -894,10 +895,11 @@ a.primary-button {
 }
 
 .landing-copy h1 {
+  max-width: 24ch;
   margin: 0;
   color: #22342d;
   font-size: 30px;
-  line-height: 1.12;
+  line-height: 1.16;
 }
 
 .landing-copy p {
