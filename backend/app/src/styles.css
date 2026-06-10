@@ -842,9 +842,8 @@ a.primary-button {
   color: #2f6f5c;
   white-space: nowrap;
   text-overflow: ellipsis;
-  text-transform: none;
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .machine-row .badge {
