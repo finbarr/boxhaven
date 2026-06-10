@@ -1,61 +1,28 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { Activity, Check, Cloud, Copy, Home, LogOut, MonitorDot, Play, Plus, RefreshCw, Server, ShieldCheck, Trash2, XCircle } from "lucide-react";
+import { createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from "@tanstack/react-router";
+import { Activity, Check, Cloud, Home, Layers, LogOut, MonitorDot, Plus, RefreshCw, Server, ShieldCheck, Trash2, Users, XCircle } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { AccessPanel, CommandBlock } from "./access";
+import {
+  apiFetch,
+  AuthUser,
+  formatDate,
+  formatUserCode,
+  Machine,
+  MachineResponse,
+  MachinesResponse,
+  ProvidersResponse,
+  sectionKey,
+  slugName,
+  tokenKey,
+  WhoamiResponse,
+} from "./api";
 import logoURL from "./assets/boxhaven-logo.png";
+import { ImagesView } from "./images";
+import { InvitePanel } from "./invite";
 import "./styles.css";
-
-type AuthUser = {
-  id: string;
-  email: string;
-};
-
-type ProviderInfo = {
-  name: string;
-  label: string;
-  capabilities: string[];
-};
-
-type Machine = {
-  name: string;
-  provider?: string;
-  provider_label?: string;
-  provider_id?: string;
-  public_ipv4?: string;
-  region?: string;
-  size?: string;
-  image?: string;
-  ssh_user?: string;
-  preview_hostname?: string;
-  preview_url?: string;
-  source_path?: string;
-  project_path?: string;
-  repo_url?: string;
-  branch?: string;
-  last_synced_at?: string;
-  bootstrap_complete?: boolean;
-  created_at?: string;
-  updated_at?: string;
-};
-
-type LoginResponse = {
-  token: string;
-  user?: AuthUser;
-};
-
-type MachineResponse = {
-  machine: Machine;
-  status?: string;
-};
-
-type MachinesResponse = {
-  machines: Machine[];
-};
-
-type ProvidersResponse = {
-  providers: ProviderInfo[];
-};
+import { TeamView } from "./team";
 
 type DeviceStatusResponse = {
   user_code: string;
@@ -72,15 +39,14 @@ type ConnectResponse = MachineResponse & {
 
 type MachineTier = "small" | "medium" | "large";
 
+type Section = "boxes" | "team" | "images";
+
 const machineTiers: Array<{ value: MachineTier; label: string; detail: string }> = [
   { value: "small", label: "Small", detail: "2 vCPU / 4 GB" },
   { value: "medium", label: "Medium", detail: "4 vCPU / 8 GB" },
   { value: "large", label: "Large", detail: "8 vCPU / 16 GB" },
 ];
 
-const configuredAPIURL = (import.meta.env.VITE_BOXHAVEN_API_URL || "").replace(/\/+$/, "");
-const apiBaseURL = configuredAPIURL || (window.location.hostname === "app.boxhaven.dev" ? "https://api.boxhaven.dev" : "");
-const tokenKey = "boxhaven.backend.token";
 const queryClient = new QueryClient();
 
 const rootRoute = createRootRoute({
@@ -99,8 +65,17 @@ const deviceRoute = createRoute({
   component: ConsoleRoute,
 });
 
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/invite",
+  validateSearch: (search: Record<string, unknown>) => ({
+    id: typeof search.id === "string" ? search.id : "",
+  }),
+  component: InviteRoute,
+});
+
 const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, deviceRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, deviceRoute, inviteRoute]),
 });
 
 declare module "@tanstack/react-router" {
@@ -110,19 +85,27 @@ declare module "@tanstack/react-router" {
 }
 
 function AppShell() {
-  return <ConsoleRoute />;
+  return <Outlet />;
+}
+
+function InviteRoute() {
+  const { id } = inviteRoute.useSearch();
+  return <InvitePanel invitationId={id} />;
 }
 
 function ConsoleRoute() {
   const [token, setToken] = useState(() => localStorage.getItem(tokenKey) || "");
   const [deviceUserCode, setDeviceUserCode] = useState(() => readDeviceUserCode());
+  const [section, setSection] = useState<Section>(() => readInitialSection());
   const session = useQuery({
     queryKey: ["session", token],
     enabled: token.length > 0,
     retry: false,
-    queryFn: () => apiFetch<{ authenticated: boolean; provider: string; user: AuthUser }>("/v1/auth/whoami", token),
+    queryFn: () => apiFetch<WhoamiResponse>("/v1/auth/whoami", token),
   });
   const authenticated = Boolean(token && session.data?.authenticated);
+  const isAdmin = Boolean(session.data?.admin);
+  const activeSection: Section = section === "images" && !isAdmin ? "boxes" : section;
 
   function handleToken(nextToken: string) {
     localStorage.setItem(tokenKey, nextToken);
@@ -135,6 +118,7 @@ function ConsoleRoute() {
     }
     localStorage.removeItem(tokenKey);
     setToken("");
+    setSection("boxes");
     queryClient.clear();
   }
 
@@ -156,6 +140,24 @@ function ConsoleRoute() {
             <span>remote dev boxes</span>
           </div>
         </div>
+        {authenticated && !deviceUserCode ? (
+          <nav className="section-tabs">
+            <button type="button" className={activeSection === "boxes" ? "active" : ""} onClick={() => setSection("boxes")}>
+              <Server size={15} />
+              Boxes
+            </button>
+            <button type="button" className={activeSection === "team" ? "active" : ""} onClick={() => setSection("team")}>
+              <Users size={15} />
+              Team
+            </button>
+            {isAdmin ? (
+              <button type="button" className={activeSection === "images" ? "active" : ""} onClick={() => setSection("images")}>
+                <Layers size={15} />
+                Images
+              </button>
+            ) : null}
+          </nav>
+        ) : null}
         <div className="topbar-actions">
           <span className="pulse"><Activity size={14} /> API</span>
           {authenticated ? (
@@ -169,6 +171,10 @@ function ConsoleRoute() {
       {authenticated ? (
         deviceUserCode ? (
           <DeviceGrantPanel token={token} user={session.data?.user} userCode={deviceUserCode} onDone={clearDevicePrompt} />
+        ) : activeSection === "team" ? (
+          <TeamView token={token} user={session.data?.user} />
+        ) : activeSection === "images" ? (
+          <ImagesView token={token} />
         ) : (
           <Dashboard token={token} user={session.data?.user} />
         )
@@ -176,81 +182,6 @@ function ConsoleRoute() {
         <AccessPanel onToken={handleToken} deviceUserCode={deviceUserCode} />
       )}
     </main>
-  );
-}
-
-function AccessPanel({ onToken, deviceUserCode }: { onToken: (token: string) => void; deviceUserCode?: string }) {
-  const [mode, setMode] = useState<"signin" | "signup">("signup");
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
-  const mutation = useMutation({
-    mutationFn: async () => {
-      const endpoint = mode === "signup" ? "/v1/auth/sign-up/email" : "/v1/auth/sign-in/email";
-      return apiFetch<LoginResponse>(endpoint, "", {
-        method: "POST",
-        body: {
-          email,
-          password,
-          ...(mode === "signup" ? { name: name || email.split("@")[0] } : {}),
-        },
-      });
-    },
-    onSuccess: (data) => onToken(data.token),
-  });
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    mutation.mutate();
-  }
-
-  return (
-    <section className="access-layout">
-      <div className="welcome-panel">
-        <div className="logo-stage"><img src={logoURL} alt="BoxHaven logo" /></div>
-        <div className="terminal-card">
-          <div className="terminal-title">
-            <span />
-            <span />
-            <span />
-          </div>
-          <pre>{`$ bh list
-NAME      SIZE              STATUS
-porch     s-2vcpu-4gb-amd  ready
-attic     s-4vcpu-8gb-amd  running`}</pre>
-        </div>
-      </div>
-      <form className="auth-panel" onSubmit={submit}>
-        <div className="panel-heading">
-          <span>{mode === "signup" ? "new account" : "welcome back"}</span>
-          <h1>{mode === "signup" ? "Bring a box home" : "Open the haven"}</h1>
-        </div>
-        <div className="segmented">
-          <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>Sign up</button>
-          <button type="button" className={mode === "signin" ? "active" : ""} onClick={() => setMode("signin")}>Sign in</button>
-        </div>
-        <label>
-          Email
-          <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" required />
-        </label>
-        {mode === "signup" ? (
-          <label>
-            Name
-            <input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" />
-          </label>
-        ) : null}
-        <label>
-          Password
-          <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required />
-        </label>
-        {deviceUserCode ? <p className="hint">Sign in here to approve CLI access for code <code>{formatUserCode(deviceUserCode)}</code>.</p> : null}
-        <button className="primary-button" type="submit" disabled={mutation.isPending}>
-          <Play size={16} />
-          {mutation.isPending ? "Working" : mode === "signup" ? "Create account" : "Open console"}
-        </button>
-        {mutation.error ? <p className="error">{(mutation.error as Error).message}</p> : null}
-      </form>
-    </section>
   );
 }
 
@@ -328,6 +259,7 @@ code: ${formatUserCode(userCode)}`}</pre>
 function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
   const [name, setName] = useState("");
   const [tier, setTier] = useState<MachineTier>("small");
+  const [provider, setProvider] = useState("");
   const [selected, setSelected] = useState<string>("");
   const queryClient = useQueryClient();
   const providers = useQuery({
@@ -339,8 +271,13 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
     queryFn: () => apiFetch<MachinesResponse>("/v1/machines", token),
     refetchInterval: 15000,
   });
+  const providerList = providers.data?.providers || [];
+  const defaultProvider = providerList.find((option) => option.default)?.name || providerList[0]?.name || "";
   const createMachine = useMutation({
-    mutationFn: () => apiFetch<MachineResponse>("/v1/machines", token, { method: "POST", body: { name, tier } }),
+    mutationFn: () => apiFetch<MachineResponse>("/v1/machines", token, {
+      method: "POST",
+      body: { name, tier, ...(provider ? { provider } : {}) },
+    }),
     onSuccess: (data) => {
       setName("");
       setSelected(data.machine.name);
@@ -386,6 +323,16 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
             Machine name
             <input value={name} onChange={(event) => setName(slugName(event.target.value))} placeholder="porch" required />
           </label>
+          {providerList.length > 1 ? (
+            <label>
+              Provider
+              <select value={provider || defaultProvider} onChange={(event) => setProvider(event.target.value)}>
+                {providerList.map((option) => (
+                  <option value={option.name} key={option.name}>{option.label}{option.default ? " (default)" : ""}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label>
             Size
             <select value={tier} onChange={(event) => setTier(event.target.value as MachineTier)}>
@@ -401,10 +348,10 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
           {createMachine.error ? <p className="error">{(createMachine.error as Error).message}</p> : null}
         </form>
         <div className="provider-strip">
-          {(providers.data?.providers || []).map((provider) => (
-            <div className="provider-pill" key={provider.name}>
+          {providerList.map((providerOption) => (
+            <div className="provider-pill" key={providerOption.name}>
               <Cloud size={16} />
-              <span>{provider.label}</span>
+              <span>{providerOption.label}</span>
             </div>
           ))}
         </div>
@@ -508,73 +455,18 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CommandBlock({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="command-block">
-      <span>{label}</span>
-      <code>{value || "-"}</code>
-      <button className="icon-button" type="button" title="Copy" aria-label={`Copy ${label}`} onClick={() => {
-        void navigator.clipboard.writeText(value);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1200);
-      }}>
-        <Copy size={15} />
-      </button>
-      {copied ? <em>copied</em> : null}
-    </div>
-  );
-}
-
-async function apiFetch<T = unknown>(path: string, token = "", init: { method?: string; body?: unknown } = {}): Promise<T> {
-  const response = await fetch(`${apiBaseURL}${path}`, {
-    method: init.method || "GET",
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
-    },
-    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-  });
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(readError(detail) || response.statusText);
-  }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
-}
-
-function readError(detail: string): string {
-  try {
-    const parsed = JSON.parse(detail);
-    return parsed.message || parsed.error_description || parsed.error || detail;
-  } catch {
-    return detail;
-  }
-}
-
-function slugName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+/, "").slice(0, 63);
-}
-
-function formatDate(value?: string): string {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 function readDeviceUserCode(): string {
   const params = new URLSearchParams(window.location.search);
   return (params.get("user_code") || params.get("code") || "").trim();
 }
 
-function formatUserCode(code: string): string {
-  const clean = code.trim().replace(/-/g, "");
-  if (clean.length === 8) return `${clean.slice(0, 4)}-${clean.slice(4)}`;
-  return code.trim();
+function readInitialSection(): Section {
+  const stored = sessionStorage.getItem(sectionKey);
+  if (stored === "team" || stored === "images") {
+    sessionStorage.removeItem(sectionKey);
+    return stored;
+  }
+  return "boxes";
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(
