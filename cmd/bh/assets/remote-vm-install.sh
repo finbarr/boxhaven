@@ -213,6 +213,17 @@ install_boxhaven_user() {
     usermod -aG docker boxhaven || true
   fi
   echo "boxhaven ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/boxhaven
+  # Pre-trust the project path so codex does not stop at an interactive
+  # trust prompt on first run, which would block detached agent sessions.
+  install -d -o boxhaven -g boxhaven -m 0700 /home/boxhaven/.codex
+  if [ ! -f /home/boxhaven/.codex/config.toml ]; then
+    cat > /home/boxhaven/.codex/config.toml <<'CODEX_TRUST'
+[projects."/opt/boxhaven/project"]
+trust_level = "trusted"
+CODEX_TRUST
+    chown boxhaven:boxhaven /home/boxhaven/.codex/config.toml
+    chmod 0600 /home/boxhaven/.codex/config.toml
+  fi
   chmod 0440 /etc/sudoers.d/boxhaven
 }
 

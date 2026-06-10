@@ -1299,8 +1299,21 @@ func remoteAuthFilesScript(machine remoteMachine, files []remoteAuthFile) string
 		script.WriteString("\nchmod 0600 ")
 		script.WriteString(shellQuote(target))
 		script.WriteString("\n")
+		if filepath.Base(target) == "config.toml" && filepath.Base(filepath.Dir(target)) == ".codex" {
+			script.WriteString(codexTrustAppendScript(target, remoteWorkPath(machine)))
+		}
 	}
 	return script.String()
+}
+
+// codexTrustAppendScript marks the box's project path as trusted in the
+// forwarded codex config; without it, codex stops at an interactive trust
+// prompt on every fresh box, which blocks detached agent sessions.
+func codexTrustAppendScript(configPath string, projectPath string) string {
+	header := fmt.Sprintf("[projects.%q]", projectPath)
+	block := header + "\ntrust_level = \"trusted\""
+	return "grep -qF " + shellQuote(header) + " " + shellQuote(configPath) +
+		" || printf '\\n%s\\n' " + shellQuote(block) + " >> " + shellQuote(configPath) + "\n"
 }
 
 func remoteHomeDir(user string) string {
