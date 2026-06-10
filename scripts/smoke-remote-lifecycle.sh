@@ -106,7 +106,9 @@ run_remote() {
 
 preview_url_for() {
   local name="$1"
-  bh list | awk -v name="$name" '$1 == name { print $3; exit }'
+  # The URL is the last column of bh list; do not rely on column position,
+  # which changes as columns are added (TEAM and PROVIDER were inserted).
+  bh list | awk -v name="$name" '$1 == name { print $NF; exit }'
 }
 
 create_boxes() {
