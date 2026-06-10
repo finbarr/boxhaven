@@ -74,11 +74,33 @@ The same open-source backend self-hosts with your own provider credentials and
 no built-in limits. See [backend/README.md](backend/README.md) for running the
 backend and [deploy](deploy) for the production deployment bundle.
 
-## Install From Source
+## Install
+
+One-liner (macOS and Linux, installs the latest release):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh
+```
+
+Homebrew (via the `finbarr/tap` tap):
+
+```bash
+brew install finbarr/tap/boxhaven
+```
+
+Or build from source:
 
 ```bash
 go build -o bh ./cmd/bh
 ./bh version
+```
+
+Then jump straight into the quickstart:
+
+```bash
+bh login
+bh create work       # provisions the box and syncs this project once
+bh run work claude   # start Claude in the box's tmux session
 ```
 
 ## Configuration
