@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
-import { bearer, deviceAuthorization } from "better-auth/plugins";
+import { bearer, deviceAuthorization, organization } from "better-auth/plugins";
 import Database from "better-sqlite3";
 
 export type BackendAuthOptions = {
@@ -45,6 +45,14 @@ function authConfig(options: BackendAuthOptions) {
         schema: {},
         verificationUri: options.deviceVerificationURL || "/device",
         validateClient: (clientID: string) => clientID === "boxhaven-cli",
+      }),
+      organization({
+        // BoxHaven accounts are usable without email verification, so the
+        // invitation flow must not require verified addresses. Invites are
+        // shared as links and are only redeemable by the invited email.
+        requireEmailVerificationOnInvitation: false,
+        invitationExpiresIn: 60 * 60 * 24 * 7,
+        membershipLimit: 200,
       }),
     ],
   };
