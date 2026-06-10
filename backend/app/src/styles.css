@@ -159,6 +159,15 @@ label,
   padding-top: min(7vh, 78px);
 }
 
+/* Long one-line commands must scroll inside their blocks, never widen the
+   column: grid/flex items need min-width 0 for that to work. */
+.access-layout > *,
+.welcome-panel > *,
+.terminal-card,
+.auth-panel {
+  min-width: 0;
+}
+
 .welcome-panel {
   display: grid;
   grid-template-columns: minmax(220px, 0.72fr) minmax(320px, 1fr);
