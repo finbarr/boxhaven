@@ -28,6 +28,9 @@ const (
 
 type remoteMachine struct {
 	Name               string    `json:"name"`
+	TeamID             string    `json:"team_id,omitempty"`
+	TeamSlug           string    `json:"team_slug,omitempty"`
+	TeamName           string    `json:"team_name,omitempty"`
 	Provider           string    `json:"provider,omitempty"`
 	ProviderID         string    `json:"provider_id,omitempty"`
 	PublicIPv4         string    `json:"public_ipv4,omitempty"`
@@ -60,6 +63,7 @@ type remoteProvisionOptions struct {
 	Provider   string
 	Region     string
 	Image      string
+	Team       string
 }
 
 func runRemote(args []string, projectDir string) error {
@@ -83,6 +87,8 @@ func runRemote(args []string, projectDir string) error {
 		return runRemoteStatus(args[1:], projectDir)
 	case "rename":
 		return runRemoteRename(args[1:], projectDir)
+	case "move":
+		return runRemoteMove(args[1:], projectDir)
 	case "destroy":
 		return runRemoteDestroy(args[1:], projectDir)
 	default:
@@ -92,7 +98,7 @@ func runRemote(args []string, projectDir string) error {
 
 func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "USAGE:")
-	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--tier <tier>] [--region <region>] [--image <image>] [--no-sync]")
+	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--tier <tier>] [--region <region>] [--image <image>] [--team <team>] [--no-sync]")
 	fmt.Fprintln(os.Stderr, "  bh run <name> <cmd...>")
 	fmt.Fprintln(os.Stderr, "  bh connect <name>")
 	fmt.Fprintln(os.Stderr, "  bh sync up <name>")
@@ -100,6 +106,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  bh list")
 	fmt.Fprintln(os.Stderr, "  bh status <name>")
 	fmt.Fprintln(os.Stderr, "  bh rename <old-name> <new-name>")
+	fmt.Fprintln(os.Stderr, "  bh move <name> <team>")
 	fmt.Fprintln(os.Stderr, "  bh destroy <name>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "OPTIONS:")
@@ -108,6 +115,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  --tier <tier>        Machine size tier for create: small, medium, or large")
 	fmt.Fprintln(os.Stderr, "  --region <region>    Provider region for create")
 	fmt.Fprintln(os.Stderr, "  --image <image>      Provider image ID or slug for create")
+	fmt.Fprintln(os.Stderr, "  --team <team>        Team that owns the new box (defaults to your active team)")
 	fmt.Fprintln(os.Stderr, "  --ssh-user <user>    SSH user for create")
 	fmt.Fprintln(os.Stderr, "  --backend-url <url>  Remote backend API URL for create")
 	fmt.Fprintln(os.Stderr, "")
@@ -210,6 +218,14 @@ func parseRemoteCreateArgs(args []string, cfg Config) (remoteProvisionOptions, b
 			opts.Image = args[i]
 		case strings.HasPrefix(arg, "--image="):
 			opts.Image = strings.TrimPrefix(arg, "--image=")
+		case arg == "--team":
+			i++
+			if i >= len(args) {
+				return opts, noSync, fmt.Errorf("bh create --team requires a value")
+			}
+			opts.Team = args[i]
+		case strings.HasPrefix(arg, "--team="):
+			opts.Team = strings.TrimPrefix(arg, "--team=")
 		case arg == "--backend-url":
 			i++
 			if i >= len(args) {
@@ -237,6 +253,7 @@ func parseRemoteCreateArgs(args []string, cfg Config) (remoteProvisionOptions, b
 	opts.Provider = strings.ToLower(strings.TrimSpace(opts.Provider))
 	opts.Region = strings.TrimSpace(opts.Region)
 	opts.Image = strings.TrimSpace(opts.Image)
+	opts.Team = strings.TrimSpace(opts.Team)
 	opts.BackendURL = strings.TrimRight(strings.TrimSpace(opts.BackendURL), "/")
 	if opts.Name == "" {
 		return opts, noSync, fmt.Errorf("bh create requires a remote name")
@@ -384,15 +401,19 @@ func runRemoteList(args []string, projectDir string) error {
 		return machines[i].Name < machines[j].Name
 	})
 	table := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(table, "NAME\tPROVIDER\tSIZE\tURL"); err != nil {
+	if _, err := fmt.Fprintln(table, "NAME\tTEAM\tPROVIDER\tSIZE\tURL"); err != nil {
 		return err
 	}
 	for _, m := range machines {
-		if _, err := fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", m.Name, valueOrDash(m.Provider), configValueOrNotSet(m.Size), remoteListURL(m)); err != nil {
+		if _, err := fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\n", m.Name, valueOrDash(m.TeamSlug), valueOrDash(m.Provider), configValueOrNotSet(m.Size), remoteListURL(m)); err != nil {
 			return err
 		}
 	}
 	return table.Flush()
+}
+
+func remoteMachineTeamLabel(machine remoteMachine) string {
+	return valueOrDash(firstNonEmpty(machine.TeamSlug, machine.TeamName))
 }
 
 func remoteListURL(machine remoteMachine) string {
@@ -425,6 +446,7 @@ func runRemoteStatus(args []string, projectDir string) error {
 	fmt.Printf("%sname:%s %s\n", colorBold, colorReset, machine.Name)
 	fmt.Printf("%sbackend_url:%s %s\n", colorBold, colorReset, remoteBackendURL(cfg))
 	fmt.Printf("%sbackend_status:%s %s\n", colorBold, colorReset, configValueOrNotSet(status))
+	fmt.Printf("%steam:%s %s\n", colorBold, colorReset, remoteMachineTeamLabel(machine))
 	fmt.Printf("%sprovider:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.Provider))
 	fmt.Printf("%sprovider_id:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.ProviderID))
 	fmt.Printf("%spublic_ipv4:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.PublicIPv4))
@@ -497,6 +519,30 @@ func runRemoteRename(args []string, projectDir string) error {
 		return err
 	}
 	success("Renamed remote %s to %s", fromName, machine.Name)
+	return nil
+}
+
+func runRemoteMove(args []string, projectDir string) error {
+	if len(args) != 2 {
+		return fmt.Errorf("bh move requires a remote name and a target team")
+	}
+	name := strings.ToLower(strings.TrimSpace(args[0]))
+	if err := validateRemoteName(name); err != nil {
+		return err
+	}
+	team := strings.TrimSpace(args[1])
+	if team == "" {
+		return fmt.Errorf("bh move requires a target team")
+	}
+	cfg, err := loadConfig(projectDir)
+	if err != nil {
+		return err
+	}
+	machine, err := moveRemoteBackendMachine(cfg, name, team)
+	if err != nil {
+		return err
+	}
+	success("Moved remote %s to team %s", machine.Name, firstNonEmpty(machine.TeamSlug, machine.TeamName, team))
 	return nil
 }
 

@@ -113,6 +113,7 @@ func runLogin(args []string) error {
 		return err
 	}
 	success("Logged in to %s", backendURL)
+	printLoginDefaultTeam(cfg)
 	return nil
 }
 

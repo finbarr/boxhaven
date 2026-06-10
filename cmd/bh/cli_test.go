@@ -117,6 +117,73 @@ func TestParseRemoteCreateArgsDefaultProviderFromConfig(t *testing.T) {
 	}
 }
 
+func TestParseRemoteCreateArgsTeam(t *testing.T) {
+	cfg := defaultConfig()
+
+	opts, _, err := parseRemoteCreateArgs([]string{"dev", "--team", "acme-inc"}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Team != "acme-inc" {
+		t.Fatalf("team = %q, want %q", opts.Team, "acme-inc")
+	}
+
+	opts, _, err = parseRemoteCreateArgs([]string{"dev", "--team=beta"}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Team != "beta" {
+		t.Fatalf("flag=value team = %q, want %q", opts.Team, "beta")
+	}
+
+	opts, _, err = parseRemoteCreateArgs([]string{"dev"}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Team != "" {
+		t.Fatalf("default team = %q, want empty", opts.Team)
+	}
+
+	if _, _, err := parseRemoteCreateArgs([]string{"dev", "--team"}, cfg); err == nil {
+		t.Fatal("parseRemoteCreateArgs accepted --team without a value")
+	}
+}
+
+func TestRemoteMachineTeamLabel(t *testing.T) {
+	cases := []struct {
+		machine remoteMachine
+		want    string
+	}{
+		{remoteMachine{TeamSlug: "acme-inc", TeamName: "Acme Inc"}, "acme-inc"},
+		{remoteMachine{TeamName: "Acme Inc"}, "Acme Inc"},
+		{remoteMachine{}, "-"},
+	}
+	for _, tc := range cases {
+		if got := remoteMachineTeamLabel(tc.machine); got != tc.want {
+			t.Fatalf("remoteMachineTeamLabel(%#v) = %q, want %q", tc.machine, got, tc.want)
+		}
+	}
+}
+
+func TestTeamActiveLabel(t *testing.T) {
+	cases := []struct {
+		team *teamOrganization
+		want string
+	}{
+		{nil, "-"},
+		{&teamOrganization{ID: "org-1", Name: "Acme Inc", Slug: "acme-inc"}, "Acme Inc (acme-inc)"},
+		{&teamOrganization{ID: "org-1", Name: "Acme Inc"}, "Acme Inc"},
+		{&teamOrganization{ID: "org-1", Slug: "acme-inc"}, "acme-inc"},
+		{&teamOrganization{ID: "org-1"}, "org-1"},
+		{&teamOrganization{}, "-"},
+	}
+	for _, tc := range cases {
+		if got := teamActiveLabel(tc.team); got != tc.want {
+			t.Fatalf("teamActiveLabel(%#v) = %q, want %q", tc.team, got, tc.want)
+		}
+	}
+}
+
 func TestTeamSlugFromName(t *testing.T) {
 	cases := map[string]string{
 		"Acme":              "acme",
@@ -178,9 +245,20 @@ func TestTopLevelHelpMentionsBHCommands(t *testing.T) {
 	output := captureStderr(t, func() {
 		printUsage()
 	})
-	for _, want := range []string{"bh create", "bh list", "bh destroy", "bh rename", "bh connect", "bh run", "bh image", "bh team"} {
+	for _, want := range []string{"bh create", "bh list", "bh destroy", "bh rename", "bh move", "bh connect", "bh run", "bh image", "bh team"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("help output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTeamUsageMentionsSwitchAndStatus(t *testing.T) {
+	output := captureStderr(t, func() {
+		printTeamUsage()
+	})
+	for _, want := range []string{"bh team switch <team>", "bh team status"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("team usage missing %q:\n%s", want, output)
 		}
 	}
 }
