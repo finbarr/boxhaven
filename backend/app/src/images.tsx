@@ -157,7 +157,12 @@ export function ImagesView({ token }: { token: string }) {
               ))}
             </tbody>
           </table>
-          {!imageList.length && !images.isLoading ? <p className="hint">No golden images yet. Snapshot one of your boxes to create one.</p> : null}
+          {!imageList.length ? (
+            <div className="empty">
+              <Camera size={20} />
+              <span>{images.isLoading ? "Loading images" : "No golden images yet. Snapshot one of your boxes to create one."}</span>
+            </div>
+          ) : null}
           {activate.error ? <p className="error">{(activate.error as Error).message}</p> : null}
           {deleteImage.error ? <p className="error">{(deleteImage.error as Error).message}</p> : null}
         </div>

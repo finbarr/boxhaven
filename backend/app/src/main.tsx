@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from "@tanstack/react-router";
-import { Activity, ArrowRightLeft, Check, Cloud, Home, Layers, LogOut, MonitorDot, Plus, RefreshCw, Server, ShieldCheck, Trash2, Users, XCircle } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { createRootRoute, createRoute, createRouter, Outlet, RouterProvider, useNavigate } from "@tanstack/react-router";
+import { Activity, ArrowRightLeft, Check, Cloud, CreditCard, Layers, LogOut, MonitorDot, Plus, RefreshCw, Server, ShieldCheck, Trash2, Users, XCircle } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AccessPanel, CommandBlock } from "./access";
+import { AccessPanel, CommandBlock, installCommand, ResetPasswordPanel } from "./access";
 import {
   apiFetch,
   AuthUser,
@@ -20,6 +20,7 @@ import {
   WhoamiResponse,
 } from "./api";
 import logoURL from "./assets/boxhaven-logo.png";
+import { BillingView } from "./billing";
 import { ImagesView } from "./images";
 import { InvitePanel } from "./invite";
 import "./styles.css";
@@ -40,7 +41,14 @@ type ConnectResponse = MachineResponse & {
 
 type MachineTier = "small" | "medium" | "large";
 
-type Section = "boxes" | "team" | "images";
+type Section = "boxes" | "team" | "images" | "billing";
+
+const sectionTitles: Record<Section, string> = {
+  boxes: "Boxes",
+  team: "Team",
+  images: "Images",
+  billing: "Billing",
+};
 
 const machineTiers: Array<{ value: MachineTier; label: string; detail: string }> = [
   { value: "small", label: "Small", detail: "2 vCPU / 4 GB" },
@@ -75,8 +83,18 @@ const inviteRoute = createRoute({
   component: InviteRoute,
 });
 
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reset-password",
+  validateSearch: (search: Record<string, unknown>) => ({
+    token: typeof search.token === "string" ? search.token : "",
+    error: typeof search.error === "string" ? search.error : "",
+  }),
+  component: ResetPasswordRoute,
+});
+
 const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, deviceRoute, inviteRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, deviceRoute, inviteRoute, resetPasswordRoute]),
 });
 
 declare module "@tanstack/react-router" {
@@ -94,6 +112,32 @@ function InviteRoute() {
   return <InvitePanel invitationId={id} />;
 }
 
+function ResetPasswordRoute() {
+  const { token, error } = resetPasswordRoute.useSearch();
+  const navigate = useNavigate();
+  useEffect(() => {
+    document.title = "Reset password — BoxHaven";
+  }, []);
+  return (
+    <main className="console">
+      <div className="backdrop" />
+      <header className="topbar">
+        <div className="brand">
+          <div className="brand-mark"><img src={logoURL} alt="" /></div>
+          <div>
+            <strong>BoxHaven</strong>
+            <span>account recovery</span>
+          </div>
+        </div>
+        <div className="topbar-actions">
+          <span className="pulse"><Activity size={14} /> API</span>
+        </div>
+      </header>
+      <ResetPasswordPanel resetToken={token} linkError={error} onDone={() => void navigate({ to: "/" })} />
+    </main>
+  );
+}
+
 function ConsoleRoute() {
   const [token, setToken] = useState(() => localStorage.getItem(tokenKey) || "");
   const [deviceUserCode, setDeviceUserCode] = useState(() => readDeviceUserCode());
@@ -107,6 +151,14 @@ function ConsoleRoute() {
   const authenticated = Boolean(token && session.data?.authenticated);
   const isAdmin = Boolean(session.data?.admin);
   const activeSection: Section = section === "images" && !isAdmin ? "boxes" : section;
+
+  useEffect(() => {
+    document.title = !authenticated
+      ? "BoxHaven — Remote dev boxes for AI coding agents"
+      : deviceUserCode
+        ? "Approve CLI — BoxHaven"
+        : `${sectionTitles[activeSection]} — BoxHaven`;
+  }, [authenticated, deviceUserCode, activeSection]);
 
   function handleToken(nextToken: string) {
     localStorage.setItem(tokenKey, nextToken);
@@ -157,6 +209,10 @@ function ConsoleRoute() {
                 Images
               </button>
             ) : null}
+            <button type="button" className={activeSection === "billing" ? "active" : ""} onClick={() => setSection("billing")}>
+              <CreditCard size={15} />
+              Billing
+            </button>
           </nav>
         ) : null}
         <div className="topbar-actions">
@@ -176,8 +232,10 @@ function ConsoleRoute() {
           <TeamView token={token} user={session.data?.user} activeTeamId={session.data?.team?.id} />
         ) : activeSection === "images" ? (
           <ImagesView token={token} />
+        ) : activeSection === "billing" ? (
+          <BillingView token={token} />
         ) : (
-          <Dashboard token={token} user={session.data?.user} teams={session.data?.teams || []} activeTeam={session.data?.team || undefined} />
+          <Dashboard token={token} user={session.data?.user} teams={session.data?.teams || []} activeTeam={session.data?.team || undefined} onShowBilling={() => setSection("billing")} />
         )
       ) : (
         <AccessPanel onToken={handleToken} deviceUserCode={deviceUserCode} />
@@ -257,7 +315,13 @@ code: ${formatUserCode(userCode)}`}</pre>
   );
 }
 
-function Dashboard({ token, user, teams, activeTeam }: { token: string; user?: AuthUser; teams: TeamInfo[]; activeTeam?: TeamInfo }) {
+function Dashboard({ token, user, teams, activeTeam, onShowBilling }: {
+  token: string;
+  user?: AuthUser;
+  teams: TeamInfo[];
+  activeTeam?: TeamInfo;
+  onShowBilling: () => void;
+}) {
   const [name, setName] = useState("");
   const [tier, setTier] = useState<MachineTier>("small");
   const [provider, setProvider] = useState("");
@@ -308,6 +372,9 @@ function Dashboard({ token, user, teams, activeTeam }: { token: string; user?: A
     enabled: Boolean(selectedMachine),
     queryFn: () => apiFetch<ConnectResponse>(`/v1/machines/${encodeURIComponent(selectedMachine?.name || "")}/connect`, token),
   });
+
+  const createError = createMachine.error ? (createMachine.error as Error).message : "";
+  const paymentRequired = createError.includes("section=billing") || createError.toLowerCase().includes("free tier");
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -365,7 +432,17 @@ function Dashboard({ token, user, teams, activeTeam }: { token: string; user?: A
             <Plus size={16} />
             {createMachine.isPending ? "Creating" : "Create"}
           </button>
-          {createMachine.error ? <p className="error">{(createMachine.error as Error).message}</p> : null}
+          {createError ? (
+            <p className="error">
+              {createError}
+              {paymentRequired ? (
+                <>
+                  {" "}
+                  <button className="link-button" type="button" onClick={onShowBilling}>Upgrade</button>
+                </>
+              ) : null}
+            </p>
+          ) : null}
         </form>
         <div className="provider-strip">
           {providerList.map((providerOption) => (
@@ -400,10 +477,14 @@ function Dashboard({ token, user, teams, activeTeam }: { token: string; user?: A
             </button>
           ))}
           {!machineList.length ? (
-            <div className="empty">
-              <Home size={24} />
-              <span>No boxes checked in.</span>
-            </div>
+            machines.isLoading ? (
+              <div className="empty">
+                <Server size={24} />
+                <span>Loading boxes</span>
+              </div>
+            ) : (
+              <GettingStarted />
+            )
           ) : null}
         </div>
       </div>
@@ -420,6 +501,42 @@ function Dashboard({ token, user, teams, activeTeam }: { token: string; user?: A
         moveError={moveMachine.error ? (moveMachine.error as Error).message : ""}
       />
     </section>
+  );
+}
+
+function GettingStarted() {
+  return (
+    <div className="getting-started">
+      <div className="panel-heading small">
+        <span>getting started</span>
+        <h2>Your first box</h2>
+      </div>
+      <ol className="steps">
+        <li>
+          <span className="step-num">1</span>
+          <div>
+            <strong>Install the CLI</strong>
+            <CommandBlock label="Install" value={installCommand} />
+          </div>
+        </li>
+        <li>
+          <span className="step-num">2</span>
+          <div>
+            <strong>Sign in from your terminal</strong>
+            <CommandBlock label="Login" value="bh login" />
+          </div>
+        </li>
+        <li>
+          <span className="step-num">3</span>
+          <div>
+            <strong>Create a box and hand it to your agent</strong>
+            <CommandBlock label="Create" value="bh create work" />
+            <CommandBlock label="Run" value="bh run work claude --continue" />
+          </div>
+        </li>
+      </ol>
+      <p className="hint">Prefer clicking? The form on the left creates a box right from the console.</p>
+    </div>
   );
 }
 
@@ -522,8 +639,11 @@ function readDeviceUserCode(): string {
 }
 
 function readInitialSection(): Section {
+  // The machine-create payment gate links to /?section=billing.
+  const fromQuery = new URLSearchParams(window.location.search).get("section");
+  if (fromQuery === "team" || fromQuery === "images" || fromQuery === "billing") return fromQuery;
   const stored = sessionStorage.getItem(sectionKey);
-  if (stored === "team" || stored === "images") {
+  if (stored === "team" || stored === "images" || stored === "billing") {
     sessionStorage.removeItem(sectionKey);
     return stored;
   }

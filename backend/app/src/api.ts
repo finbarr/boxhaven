@@ -72,6 +72,14 @@ export type ProvidersResponse = {
   providers: ProviderInfo[];
 };
 
+export type BillingResponse = {
+  enabled: boolean;
+  status: "free" | "active" | "past_due" | "canceled";
+  free_machines: number;
+  machines_used: number;
+  portal_available: boolean;
+};
+
 const configuredAPIURL = (import.meta.env.VITE_BOXHAVEN_API_URL || "").replace(/\/+$/, "");
 export const apiBaseURL = configuredAPIURL || (window.location.hostname === "app.boxhaven.dev" ? "https://api.boxhaven.dev" : "");
 export const tokenKey = "boxhaven.backend.token";

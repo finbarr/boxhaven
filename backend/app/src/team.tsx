@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, LogOut, Plus, Send, Trash2, XCircle } from "lucide-react";
+import { Copy, LogOut, Plus, Send, Server, Trash2, Users, XCircle } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { apiFetch, AuthUser, formatDate, inviteLink, Machine } from "./api";
 import { CommandBlock } from "./access";
@@ -359,6 +359,12 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
               ))}
             </tbody>
           </table>
+          {!memberList.length ? (
+            <div className="empty">
+              <Users size={20} />
+              <span>{members.isLoading ? "Loading members" : "No members yet."}</span>
+            </div>
+          ) : null}
           {updateRole.error ? <p className="error">{(updateRole.error as Error).message}</p> : null}
           {removeMember.error ? <p className="error">{(removeMember.error as Error).message}</p> : null}
         </div>
@@ -465,7 +471,12 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
               ))}
             </tbody>
           </table>
-          {!machineList.length && !orgMachines.isLoading ? <p className="hint">No boxes in this team yet.</p> : null}
+          {!machineList.length ? (
+            <div className="empty">
+              <Server size={20} />
+              <span>{orgMachines.isLoading ? "Loading boxes" : "No boxes in this team yet."}</span>
+            </div>
+          ) : null}
           {destroyMachine.error ? <p className="error">{(destroyMachine.error as Error).message}</p> : null}
         </div>
       </div>
