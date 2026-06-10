@@ -643,8 +643,153 @@ button:disabled {
   color: #31473f;
 }
 
+.section-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(96, 75, 53, 0.16);
+  border-radius: 8px;
+  background: #ebe4d4;
+}
+
+.section-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #24352f;
+}
+
+.section-tabs button.active {
+  background: #fffaf0;
+  color: #244f43;
+  box-shadow: 0 4px 12px rgba(90, 67, 41, 0.12);
+}
+
+.dashboard.two-col {
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.rail-grid {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.panel-stack {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.panel {
+  display: grid;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 18px;
+  border: 1px solid rgba(96, 75, 53, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 252, 243, 0.88);
+  box-shadow: 0 20px 60px rgba(90, 67, 41, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+.narrow-layout {
+  position: relative;
+  z-index: 1;
+  max-width: 480px;
+  margin: 0 auto;
+  padding-top: min(6vh, 64px);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(96, 75, 53, 0.09);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.data-table th {
+  color: #6a776f;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.data-table td {
+  color: #31473f;
+}
+
+.data-table td code {
+  color: #2a6470;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.data-table a {
+  color: #2f6f5c;
+}
+
+.data-table select {
+  width: auto;
+  min-height: 34px;
+}
+
+.data-table .primary-button,
+.data-table .danger-button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.data-table .icon-button {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid rgba(47, 111, 92, 0.28);
+  border-radius: 999px;
+  background: rgba(47, 111, 92, 0.12);
+  color: #2f6f5c;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.invite-result {
+  display: grid;
+  gap: 10px;
+}
+
+.invite-result .command-block {
+  margin-bottom: 0;
+}
+
 @media (max-width: 1120px) {
-  .dashboard {
+  .dashboard,
+  .dashboard.two-col {
     grid-template-columns: 1fr;
   }
 
