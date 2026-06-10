@@ -113,6 +113,8 @@ func runTeam(args []string, projectDir string) error {
 		return runTeamInvite(args[1:], projectDir)
 	case "boxes":
 		return runTeamBoxes(args[1:], projectDir)
+	case "destroy":
+		return runTeamDestroy(args[1:], projectDir)
 	default:
 		return fmt.Errorf("unknown bh team command: %s (try 'bh team --help')", args[0])
 	}
@@ -127,8 +129,10 @@ func printTeamUsage() {
 	fmt.Fprintln(os.Stderr, "  bh team members [--team <slug-or-id>]")
 	fmt.Fprintln(os.Stderr, "  bh team invite <email> [--role member|admin|owner] [--team <slug-or-id>]")
 	fmt.Fprintln(os.Stderr, "  bh team boxes [--team <slug-or-id>]")
+	fmt.Fprintln(os.Stderr, "  bh team destroy <box> --force [--team <slug-or-id>]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "--team is optional when you belong to exactly one team.")
+	fmt.Fprintln(os.Stderr, "destroy removes a teammate's box; it requires the owner or admin role.")
 }
 
 func parseTeamArgs(command string, args []string, wantPositional bool) (string, string, string, error) {
@@ -164,6 +168,76 @@ func parseTeamArgs(command string, args []string, wantPositional bool) (string, 
 		}
 	}
 	return strings.TrimSpace(positional), strings.TrimSpace(team), strings.ToLower(strings.TrimSpace(role)), nil
+}
+
+func runTeamDestroy(args []string, projectDir string) error {
+	name := ""
+	team := ""
+	force := false
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--force":
+			force = true
+		case arg == "--team":
+			i++
+			if i >= len(args) {
+				return fmt.Errorf("bh team destroy --team requires a value")
+			}
+			team = args[i]
+		case strings.HasPrefix(arg, "--team="):
+			team = strings.TrimPrefix(arg, "--team=")
+		case strings.HasPrefix(arg, "-"):
+			return fmt.Errorf("unknown bh team destroy option: %s", arg)
+		default:
+			if name != "" {
+				return fmt.Errorf("unexpected bh team destroy argument: %s", arg)
+			}
+			name = strings.ToLower(strings.TrimSpace(arg))
+		}
+	}
+	if name == "" {
+		return fmt.Errorf("bh team destroy requires a box name")
+	}
+	if err := validateRemoteName(name); err != nil {
+		return err
+	}
+	cfg, err := loadConfig(projectDir)
+	if err != nil {
+		return err
+	}
+	org, err := resolveTeamOrganization(cfg, team)
+	if err != nil {
+		return err
+	}
+	var response teamMachinesResponse
+	if err := remoteBackendRequest(cfg, http.MethodGet, "/v1/orgs/"+url.PathEscape(org.ID)+"/machines", nil, &response); err != nil {
+		return err
+	}
+	var target *teamMachine
+	for i := range response.Machines {
+		if response.Machines[i].Name == name {
+			target = &response.Machines[i]
+			break
+		}
+	}
+	teamLabel := firstNonEmpty(org.Slug, org.Name, org.ID)
+	if target == nil {
+		return fmt.Errorf("no box named %s in %s", name, teamLabel)
+	}
+	owner := firstNonEmpty(target.OwnerEmail, target.OwnerName, target.UserID)
+	if !force {
+		return fmt.Errorf("bh team destroy removes %s owned by %s; pass --force to continue", name, owner)
+	}
+	if target.UserID == "" {
+		return fmt.Errorf("box %s has no owner id; destroy it from the console instead", name)
+	}
+	endpoint := "/v1/orgs/" + url.PathEscape(org.ID) + "/machines/" + url.PathEscape(target.UserID) + "/" + url.PathEscape(name)
+	if err := remoteBackendRequest(cfg, http.MethodDelete, endpoint, nil, nil); err != nil {
+		return err
+	}
+	success("Destroyed %s (owned by %s) in team %s", name, owner, teamLabel)
+	return nil
 }
 
 func teamSlugFromName(name string) string {

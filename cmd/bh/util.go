@@ -32,7 +32,11 @@ func remoteCommandNeedsTTY(command []string) bool {
 		return true
 	}
 	switch strings.TrimSpace(command[0]) {
-	case "shell", "bash", "sh", "zsh", "fish", "claude", "codex", "gemini", "opencode", "copilot", "pi":
+	case "shell", "bash", "sh", "zsh", "fish":
+		// A bare shell is an interactive session; a shell with arguments
+		// (bash -lc '...', sh script.sh) is a one-off command over SSH.
+		return len(command) == 1
+	case "claude", "codex", "gemini", "opencode", "copilot", "pi":
 		return true
 	default:
 		return false

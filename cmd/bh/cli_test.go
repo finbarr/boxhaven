@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidateRemoteName(t *testing.T) {
@@ -428,5 +429,88 @@ func TestSelectTeamOrganizationPrecedenceAndAmbiguity(t *testing.T) {
 		t.Fatal("expected ambiguous name selection to error")
 	} else if !strings.Contains(err.Error(), "ambiguous") {
 		t.Fatalf("expected ambiguity error, got: %v", err)
+	}
+}
+
+func TestRemoteCommandNeedsTTYShellWithArgs(t *testing.T) {
+	if !remoteCommandNeedsTTY([]string{"bash"}) {
+		t.Fatal("bare bash should be interactive")
+	}
+	if remoteCommandNeedsTTY([]string{"bash", "-lc", "echo hi"}) {
+		t.Fatal("bash -lc should run over direct SSH, not a session")
+	}
+	if remoteCommandNeedsTTY([]string{"sh", "script.sh"}) {
+		t.Fatal("sh with a script should run over direct SSH")
+	}
+	if !remoteCommandNeedsTTY([]string{"claude", "--continue"}) {
+		t.Fatal("agents stay interactive even with arguments")
+	}
+}
+
+func TestRemoteMachineStatusLabel(t *testing.T) {
+	now := time.Now()
+	cases := []struct {
+		machine remoteMachine
+		want    string
+	}{
+		{remoteMachine{BootstrapComplete: false}, "creating"},
+		{remoteMachine{BootstrapComplete: true}, "-"},
+		{remoteMachine{BootstrapComplete: true, AgentLastSeenAt: now.Add(-time.Minute)}, "online"},
+		{remoteMachine{BootstrapComplete: true, AgentLastSeenAt: now.Add(-time.Hour)}, "offline"},
+	}
+	for _, tc := range cases {
+		if got := remoteMachineStatusLabel(tc.machine, now); got != tc.want {
+			t.Fatalf("status label = %q, want %q", got, tc.want)
+		}
+	}
+}
+
+func TestRemoteDevBoxName(t *testing.T) {
+	if got := remoteDevBoxName(Config{RemoteName: "pinned"}, "/Users/x/My Project"); got != "pinned" {
+		t.Fatalf("remote_name should win, got %q", got)
+	}
+	if got := remoteDevBoxName(Config{}, "/Users/x/My_Cool Project!!"); got != "my-cool-project" {
+		t.Fatalf("derived name = %q", got)
+	}
+	if got := remoteDevBoxName(Config{}, "/"); got != "dev" {
+		t.Fatalf("fallback name = %q", got)
+	}
+}
+
+func TestParseRemoteDevArgs(t *testing.T) {
+	opts, noSync, command, err := parseRemoteDevArgs([]string{"--tier", "small", "--no-sync", "claude", "--continue"}, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Tier != "small" || !noSync {
+		t.Fatalf("flags not parsed: %+v noSync=%v", opts, noSync)
+	}
+	if strings.Join(command, " ") != "claude --continue" {
+		t.Fatalf("command = %v", command)
+	}
+	if _, _, _, err := parseRemoteDevArgs([]string{"--bogus"}, Config{}); err == nil {
+		t.Fatal("unknown flag should error")
+	}
+	// Flags after the command start belong to the command.
+	_, _, command, err = parseRemoteDevArgs([]string{"make", "--no-sync"}, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(command, " ") != "make --no-sync" {
+		t.Fatalf("command flags should pass through, got %v", command)
+	}
+}
+
+func TestRemoteBackendErrorMessage(t *testing.T) {
+	err := &remoteBackendError{Method: "GET", Endpoint: "/v1/machines/x", Status: 404, Detail: `{"id":"not_found","message":"machine does not exist"}`}
+	if err.Error() != "machine does not exist" {
+		t.Fatalf("expected clean message, got %q", err.Error())
+	}
+	if err.Code() != "not_found" {
+		t.Fatalf("expected code not_found, got %q", err.Code())
+	}
+	raw := &remoteBackendError{Method: "GET", Endpoint: "/x", Status: 502, Detail: "bad gateway"}
+	if !strings.Contains(raw.Error(), "bad gateway") || !strings.Contains(raw.Error(), "/x") {
+		t.Fatalf("raw errors keep context, got %q", raw.Error())
 	}
 }

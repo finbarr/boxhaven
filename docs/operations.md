@@ -184,6 +184,8 @@ team can still see and destroy those boxes.
 
 Roles are `owner`, `admin`, and `member`. Members see exactly the boxes in
 that team and their owners — not every box of every member. Owners and admins
+can remove a teammate's box with `bh team destroy <box> --force
+[--team <slug>]` or from the console. Owners and admins
 can destroy any box in the team; members can only destroy their own. Pending
 invitations can be cancelled by the inviter or a team admin before they are
 accepted.

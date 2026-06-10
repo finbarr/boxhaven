@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -146,6 +147,11 @@ func createRemoteBackendMachine(cfg Config, projectDir string, opts remoteProvis
 func getRemoteBackendMachine(cfg Config, name string) (remoteMachine, string, error) {
 	var response remoteBackendMachineResponse
 	if err := remoteBackendRequest(cfg, http.MethodGet, "/v1/machines/"+url.PathEscape(name), nil, &response); err != nil {
+		if remoteBackendErrorCode(err) == "not_found" {
+			if friendly := describeTeamBox(cfg, name); friendly != nil {
+				return remoteMachine{}, "", friendly
+			}
+		}
 		return remoteMachine{}, "", err
 	}
 	machine := response.Machine
@@ -326,12 +332,73 @@ func remoteBackendRequestWithTimeout(cfg Config, method string, endpoint string,
 		if detail == "" {
 			detail = resp.Status
 		}
-		return fmt.Errorf("remote backend %s %s failed: %s", method, endpoint, detail)
+		return &remoteBackendError{Method: method, Endpoint: endpoint, Status: resp.StatusCode, Detail: detail}
 	}
 	if out == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// describeTeamBox explains a "machine does not exist" miss when the name
+// actually refers to a teammate's box that is visible through a shared team.
+func describeTeamBox(cfg Config, name string) error {
+	orgs, err := listTeamOrganizations(cfg)
+	if err != nil {
+		return nil
+	}
+	for _, org := range orgs {
+		var response teamMachinesResponse
+		if err := remoteBackendRequest(cfg, http.MethodGet, "/v1/orgs/"+url.PathEscape(org.ID)+"/machines", nil, &response); err != nil {
+			continue
+		}
+		for _, machine := range response.Machines {
+			if machine.Name != name {
+				continue
+			}
+			owner := firstNonEmpty(machine.OwnerEmail, machine.OwnerName, "a teammate")
+			team := firstNonEmpty(org.Slug, org.Name, org.ID)
+			return fmt.Errorf("%s is a team box in %s owned by %s; only the owner can connect or run commands (team owners and admins can remove it with `bh team destroy %s --team %s`)", name, team, owner, name, team)
+		}
+	}
+	return nil
+}
+
+type remoteBackendError struct {
+	Method   string
+	Endpoint string
+	Status   int
+	Detail   string
+}
+
+// Error renders the backend's human-readable message, falling back to the
+// raw response body when it is not the standard {id, message} JSON shape.
+func (e *remoteBackendError) Error() string {
+	var body struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(e.Detail), &body); err == nil && strings.TrimSpace(body.Message) != "" {
+		return body.Message
+	}
+	return fmt.Sprintf("remote backend %s %s failed: %s", e.Method, e.Endpoint, e.Detail)
+}
+
+func (e *remoteBackendError) Code() string {
+	var body struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(e.Detail), &body); err == nil {
+		return body.ID
+	}
+	return ""
+}
+
+func remoteBackendErrorCode(err error) string {
+	var backendErr *remoteBackendError
+	if errors.As(err, &backendErr) {
+		return backendErr.Code()
+	}
+	return ""
 }
 
 func remoteBackendHTTPTransport() *http.Transport {

@@ -54,6 +54,8 @@ func runCmd(args []string) error {
 	switch args[0] {
 	case "create", "run", "connect", "sync", "list", "status", "rename", "move", "destroy":
 		return runRemote(args, projectDir)
+	case "dev":
+		return runRemoteDev(args[1:], projectDir)
 	case "image":
 		return runImage(args[1:], projectDir)
 	case "team":
@@ -82,6 +84,7 @@ func runCmd(args []string) error {
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "%sBoxHaven%s %s\n\n", colorBold, colorReset, Version)
 	fmt.Fprintf(os.Stderr, "%sUSAGE:%s\n", colorBold, colorReset)
+	fmt.Fprintln(os.Stderr, "  bh dev [options] [cmd...]   one command: create the project's box if needed, sync, run")
 	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--tier small|medium|large] [--region <region>] [--image <image>] [--team <team>] [--no-sync]")
 	fmt.Fprintln(os.Stderr, "  bh list")
 	fmt.Fprintln(os.Stderr, "  bh destroy <name>")
