@@ -13,6 +13,7 @@ type RemoteConfig struct {
 	BackendURL string   `toml:"backend_url"`
 	Token      string   `toml:"token"`
 	SSHUser    string   `toml:"ssh_user"`
+	Provider   string   `toml:"provider"`
 	Setup      []string `toml:"setup"`
 }
 
@@ -100,6 +101,9 @@ func mergeConfig(dst *Config, src Config) {
 	if src.Remote.SSHUser != "" {
 		dst.Remote.SSHUser = strings.TrimSpace(src.Remote.SSHUser)
 	}
+	if src.Remote.Provider != "" {
+		dst.Remote.Provider = strings.ToLower(strings.TrimSpace(src.Remote.Provider))
+	}
 	if len(src.Remote.Setup) > 0 {
 		dst.Remote.Setup = append([]string{}, src.Remote.Setup...)
 	}
@@ -131,6 +135,9 @@ func saveGlobalConfig(cfg Config) error {
 	if cfg.Remote.SSHUser != "" && cfg.Remote.SSHUser != defaultConfig().Remote.SSHUser {
 		lines = append(lines, fmt.Sprintf("ssh_user = %q", cfg.Remote.SSHUser))
 	}
+	if cfg.Remote.Provider != "" {
+		lines = append(lines, fmt.Sprintf("provider = %q", cfg.Remote.Provider))
+	}
 	if len(cfg.Remote.Setup) > 0 {
 		lines = append(lines, fmt.Sprintf("setup = %s", formatTomlStringSlice(cfg.Remote.Setup)))
 	}
@@ -141,6 +148,7 @@ func printConfig(cfg Config) error {
 	fmt.Printf("%sbackend_url:%s %s\n", colorBold, colorReset, remoteBackendURL(cfg))
 	fmt.Printf("%stoken:%s %s\n", colorBold, colorReset, redactConfigSecret(remoteAuthToken(cfg)))
 	fmt.Printf("%sssh_user:%s %s\n", colorBold, colorReset, configValueOrNotSet(cfg.Remote.SSHUser))
+	fmt.Printf("%sprovider:%s %s\n", colorBold, colorReset, configValueOrNotSet(cfg.Remote.Provider))
 	fmt.Printf("%sremote_name:%s %s\n", colorBold, colorReset, configValueOrNotSet(cfg.RemoteName))
 	printSliceConfigField("command", cfg.Command)
 	printSliceConfigField("setup", cfg.Remote.Setup)

@@ -57,6 +57,9 @@ type remoteProvisionOptions struct {
 	SSHUser    string
 	BackendURL string
 	Tier       string
+	Provider   string
+	Region     string
+	Image      string
 }
 
 func runRemote(args []string, projectDir string) error {
@@ -89,7 +92,7 @@ func runRemote(args []string, projectDir string) error {
 
 func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "USAGE:")
-	fmt.Fprintln(os.Stderr, "  bh create <name> [--tier <tier>] [--no-sync]")
+	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--tier <tier>] [--region <region>] [--image <image>] [--no-sync]")
 	fmt.Fprintln(os.Stderr, "  bh run <name> <cmd...>")
 	fmt.Fprintln(os.Stderr, "  bh connect <name>")
 	fmt.Fprintln(os.Stderr, "  bh sync up <name>")
@@ -101,7 +104,10 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "OPTIONS:")
 	fmt.Fprintln(os.Stderr, "  --no-sync            Skip the create command's initial project sync")
+	fmt.Fprintln(os.Stderr, "  --provider <name>    Cloud provider for create (defaults to config or backend default)")
 	fmt.Fprintln(os.Stderr, "  --tier <tier>        Machine size tier for create: small, medium, or large")
+	fmt.Fprintln(os.Stderr, "  --region <region>    Provider region for create")
+	fmt.Fprintln(os.Stderr, "  --image <image>      Provider image ID or slug for create")
 	fmt.Fprintln(os.Stderr, "  --ssh-user <user>    SSH user for create")
 	fmt.Fprintln(os.Stderr, "  --backend-url <url>  Remote backend API URL for create")
 	fmt.Fprintln(os.Stderr, "")
@@ -156,6 +162,7 @@ func parseRemoteCreateArgs(args []string, cfg Config) (remoteProvisionOptions, b
 	opts := remoteProvisionOptions{
 		SSHUser:    cfg.Remote.SSHUser,
 		BackendURL: remoteBackendURL(cfg),
+		Provider:   cfg.Remote.Provider,
 	}
 	noSync := false
 	for i := 0; i < len(args); i++ {
@@ -179,6 +186,30 @@ func parseRemoteCreateArgs(args []string, cfg Config) (remoteProvisionOptions, b
 			opts.Tier = args[i]
 		case strings.HasPrefix(arg, "--tier="):
 			opts.Tier = strings.TrimPrefix(arg, "--tier=")
+		case arg == "--provider":
+			i++
+			if i >= len(args) {
+				return opts, noSync, fmt.Errorf("bh create --provider requires a value")
+			}
+			opts.Provider = args[i]
+		case strings.HasPrefix(arg, "--provider="):
+			opts.Provider = strings.TrimPrefix(arg, "--provider=")
+		case arg == "--region":
+			i++
+			if i >= len(args) {
+				return opts, noSync, fmt.Errorf("bh create --region requires a value")
+			}
+			opts.Region = args[i]
+		case strings.HasPrefix(arg, "--region="):
+			opts.Region = strings.TrimPrefix(arg, "--region=")
+		case arg == "--image":
+			i++
+			if i >= len(args) {
+				return opts, noSync, fmt.Errorf("bh create --image requires a value")
+			}
+			opts.Image = args[i]
+		case strings.HasPrefix(arg, "--image="):
+			opts.Image = strings.TrimPrefix(arg, "--image=")
 		case arg == "--backend-url":
 			i++
 			if i >= len(args) {
@@ -203,6 +234,9 @@ func parseRemoteCreateArgs(args []string, cfg Config) (remoteProvisionOptions, b
 		return opts, noSync, err
 	}
 	opts.Tier = tier
+	opts.Provider = strings.ToLower(strings.TrimSpace(opts.Provider))
+	opts.Region = strings.TrimSpace(opts.Region)
+	opts.Image = strings.TrimSpace(opts.Image)
 	opts.BackendURL = strings.TrimRight(strings.TrimSpace(opts.BackendURL), "/")
 	if opts.Name == "" {
 		return opts, noSync, fmt.Errorf("bh create requires a remote name")
@@ -350,11 +384,11 @@ func runRemoteList(args []string, projectDir string) error {
 		return machines[i].Name < machines[j].Name
 	})
 	table := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(table, "NAME\tSIZE\tURL"); err != nil {
+	if _, err := fmt.Fprintln(table, "NAME\tPROVIDER\tSIZE\tURL"); err != nil {
 		return err
 	}
 	for _, m := range machines {
-		if _, err := fmt.Fprintf(table, "%s\t%s\t%s\n", m.Name, configValueOrNotSet(m.Size), remoteListURL(m)); err != nil {
+		if _, err := fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", m.Name, valueOrDash(m.Provider), configValueOrNotSet(m.Size), remoteListURL(m)); err != nil {
 			return err
 		}
 	}
@@ -395,6 +429,8 @@ func runRemoteStatus(args []string, projectDir string) error {
 	fmt.Printf("%sprovider_id:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.ProviderID))
 	fmt.Printf("%spublic_ipv4:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.PublicIPv4))
 	fmt.Printf("%ssize:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.Size))
+	fmt.Printf("%sregion:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.Region))
+	fmt.Printf("%simage:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.Image))
 	fmt.Printf("%sssh_user:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.SSHUser))
 	fmt.Printf("%spreview_url:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.PreviewURL))
 	fmt.Printf("%ssource_path:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.SourcePath))

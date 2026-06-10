@@ -61,11 +61,124 @@ func TestSaveAndLoadGlobalConfig(t *testing.T) {
 	}
 }
 
+func TestParseRemoteCreateArgsProviderRegionImage(t *testing.T) {
+	cfg := defaultConfig()
+
+	opts, noSync, err := parseRemoteCreateArgs([]string{"dev", "--provider", "Hetzner", "--region", "nbg1", "--image", "12345"}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if noSync {
+		t.Fatal("noSync = true, want false")
+	}
+	if opts.Provider != "hetzner" {
+		t.Fatalf("provider = %q, want %q", opts.Provider, "hetzner")
+	}
+	if opts.Region != "nbg1" {
+		t.Fatalf("region = %q, want %q", opts.Region, "nbg1")
+	}
+	if opts.Image != "12345" {
+		t.Fatalf("image = %q, want %q", opts.Image, "12345")
+	}
+
+	opts, _, err = parseRemoteCreateArgs([]string{"dev", "--provider=digitalocean", "--region=nyc3", "--image=ubuntu-24-04-x64"}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Provider != "digitalocean" || opts.Region != "nyc3" || opts.Image != "ubuntu-24-04-x64" {
+		t.Fatalf("flag=value form parsed %q/%q/%q", opts.Provider, opts.Region, opts.Image)
+	}
+
+	for _, flag := range []string{"--provider", "--region", "--image"} {
+		if _, _, err := parseRemoteCreateArgs([]string{"dev", flag}, cfg); err == nil {
+			t.Fatalf("parseRemoteCreateArgs accepted %s without a value", flag)
+		}
+	}
+}
+
+func TestParseRemoteCreateArgsDefaultProviderFromConfig(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.Remote.Provider = "hetzner"
+
+	opts, _, err := parseRemoteCreateArgs([]string{"dev"}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Provider != "hetzner" {
+		t.Fatalf("provider = %q, want config default %q", opts.Provider, "hetzner")
+	}
+
+	opts, _, err = parseRemoteCreateArgs([]string{"dev", "--provider", "digitalocean"}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Provider != "digitalocean" {
+		t.Fatalf("provider = %q, want flag override %q", opts.Provider, "digitalocean")
+	}
+}
+
+func TestTeamSlugFromName(t *testing.T) {
+	cases := map[string]string{
+		"Acme":              "acme",
+		"Acme Inc.":         "acme-inc",
+		"  Big   Corp  ":    "big-corp",
+		"Team_42!":          "team-42",
+		"--Already-Slug--":  "already-slug",
+		"ümlaut & friends!": "mlaut-friends",
+		"!!!":               "",
+		"":                  "",
+	}
+	for name, want := range cases {
+		if got := teamSlugFromName(name); got != want {
+			t.Fatalf("teamSlugFromName(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestSelectTeamOrganization(t *testing.T) {
+	acme := teamOrganization{ID: "org-1", Name: "Acme Inc", Slug: "acme-inc"}
+	beta := teamOrganization{ID: "org-2", Name: "Beta", Slug: "beta"}
+
+	if _, err := selectTeamOrganization(nil, ""); err == nil || !strings.Contains(err.Error(), "bh team create") {
+		t.Fatalf("zero teams error = %v, want bh team create hint", err)
+	}
+
+	org, err := selectTeamOrganization([]teamOrganization{acme}, "")
+	if err != nil || org.ID != acme.ID {
+		t.Fatalf("single team selection = %v, %v; want %s", org, err, acme.ID)
+	}
+
+	if _, err := selectTeamOrganization([]teamOrganization{acme, beta}, ""); err == nil ||
+		!strings.Contains(err.Error(), "--team") || !strings.Contains(err.Error(), "acme-inc") || !strings.Contains(err.Error(), "beta") {
+		t.Fatalf("multiple teams error = %v, want slugs and --team hint", err)
+	}
+
+	for selector, want := range map[string]string{
+		"org-2":    beta.ID,
+		"acme-inc": acme.ID,
+		"ACME-INC": acme.ID,
+		"Beta":     beta.ID,
+		"acme inc": acme.ID,
+	} {
+		org, err := selectTeamOrganization([]teamOrganization{acme, beta}, selector)
+		if err != nil {
+			t.Fatalf("selectTeamOrganization(%q) returned %v", selector, err)
+		}
+		if org.ID != want {
+			t.Fatalf("selectTeamOrganization(%q) = %s, want %s", selector, org.ID, want)
+		}
+	}
+
+	if _, err := selectTeamOrganization([]teamOrganization{acme, beta}, "nope"); err == nil || !strings.Contains(err.Error(), "nope") {
+		t.Fatalf("unknown selector error = %v, want selector in message", err)
+	}
+}
+
 func TestTopLevelHelpMentionsBHCommands(t *testing.T) {
 	output := captureStderr(t, func() {
 		printUsage()
 	})
-	for _, want := range []string{"bh create", "bh list", "bh destroy", "bh rename", "bh connect", "bh run"} {
+	for _, want := range []string{"bh create", "bh list", "bh destroy", "bh rename", "bh connect", "bh run", "bh image", "bh team"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("help output missing %q:\n%s", want, output)
 		}
