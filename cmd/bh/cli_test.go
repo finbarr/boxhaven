@@ -465,41 +465,7 @@ func TestRemoteMachineStatusLabel(t *testing.T) {
 	}
 }
 
-func TestRemoteDevBoxName(t *testing.T) {
-	if got := remoteDevBoxName(Config{RemoteName: "pinned"}, "/Users/x/My Project"); got != "pinned" {
-		t.Fatalf("remote_name should win, got %q", got)
-	}
-	if got := remoteDevBoxName(Config{}, "/Users/x/My_Cool Project!!"); got != "my-cool-project" {
-		t.Fatalf("derived name = %q", got)
-	}
-	if got := remoteDevBoxName(Config{}, "/"); got != "dev" {
-		t.Fatalf("fallback name = %q", got)
-	}
-}
 
-func TestParseRemoteDevArgs(t *testing.T) {
-	opts, noSync, command, err := parseRemoteDevArgs([]string{"--tier", "small", "--no-sync", "claude", "--continue"}, Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if opts.Tier != "small" || !noSync {
-		t.Fatalf("flags not parsed: %+v noSync=%v", opts, noSync)
-	}
-	if strings.Join(command, " ") != "claude --continue" {
-		t.Fatalf("command = %v", command)
-	}
-	if _, _, _, err := parseRemoteDevArgs([]string{"--bogus"}, Config{}); err == nil {
-		t.Fatal("unknown flag should error")
-	}
-	// Flags after the command start belong to the command.
-	_, _, command, err = parseRemoteDevArgs([]string{"make", "--no-sync"}, Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Join(command, " ") != "make --no-sync" {
-		t.Fatalf("command flags should pass through, got %v", command)
-	}
-}
 
 func TestRemoteBackendErrorMessage(t *testing.T) {
 	err := &remoteBackendError{Method: "GET", Endpoint: "/v1/machines/x", Status: 404, Detail: `{"id":"not_found","message":"machine does not exist"}`}
@@ -512,5 +478,44 @@ func TestRemoteBackendErrorMessage(t *testing.T) {
 	raw := &remoteBackendError{Method: "GET", Endpoint: "/x", Status: 502, Detail: "bad gateway"}
 	if !strings.Contains(raw.Error(), "bad gateway") || !strings.Contains(raw.Error(), "/x") {
 		t.Fatalf("raw errors keep context, got %q", raw.Error())
+	}
+}
+
+func TestClaudeProjectDirName(t *testing.T) {
+	if got := claudeProjectDirName("/Users/finbarr/code/boxhaven"); got != "-Users-finbarr-code-boxhaven" {
+		t.Fatalf("local dir name = %q", got)
+	}
+	if got := claudeProjectDirName("/opt/boxhaven/project"); got != "-opt-boxhaven-project" {
+		t.Fatalf("remote dir name = %q", got)
+	}
+}
+
+func TestClaudeSessionFilesSelection(t *testing.T) {
+	home := t.TempDir()
+	project := "/Users/x/proj"
+	dir := filepath.Join(home, ".claude", "projects", claudeProjectDirName(project))
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for i, name := range []string{"a.jsonl", "b.jsonl", "c.jsonl", "d.jsonl", "skip.txt"} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		stamp := time.Now().Add(-time.Duration(i) * time.Hour)
+		if err := os.Chtimes(path, stamp, stamp); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files := claudeSessionFiles(home, project, "/opt/boxhaven/project")
+	if len(files) != 3 {
+		t.Fatalf("expected 3 newest sessions, got %d", len(files))
+	}
+	if filepath.Base(files[0].LocalPath) != "a.jsonl" {
+		t.Fatalf("expected newest first, got %s", files[0].LocalPath)
+	}
+	want := filepath.Join(".claude", "projects", "-opt-boxhaven-project", "a.jsonl")
+	if files[0].RemoteRelativePath != want {
+		t.Fatalf("remote path = %q, want %q", files[0].RemoteRelativePath, want)
 	}
 }

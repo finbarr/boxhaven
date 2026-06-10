@@ -11,41 +11,37 @@ remote dev boxes for individual developers, persistent agent sessions, direct
 SSH access, project sync, GitHub pushes from the box, and a self-hostable
 control plane.
 
-The CLI is intentionally small. The fastest path is one command from your
-project directory:
+The CLI is intentionally small, and the workflow is agent-first: copy your
+project to a box once, start Claude or Codex inside the box's tmux session —
+resuming your local conversation if you like — then disconnect and let it
+work:
 
 ```bash
 bh login
-bh dev claude          # box named after the project, created on first use
+bh create work                  # provisions the box and syncs this project once
+bh run work claude --continue   # resume your local claude session on the box
+bh connect work                 # reattach to the tmux session any time
 ```
 
-Or manage boxes explicitly:
+Run as many agents in parallel as you want, each on its own box:
 
 ```bash
-bh create work
-bh list
-bh run work codex
-bh connect work
-bh rename work client-a
-bh destroy work
-bh image ls
-bh team create acme
+bh create work-2 && bh run work-2 codex
+bh create work-3 && bh run work-3 claude
 ```
 
-`bh dev` derives the box name from `remote_name` in `.boxhaven.toml` (or the
-project directory name), creates the box if it does not exist, syncs the
-project, and runs the given command — or the `command` configured in
-`.boxhaven.toml`, or a shell — in the managed session.
-
 `bh create` asks the backend for a machine, waits for it to be reachable, and
-syncs the current project into `/opt/boxhaven/project` by default. `bh run`
-syncs the current project before starting the command on the existing machine.
-Local files are the source of truth during sync: `bh run` mirrors the local
-project to the box (including deletions), so pass `--no-sync` when an agent or
-editor session on the box has changes you have not pulled back yet, and use
-`bh sync down` to retrieve remote work.
-Interactive commands attach to the machine's managed tmux session; noninteractive
-commands run over direct SSH.
+syncs the current project into `/opt/boxhaven/project`. After that the box
+owns its copy: `bh run` does not mirror local files, so nothing an agent does
+on the box is ever overwritten by a routine command — `bh sync up` pushes
+local changes explicitly (mirroring deletions) and `bh sync down` retrieves
+the box's work.
+
+When you start `claude` or `codex` with `bh run`, bh forwards your newest
+local sessions for the project, so `claude --continue` on the box picks up
+the conversation exactly where your laptop left it. Interactive commands
+attach to the machine's managed tmux session; noninteractive commands run
+over direct SSH.
 
 ## What It Provides
 
