@@ -282,7 +282,7 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
         </div>
         {orgList.length > 1 ? (
           <label>
-            Team
+            Switch team
             <select value={org.id} onChange={(event) => onSelectOrg(event.target.value)}>
               {orgList.map((option) => (
                 <option value={option.id} key={option.id}>{option.name}{option.id === activeTeamId ? " (active)" : ""}</option>
@@ -451,11 +451,12 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
         <div className="panel">
           <div className="panel-heading small">
             <span>team boxes</span>
-            <h2>This team's rooms</h2>
+            <h2>This team's boxes</h2>
           </div>
           <p className="hint">
-            Boxes created while <strong>{org.name}</strong> is your active team land here. <code>bh create --team {org.slug || org.name}</code> targets it explicitly.
+            New boxes land here while <strong>{org.name}</strong> is your active team, or target it directly:
           </p>
+          <p className="hint"><code>bh create work --team {org.slug || org.name}</code></p>
           {orgMachines.error ? <p className="error">{(orgMachines.error as Error).message}</p> : null}
           <table className="data-table">
             <thead>

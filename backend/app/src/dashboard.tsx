@@ -110,7 +110,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
         <form className="create-form" onSubmit={submit}>
           <div className="panel-heading small">
             <span>new box</span>
-            <h2>Make room</h2>
+            <h2>New box</h2>
           </div>
           <label>
             Machine name
@@ -164,20 +164,22 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
             </p>
           ) : null}
         </form>
-        <div className="provider-strip">
-          {providerList.map((providerOption) => (
-            <div className="provider-pill" key={providerOption.name}>
-              <Cloud size={16} />
-              <span>{providerOption.label}</span>
-            </div>
-          ))}
-        </div>
+        {providerList.length > 1 ? (
+          <div className="provider-strip">
+            {providerList.map((providerOption) => (
+              <div className="provider-pill" key={providerOption.name}>
+                <Cloud size={16} />
+                <span>{providerOption.label}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </aside>
 
       <div className="machine-table">
         <div className="section-heading">
           <div>
-            <span>rooms occupied</span>
+            <span>boxes</span>
             <strong>{machineList.length}</strong>
           </div>
           <button className="icon-button" type="button" onClick={() => void machines.refetch()} title="Refresh" aria-label="Refresh machines">
@@ -194,12 +196,12 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
               key={machine.name}
             >
               <span className="machine-status"><MonitorDot size={16} /></span>
-              <span>
+              <span className="machine-id">
                 <strong>{machine.name}</strong>
                 <small>{machine.provider_label || machine.provider || "provider"} / {machine.region || "region"}</small>
               </span>
-              {machine.team_slug ? <span className="badge">{machine.team_slug}</span> : null}
-              <code>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code>
+              {teams.length > 1 && machine.team_slug ? <span className="badge">{machine.team_slug}</span> : null}
+              <code title={machine.preview_hostname || machine.public_ipv4 || ""}>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code>
             </Link>
           ))}
           {!machineList.length ? (
@@ -303,7 +305,7 @@ function MachineDetail({ machine, missingName, teams, connect, loading, onDestro
     <div className="detail">
       <div className="detail-header">
         <div>
-          <span>{connect?.status || "box"}{machine.team_slug ? ` / ${machine.team_slug}` : ""}</span>
+          <span>{connect?.status || "box"}</span>
           <h1>{machine.name}</h1>
         </div>
         <button className="danger-button" type="button" onClick={() => onDestroy(machine.name)} disabled={destroying} title="Destroy machine">
@@ -366,7 +368,7 @@ function MoveTeamControl({ machine, teams, onMove, moving, moveError }: {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="metric">
+    <div className="metric" title={value}>
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
