@@ -92,7 +92,6 @@ export type BillingResponse =
 const configuredAPIURL = (import.meta.env.VITE_BOXHAVEN_API_URL || "").replace(/\/+$/, "");
 export const apiBaseURL = configuredAPIURL || (window.location.hostname === "app.boxhaven.dev" ? "https://api.boxhaven.dev" : "");
 export const tokenKey = "boxhaven.backend.token";
-export const sectionKey = "boxhaven.backend.section";
 
 export async function apiFetch<T = unknown>(path: string, token = "", init: { method?: string; body?: unknown } = {}): Promise<T> {
   const response = await fetch(`${apiBaseURL}${path}`, {

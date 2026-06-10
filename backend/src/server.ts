@@ -231,8 +231,8 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return reply.code(400).send({ id: "bad_request", message: "subscription is already active; manage it through the billing portal" });
     }
     const record = await billing.ensureCustomer(team.id, auth.email, team.name || team.slug || team.id, team.personal);
-    const billingURL = `${options.appPublicURL || ""}/?section=billing`;
-    const url = await billing.createCheckoutSession(team.id, record.customer_id, `${billingURL}&checkout=success`, `${billingURL}&checkout=canceled`);
+    const billingURL = `${options.appPublicURL || ""}/billing/${encodeURIComponent(team.slug || team.id)}`;
+    const url = await billing.createCheckoutSession(team.id, record.customer_id, `${billingURL}?checkout=success`, `${billingURL}?checkout=canceled`);
     return { url };
   });
 
@@ -252,7 +252,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!record?.customer_id) {
       return reply.code(400).send({ id: "bad_request", message: "no billing customer exists yet; subscribe first" });
     }
-    const url = await billing.createPortalSession(record.customer_id, `${options.appPublicURL || ""}/?section=billing`);
+    const url = await billing.createPortalSession(record.customer_id, `${options.appPublicURL || ""}/billing/${encodeURIComponent(team.slug || team.id)}`);
     return { url };
   });
 
@@ -343,7 +343,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       if (used >= free && !billingRecordAllowsPaidBoxes(await options.store.getBillingRecord(team.id))) {
         return reply.code(403).send({
           id: "payment_required",
-          message: `Team ${team.slug || team.name || team.id} is on the free tier (${free} ${free === 1 ? "box" : "boxes"}). A team owner or admin can subscribe at ${options.appPublicURL || ""}/?section=billing to run more boxes.`,
+          message: `Team ${team.slug || team.name || team.id} is on the free tier (${free} ${free === 1 ? "box" : "boxes"}). A team owner or admin can subscribe at ${options.appPublicURL || ""}/billing to run more boxes.`,
         });
       }
     }

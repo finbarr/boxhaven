@@ -144,7 +144,7 @@ test("backend billing reports team status, sells checkout, and gates the persona
     const gated = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "two" } });
     assert.equal(gated.statusCode, 403, gated.body);
     assert.equal(gated.json().id, "payment_required");
-    assert.equal(gated.json().message, `Team ${team.slug} is on the free tier (1 box). A team owner or admin can subscribe at https://app.hosted.test/?section=billing to run more boxes.`);
+    assert.equal(gated.json().message, `Team ${team.slug} is on the free tier (1 box). A team owner or admin can subscribe at https://app.hosted.test/billing to run more boxes.`);
 
     const checkout = await app.inject({ method: "POST", url: "/v1/billing/checkout", headers, payload: {} });
     assert.equal(checkout.statusCode, 200, checkout.body);
@@ -161,8 +161,8 @@ test("backend billing reports team status, sells checkout, and gates the persona
     assert.equal(session.get("line_items[0][price]"), testPriceID);
     // Metered prices must not carry a quantity.
     assert.equal(session.get("line_items[0][quantity]"), null);
-    assert.equal(session.get("success_url"), "https://app.hosted.test/?section=billing&checkout=success");
-    assert.equal(session.get("cancel_url"), "https://app.hosted.test/?section=billing&checkout=canceled");
+    assert.match(session.get("success_url") || "", /^https:\/\/app\.hosted\.test\/billing\/[a-z0-9-]+\?checkout=success$/);
+    assert.match(session.get("cancel_url") || "", /^https:\/\/app\.hosted\.test\/billing\/[a-z0-9-]+\?checkout=canceled$/);
 
     const completed = await injectWebhook(app, testWebhookSecret, {
       type: "checkout.session.completed",
@@ -224,7 +224,7 @@ test("backend gates shared teams from the first box and role-gates billing manag
     const gated = await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "first", team: "acme" } });
     assert.equal(gated.statusCode, 403, gated.body);
     assert.equal(gated.json().id, "payment_required");
-    assert.equal(gated.json().message, "Team acme is on the free tier (0 boxes). A team owner or admin can subscribe at https://app.hosted.test/?section=billing to run more boxes.");
+    assert.equal(gated.json().message, "Team acme is on the free tier (0 boxes). A team owner or admin can subscribe at https://app.hosted.test/billing to run more boxes.");
 
     const ownerView = await app.inject({ method: "GET", url: "/v1/billing?team=acme", headers: ownerHeaders });
     assert.equal(ownerView.statusCode, 200, ownerView.body);
@@ -317,7 +317,7 @@ test("backend billing portal requires an existing Stripe customer", async () => 
     assert.equal(portal.statusCode, 200, portal.body);
     assert.equal(portal.json().url, "https://portal.stripe.test/session");
     assert.equal(stripe.portalSessions[0].get("customer"), "cus_test1");
-    assert.equal(stripe.portalSessions[0].get("return_url"), "https://app.hosted.test/?section=billing");
+    assert.match(stripe.portalSessions[0].get("return_url") || "", /^https:\/\/app\.hosted\.test\/billing\/[a-z0-9-]+$/);
   } finally {
     await stripe.stop();
   }

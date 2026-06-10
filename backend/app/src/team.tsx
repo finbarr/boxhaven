@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Copy, CreditCard, LogOut, Plus, Send, Server, Trash2, Users, XCircle } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { apiFetch, AuthUser, BillingResponse, formatDate, inviteLink, Machine } from "./api";
 import { CommandBlock } from "./access";
 import { statusLabel } from "./billing";
+import { useConsole } from "./console-context";
 
 type Organization = {
   id: string;
@@ -38,13 +40,13 @@ type OrgMachinesResponse = {
 
 const memberRoles = ["member", "admin", "owner"] as const;
 
-export function TeamView({ token, user, activeTeamId, onShowBilling }: {
-  token: string;
-  user?: AuthUser;
-  activeTeamId?: string;
-  onShowBilling: (teamRef?: string) => void;
-}) {
-  const [orgId, setOrgId] = useState("");
+// teamRef is the /team/$team path param (slug or id). Without it, the
+// session's active team is shown. A deep-link visit only VIEWS the team —
+// only the selector below re-pins the session's active team.
+export function TeamView({ teamRef }: { teamRef?: string }) {
+  const { token, user, activeTeam } = useConsole();
+  const activeTeamId = activeTeam?.id;
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const orgs = useQuery({
     queryKey: ["orgs", token],
@@ -58,16 +60,17 @@ export function TeamView({ token, user, activeTeamId, onShowBilling }: {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["session", token] }),
   });
   const orgList = orgs.data || [];
-  const activeOrg = orgList.find((org) => org.id === orgId) || orgList.find((org) => org.id === activeTeamId) || orgList[0];
+  const viewedOrg = teamRef
+    ? orgList.find((org) => org.slug === teamRef || org.id === teamRef)
+    : orgList.find((org) => org.id === activeTeamId) || orgList[0];
 
   function selectOrg(id: string) {
-    if (!id || id === activeTeamId) {
-      setOrgId(id);
-      return;
-    }
-    // Switch the view only once the session's active team actually changed,
-    // so the dropdown never disagrees with where new boxes land.
-    setActive.mutate(id, { onSuccess: () => setOrgId(id) });
+    const org = orgList.find((candidate) => candidate.id === id);
+    if (!org) return;
+    void navigate({ to: "/team/$team", params: { team: org.slug || org.id } });
+    // The selector both navigates AND re-pins the session's active team, so
+    // the dropdown never disagrees with where new boxes land.
+    if (id !== activeTeamId) setActive.mutate(id);
   }
 
   if (orgs.isLoading) {
@@ -84,19 +87,35 @@ export function TeamView({ token, user, activeTeamId, onShowBilling }: {
       </section>
     );
   }
-  if (!activeOrg) {
+  if (!orgList.length) {
     return <CreateTeamPanel token={token} />;
+  }
+  if (!viewedOrg) {
+    return (
+      <section className="narrow-layout">
+        <div className="auth-panel">
+          <div className="panel-heading">
+            <span>teams</span>
+            <h1>Team not found</h1>
+            <p>You are not a member of a team called <strong>{teamRef}</strong>.</p>
+          </div>
+          <Link className="primary-button" to="/team">
+            <Users size={16} />
+            Back to your team
+          </Link>
+        </div>
+      </section>
+    );
   }
   return (
     <TeamDetail
-      key={activeOrg.id}
+      key={viewedOrg.id}
       token={token}
       user={user}
-      org={activeOrg}
+      org={viewedOrg}
       orgList={orgList}
       activeTeamId={activeTeamId}
       onSelectOrg={selectOrg}
-      onShowBilling={onShowBilling}
       switchError={setActive.error ? (setActive.error as Error).message : ""}
     />
   );
@@ -150,17 +169,17 @@ function CreateTeamPanel({ token }: { token: string }) {
   );
 }
 
-function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, onShowBilling, switchError }: {
+function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, switchError }: {
   token: string;
   user?: AuthUser;
   org: Organization;
   orgList: Organization[];
   activeTeamId?: string;
   onSelectOrg: (id: string) => void;
-  onShowBilling: (teamRef?: string) => void;
   switchError: string;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<string>("member");
   const [lastInvitation, setLastInvitation] = useState<Invitation | null>(null);
@@ -227,9 +246,9 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, onSh
       body: { organizationId: org.id },
     }),
     onSuccess: () => {
-      onSelectOrg("");
       void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
       void queryClient.invalidateQueries({ queryKey: ["session", token] });
+      void navigate({ to: "/team" });
     },
   });
   const destroyMachine = useMutation({
@@ -272,7 +291,7 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, onSh
           </label>
         ) : null}
         {switchError ? <p className="error">{switchError}</p> : null}
-        <TeamBillingHint token={token} org={org} onShowBilling={onShowBilling} />
+        <TeamBillingHint token={token} org={org} />
         <form className="create-form" onSubmit={submitInvite}>
           <div className="panel-heading small">
             <span>invite</span>
@@ -523,10 +542,9 @@ function NewTeamForm({ token }: { token: string }) {
 
 // Small billing status line so owners/admins discover team billing from here.
 // Hidden while loading, on error, or when billing is disabled on the backend.
-function TeamBillingHint({ token, org, onShowBilling }: {
+function TeamBillingHint({ token, org }: {
   token: string;
   org: Organization;
-  onShowBilling: (teamRef?: string) => void;
 }) {
   const teamRef = org.slug || org.id;
   const billing = useQuery({
@@ -539,7 +557,7 @@ function TeamBillingHint({ token, org, onShowBilling }: {
     <p className="hint billing-hint">
       <CreditCard size={14} />
       <span className={info.status === "past_due" ? "badge warn" : "badge"}>{statusLabel(info.status)}</span>
-      <button className="link-button" type="button" onClick={() => onShowBilling(teamRef)}>Open Billing</button>
+      <Link className="link-button" to="/billing/$team" params={{ team: teamRef }}>Open Billing</Link>
     </p>
   );
 }

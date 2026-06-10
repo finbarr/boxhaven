@@ -1,17 +1,16 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowUpRight, CreditCard } from "lucide-react";
-import { useState } from "react";
-import { apiFetch, BillingResponse, BillingStatus, TeamInfo } from "./api";
+import { apiFetch, BillingResponse, BillingStatus } from "./api";
+import { useConsole } from "./console-context";
 
-export function BillingView({ token, teams, activeTeam, initialTeam }: {
-  token: string;
-  teams: TeamInfo[];
-  activeTeam?: TeamInfo;
-  initialTeam?: string;
-}) {
-  const [team, setTeam] = useState("");
-  const defaultTeam = initialTeam || (activeTeam ? activeTeam.slug || activeTeam.id : teams[0]?.slug || teams[0]?.id || "");
-  const selectedTeam = team || defaultTeam;
+// teamRef is the /billing/$team path param (slug or id); without it the
+// session's active team (or first team) is shown.
+export function BillingView({ teamRef }: { teamRef?: string }) {
+  const { token, teams, activeTeam } = useConsole();
+  const navigate = useNavigate();
+  const defaultTeam = activeTeam ? activeTeam.slug || activeTeam.id : teams[0]?.slug || teams[0]?.id || "";
+  const selectedTeam = teamRef || defaultTeam;
   const billing = useQuery({
     queryKey: ["billing", selectedTeam, token],
     queryFn: () => apiFetch<BillingResponse>(selectedTeam ? `/v1/billing?team=${encodeURIComponent(selectedTeam)}` : "/v1/billing", token),
@@ -55,7 +54,10 @@ export function BillingView({ token, teams, activeTeam, initialTeam }: {
           <p className="hint">Billing is per team: your personal team carries your free allowance, shared teams subscribe separately.</p>
           <label>
             Team
-            <select value={selectedTeam} onChange={(event) => setTeam(event.target.value)}>
+            <select
+              value={selectedTeam}
+              onChange={(event) => void navigate({ to: "/billing/$team", params: { team: event.target.value } })}
+            >
               {teams.map((option) => (
                 <option value={option.slug || option.id} key={option.id}>{option.name}{option.id === activeTeam?.id ? " (active)" : ""}</option>
               ))}

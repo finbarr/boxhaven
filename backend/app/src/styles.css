@@ -512,6 +512,26 @@ button:disabled {
   background: rgba(47, 111, 92, 0.09);
 }
 
+/* Machine rows and a few call-to-action buttons are real <Link> anchors now
+   so cmd-click opens a new tab; strip the default anchor styling. */
+a.machine-row,
+a.primary-button {
+  text-decoration: none;
+}
+
+.detail-notfound {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+  text-align: center;
+  color: #60736a;
+}
+
+.detail-notfound strong {
+  color: #24352f;
+  font-size: 18px;
+}
+
 .machine-status {
   display: grid;
   place-items: center;
@@ -678,7 +698,7 @@ button:disabled {
   background: #ebe4d4;
 }
 
-.section-tabs button {
+.section-tabs a {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -688,9 +708,10 @@ button:disabled {
   border-radius: 6px;
   background: transparent;
   color: #24352f;
+  text-decoration: none;
 }
 
-.section-tabs button.active {
+.section-tabs a.active {
   background: #fffaf0;
   color: #244f43;
   box-shadow: 0 4px 12px rgba(90, 67, 41, 0.12);
