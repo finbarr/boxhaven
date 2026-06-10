@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Made box ownership team-centric: every account automatically gets a personal
+  team, every box belongs to a team, and new boxes land in the session's
+  active team (`bh login` pins it; accepting an invite switches it for that
+  session). `GET /v1/auth/whoami` now returns the active `team` and all
+  `teams`, and machine responses include `org_id`, `team_id`, `team_slug`, and
+  `team_name`.
+- Added `bh create --team` for creating a box directly in a team,
+  `bh team switch <team>` for changing the CLI default team, and
+  `bh move <name> <team>` plus `POST /v1/machines/:name/move` for moving a box
+  between your teams.
+- Added an operator-set per-user box limit via `BOXHAVEN_MAX_MACHINES_PER_USER`
+  (`0` or unset means unlimited); `POST /v1/machines` returns `403`
+  `limit_reached` when the cap is hit.
+- Changed `GET /v1/orgs/:id/machines` to return only the boxes that belong to
+  that team instead of all boxes of all members, and team destroys now return
+  `404` for boxes outside the team. Joining a team no longer exposes your
+  other boxes to it.
 - Added multi-provider backend support with a provider registry and a Hetzner
   Cloud provider (`HCLOUD_TOKEN`, `HETZNER_LOCATION`, `HETZNER_SERVER_TYPE`,
   `HETZNER_IMAGE`, `BOXHAVEN_REMOTE_IMAGE_HETZNER`) alongside DigitalOcean,

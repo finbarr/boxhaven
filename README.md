@@ -42,7 +42,7 @@ commands run over direct SSH.
 - Git safe-directory configuration for the synced project path.
 - Optional preview hostnames for HTTP services running on the box.
 - Multiple cloud providers per backend: DigitalOcean and Hetzner Cloud.
-- Teams with shared box visibility, roles, and shareable invite links.
+- Team-owned boxes with roles, shareable invite links, and per-team visibility.
 - Admin-managed golden images that become the default for new boxes.
 - An open-source Fastify/Better Auth backend.
 
@@ -51,6 +51,16 @@ commands run over direct SSH.
 - [Overview](docs/overview.md)
 - [Getting Started](docs/getting-started.md)
 - [Operations](docs/operations.md)
+
+## Hosted And Self-Hosted
+
+`app.boxhaven.dev` is the hosted control plane run by the BoxHaven operators.
+Hosted boxes are provisioned from the operators' cloud provider accounts, and
+the operators can cap boxes per account with `BOXHAVEN_MAX_MACHINES_PER_USER`.
+
+The same open-source backend self-hosts with your own provider credentials and
+no built-in limits. See [backend/README.md](backend/README.md) for running the
+backend and [deploy](deploy) for the production deployment bundle.
 
 ## Install From Source
 
@@ -123,8 +133,9 @@ Hetzner Cloud:
 
 ## Teams
 
-Teams share box visibility across an organization. Create a team in the
-console or from the CLI:
+Every box belongs to a team. Each account automatically gets a personal team
+named `<name>'s team`, so personal boxes work with no setup. Create a shared
+team in the console or from the CLI:
 
 ```bash
 bh team create acme
@@ -136,14 +147,28 @@ Teams view) creates an invitation and prints an invite URL such as
 teammate, who accepts it after signing in with the invited email address.
 BoxHaven does not send invitation emails.
 
-Members have one of three roles: `owner`, `admin`, or `member`. Every member
-sees the team's boxes and who owns each one. Owners and admins can also destroy
-team members' boxes; members can only destroy their own.
+New boxes land in the session's active team: `bh login` pins it, and accepting
+an invitation switches it for that session. Control placement explicitly:
 
-Box ownership stays personal: joining a team makes all of your boxes visible
-to that team, and its owners and admins can destroy them. If you belong to
-several teams, each team sees your boxes. Keep separate accounts if you need
-boxes isolated between teams.
+```bash
+bh create work --team acme   # create a box directly in a team
+bh team switch acme          # change the CLI default team for new boxes
+bh move work acme            # move one of your boxes to another of your teams
+```
+
+Members have one of three roles: `owner`, `admin`, or `member`. Team members
+see exactly the boxes in that team and who owns each one; boxes in your other
+teams stay invisible to them. Owners and admins can destroy team boxes;
+members can only destroy their own.
+
+Moving or sharing never copies a box. To hand a teammate a box like yours,
+snapshot it and create a new box from the resulting image — snapshotting is
+admin-gated today (`BOXHAVEN_ADMIN_EMAILS`):
+
+```bash
+bh image create work
+bh create work-clone --image <image-id>
+```
 
 ## Images
 
@@ -213,9 +238,9 @@ sudo access if binding to port 80 is required.
 The open-source backend in [backend](backend) provides:
 
 - Better Auth browser/device login
-- per-user machine ownership
+- team-centric box ownership with automatic personal teams
 - DigitalOcean and Hetzner Cloud provisioning
-- teams via Better Auth organizations with shared box visibility
+- shared teams via Better Auth organizations with roles and invite links
 - admin-managed golden images per provider
 - backend-signed short-lived SSH certificates
 - VM agent RPC for setup commands and tmux session lifecycle

@@ -168,12 +168,19 @@ bh team create acme
 Invite teammates with `bh team invite <email>` or from the console Teams view.
 BoxHaven does not send invitation emails: the invite is a shareable link of the
 form `<app-url>/invite?id=<invitation-id>`. Send it to the teammate, who signs
-in with the invited email address and accepts.
+in with the invited email address and accepts. Accepting also switches that
+session's active team to the joined team.
 
-Roles are `owner`, `admin`, and `member`. All members see the team's boxes and
-their owners. Owners and admins can destroy any team member's box; members can
-only destroy their own. Pending invitations can be cancelled by the inviter or
-a team admin before they are accepted.
+Every box belongs to a team, and every account gets a personal team
+automatically. New boxes land in the session's active team; `bh create --team`
+targets a team explicitly, `bh team switch <team>` changes the CLI default,
+and `bh move <name> <team>` moves a box between the owner's teams.
+
+Roles are `owner`, `admin`, and `member`. Members see exactly the boxes in
+that team and their owners — not every box of every member. Owners and admins
+can destroy any box in the team; members can only destroy their own. Pending
+invitations can be cancelled by the inviter or a team admin before they are
+accepted.
 
 ## Production Deploy
 
