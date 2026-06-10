@@ -87,7 +87,7 @@ type teamMachinesResponse struct {
 }
 
 func runTeam(args []string, projectDir string) error {
-	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
+	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
 		printTeamUsage()
 		return errHelp
 	}

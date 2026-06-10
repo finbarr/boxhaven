@@ -98,8 +98,8 @@ project-wide default with the `provider` key under `[remote]` in
 `.boxhaven.toml` or the global config.
 
 The backend enables a provider when its credentials are present and selects the
-default with `BOXHAVEN_BACKEND_PROVIDER` (defaults to `digitalocean`, falling
-back to the first configured provider).
+default with `BOXHAVEN_BACKEND_PROVIDER`. When unset, the first configured
+provider is the default (DigitalOcean when both are configured).
 
 DigitalOcean:
 
@@ -113,7 +113,10 @@ DigitalOcean:
 Hetzner Cloud:
 
 - `HCLOUD_TOKEN`: API token, enables the provider.
-- `HETZNER_LOCATION`: default `nbg1` (also `fsn1`, `hel1`, `ash`, `hil`, `sin`).
+- `HETZNER_LOCATION`: default `nbg1` (also `fsn1`, `hel1`, `sin`). The tier
+  server types are not orderable in the US locations `ash` and `hil`; to use
+  those, set `HETZNER_SERVER_TYPE` to a plan Hetzner offers there and create
+  boxes without `--tier`.
 - `HETZNER_SERVER_TYPE`: default `cpx22`; tiers map to `cpx22`/`cpx32`/`cpx42`.
 - `HETZNER_IMAGE`: base image fallback, default `ubuntu-24.04`.
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: golden snapshot id for new boxes.
@@ -136,6 +139,11 @@ BoxHaven does not send invitation emails.
 Members have one of three roles: `owner`, `admin`, or `member`. Every member
 sees the team's boxes and who owns each one. Owners and admins can also destroy
 team members' boxes; members can only destroy their own.
+
+Box ownership stays personal: joining a team makes all of your boxes visible
+to that team, and its owners and admins can destroy them. If you belong to
+several teams, each team sees your boxes. Keep separate accounts if you need
+boxes isolated between teams.
 
 ## Images
 

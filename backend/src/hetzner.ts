@@ -18,13 +18,18 @@ import {
 const execFileAsync = promisify(execFile);
 const apiBaseURL = "https://api.hetzner.cloud/v1";
 const hetznerDefaultServerType = "cpx22";
-// CPX (Gen2 AMD) is the only shared line orderable in every Hetzner location.
+// CPX Gen2 shared plans are orderable in fsn1/nbg1/hel1/sin; the US locations
+// (ash/hil) only offer legacy plans, so they need HETZNER_SERVER_TYPE instead
+// of a tier.
 const hetznerTierServerTypes: Record<string, string> = {
   small: "cpx22",
   medium: "cpx32",
   large: "cpx42",
 };
 const machineLabelKey = "boxhaven-machine";
+// Hetzner server names must be valid RFC 1123 hostnames; a dot-free name is a
+// single DNS label capped at 63 characters.
+const hetznerServerNameMaxLength = 63;
 
 type HetznerConfig = {
   token: string;
@@ -97,7 +102,7 @@ export class HetznerProvider implements MachineProvider {
       const created = await this.request<{ server: HetznerServer }>("/servers", {
         method: "POST",
         body: {
-          name: machineResourceName(providerName),
+          name: hetznerResourceName(providerName),
           server_type: hetznerServerTypeForRequest(request, this.config),
           image: hetznerImageForCreate(image),
           location: request.region?.trim() || this.config.location,
@@ -184,7 +189,7 @@ export class HetznerProvider implements MachineProvider {
   private async findServer(machineName: string): Promise<HetznerServer | undefined> {
     const selector = `${machineLabelKey}==${sanitizeResourceName(machineName)}`;
     const response = await this.request<HetznerServerList>(`/servers?label_selector=${encodeURIComponent(selector)}&per_page=50`);
-    const want = machineResourceName(machineName);
+    const want = hetznerResourceName(machineName);
     return response.servers.find((server) => server.name === want);
   }
 
@@ -318,6 +323,14 @@ export function hetznerServerTypeForTier(tier: string): string | undefined {
 export function hetznerImageForCreate(image: string): string | number {
   const value = image.trim();
   return /^\d+$/.test(value) ? Number(value) : value;
+}
+
+export function hetznerResourceName(name: string): string {
+  const full = machineResourceName(name);
+  if (full.length <= hetznerServerNameMaxLength) return full;
+  // Keep the trailing user-hash suffix so truncated names stay unique.
+  const tail = full.slice(-11);
+  return `${full.slice(0, hetznerServerNameMaxLength - tail.length)}${tail}`.replace(/--+/g, "-");
 }
 
 function hetznerImageName(image: HetznerImage | NonNullable<HetznerServer["image"]> | undefined): string {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { hetznerImageForCreate, hetznerProviderFromEnv, hetznerServerTypeForTier } from "./hetzner.js";
+import { hetznerImageForCreate, hetznerProviderFromEnv, hetznerResourceName, hetznerServerTypeForTier } from "./hetzner.js";
 
 test("Hetzner provider prefers the BoxHaven snapshot override", () => {
   const provider = hetznerProviderFromEnv({
@@ -27,6 +27,16 @@ test("Hetzner provider keeps the base image fallback", () => {
 test("Hetzner provider sends numeric snapshot image IDs as numbers", () => {
   assert.equal(hetznerImageForCreate("123456"), 123456);
   assert.equal(hetznerImageForCreate("ubuntu-24.04"), "ubuntu-24.04");
+});
+
+test("Hetzner server names stay within the 63-character hostname limit", () => {
+  assert.equal(hetznerResourceName("foo-0123456789"), "boxhaven-foo-0123456789");
+  const longBase = "a".repeat(52);
+  const longName = `${longBase}-0123456789`;
+  const truncated = hetznerResourceName(longName);
+  assert.ok(truncated.length <= 63, `expected <= 63 chars, got ${truncated.length}`);
+  assert.ok(truncated.endsWith("-0123456789"), `expected user-hash suffix preserved, got ${truncated}`);
+  assert.ok(truncated.startsWith("boxhaven-aaaa"));
 });
 
 test("Hetzner size tiers map to orderable CPX server types", () => {

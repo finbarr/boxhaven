@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Activity, Check, Users } from "lucide-react";
+import { Activity, Check, LogOut, Users } from "lucide-react";
 import { useState } from "react";
 import { apiFetch, sectionKey, tokenKey, WhoamiResponse } from "./api";
 import { AccessPanel } from "./access";
@@ -50,6 +50,13 @@ export function InvitePanel({ invitationId }: { invitationId: string }) {
     setToken(nextToken);
   }
 
+  function handleLogout() {
+    void apiFetch("/v1/auth/sign-out", token, { method: "POST", body: {} }).catch(() => undefined);
+    localStorage.removeItem(tokenKey);
+    setToken("");
+    queryClient.clear();
+  }
+
   return (
     <main className="console">
       <div className="backdrop" />
@@ -63,6 +70,11 @@ export function InvitePanel({ invitationId }: { invitationId: string }) {
         </div>
         <div className="topbar-actions">
           <span className="pulse"><Activity size={14} /> API</span>
+          {authenticated ? (
+            <button className="icon-button" type="button" title="Sign out" aria-label="Sign out" onClick={handleLogout}>
+              <LogOut size={15} />
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -94,7 +106,17 @@ export function InvitePanel({ invitationId }: { invitationId: string }) {
               ) : null}
             </div>
             {invitation.isLoading ? <p className="hint">Loading invitation</p> : null}
-            {invitation.error ? <p className="error">{(invitation.error as Error).message}</p> : null}
+            {invitation.error ? (
+              <>
+                <p className="error">{(invitation.error as Error).message}</p>
+                <p className="hint">
+                  Signed in as <strong>{session.data?.user?.email}</strong>.{" "}
+                  <button className="link-button" type="button" onClick={handleLogout}>
+                    Sign in with a different account
+                  </button>
+                </p>
+              </>
+            ) : null}
             {accept.error ? <p className="error">{(accept.error as Error).message}</p> : null}
             <button
               className="primary-button"
