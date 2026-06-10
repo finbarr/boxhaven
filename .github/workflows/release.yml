@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build release archives
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+            stage="dist/bh_${tag}_${goos}_${goarch}"
+            mkdir -p "$stage"
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+              go build -ldflags "-X main.Version=${tag}" -o "$stage/bh" ./cmd/bh
+            tar -czf "dist/bh_${tag}_${goos}_${goarch}.tar.gz" -C "$stage" bh
+            rm -r "$stage"
+          done
+          (cd dist && sha256sum bh_*.tar.gz > SHA256SUMS)
+          cat dist/SHA256SUMS
+
+      - name: Extract release notes
+        run: |
+          python3 .github/scripts/extract-release-notes.py "${GITHUB_REF_NAME}" CHANGELOG.md > release-notes.md
+          cat release-notes.md
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          files: |
+            dist/bh_*.tar.gz
+            dist/SHA256SUMS

@@ -21,6 +21,8 @@ bh run work codex
 bh connect work
 bh rename work client-a
 bh destroy work
+bh image ls
+bh team create acme
 ```
 
 `bh create` asks the backend for a machine, waits for it to be reachable, and
@@ -39,7 +41,10 @@ commands run over direct SSH.
 - GitHub HTTPS credential forwarding from local `GH_TOKEN` or `GITHUB_TOKEN`.
 - Git safe-directory configuration for the synced project path.
 - Optional preview hostnames for HTTP services running on the box.
-- An open-source Fastify/Better Auth backend with a DigitalOcean provider.
+- Multiple cloud providers per backend: DigitalOcean and Hetzner Cloud.
+- Teams with shared box visibility, roles, and shareable invite links.
+- Admin-managed golden images that become the default for new boxes.
+- An open-source Fastify/Better Auth backend.
 
 ## Docs
 
@@ -64,6 +69,7 @@ config from `.boxhaven.toml`.
 backend_url = "https://api.boxhaven.dev"
 token = "browser-granted-session-token"
 ssh_user = "boxhaven"
+provider = "hetzner"
 setup = [
   "docker compose up -d db"
 ]
@@ -74,6 +80,80 @@ Environment overrides:
 - `BOXHAVEN_BACKEND_URL`
 - `BOXHAVEN_TOKEN`
 - `GH_TOKEN` or `GITHUB_TOKEN` for GitHub repository access inside remote boxes
+
+## Providers
+
+A single backend can serve multiple cloud providers. `GET /v1/providers` lists
+what a backend has configured, and `bh create` picks the backend default unless
+a provider is requested explicitly:
+
+```bash
+bh create work --provider hetzner
+bh create work --provider digitalocean --region sfo3
+bh create work --provider hetzner --region fsn1 --image 12345678
+```
+
+`--region` and `--image` are passed through to the provider verbatim. Set a
+project-wide default with the `provider` key under `[remote]` in
+`.boxhaven.toml` or the global config.
+
+The backend enables a provider when its credentials are present and selects the
+default with `BOXHAVEN_BACKEND_PROVIDER` (defaults to `digitalocean`, falling
+back to the first configured provider).
+
+DigitalOcean:
+
+- `DIGITALOCEAN_ACCESS_TOKEN`: API token, enables the provider.
+- `DIGITALOCEAN_REGION`: default `nyc3`.
+- `DIGITALOCEAN_SIZE`: default `s-2vcpu-4gb-amd`.
+- `DIGITALOCEAN_IMAGE`: base image fallback, default `ubuntu-24-04-x64`.
+- `BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` (or legacy `BOXHAVEN_REMOTE_IMAGE`):
+  golden snapshot id for new boxes.
+
+Hetzner Cloud:
+
+- `HCLOUD_TOKEN`: API token, enables the provider.
+- `HETZNER_LOCATION`: default `nbg1` (also `fsn1`, `hel1`, `ash`, `hil`, `sin`).
+- `HETZNER_SERVER_TYPE`: default `cpx22`; tiers map to `cpx22`/`cpx32`/`cpx42`.
+- `HETZNER_IMAGE`: base image fallback, default `ubuntu-24.04`.
+- `BOXHAVEN_REMOTE_IMAGE_HETZNER`: golden snapshot id for new boxes.
+
+## Teams
+
+Teams share box visibility across an organization. Create a team in the
+console or from the CLI:
+
+```bash
+bh team create acme
+```
+
+Invite teammates by shareable link. `bh team invite <email>` (or the console
+Teams view) creates an invitation and prints an invite URL such as
+`https://app.boxhaven.dev/invite?id=<invitation-id>`; send that link to the
+teammate, who accepts it after signing in with the invited email address.
+BoxHaven does not send invitation emails.
+
+Members have one of three roles: `owner`, `admin`, or `member`. Every member
+sees the team's boxes and who owns each one. Owners and admins can also destroy
+team members' boxes; members can only destroy their own.
+
+## Images
+
+Golden images carry the BoxHaven VM runtime so new boxes boot ready to use.
+Backend admins, listed by email in `BOXHAVEN_ADMIN_EMAILS`, can manage them
+from the CLI or the console Images view:
+
+```bash
+bh image ls
+bh image create work            # snapshot the box "work" into a golden image
+bh image activate <image-id>
+bh image deactivate
+bh image rm <image-id>
+```
+
+Activating an image makes it the default image for new boxes on that provider,
+overriding the env-configured `BOXHAVEN_REMOTE_IMAGE*` default until the image
+is deactivated. Non-admin users get a `403` from the image endpoints.
 
 ## GitHub Repository Access
 
@@ -126,7 +206,9 @@ The open-source backend in [backend](backend) provides:
 
 - Better Auth browser/device login
 - per-user machine ownership
-- DigitalOcean provisioning
+- DigitalOcean and Hetzner Cloud provisioning
+- teams via Better Auth organizations with shared box visibility
+- admin-managed golden images per provider
 - backend-signed short-lived SSH certificates
 - VM agent RPC for setup commands and tmux session lifecycle
 - generated preview hostnames and a browser console
@@ -176,7 +258,9 @@ Droplet, updates `BOXHAVEN_REMOTE_IMAGE`, then restarts and verifies the backend
 so new boxes use the image. When an active `BOXHAVEN_REMOTE_IMAGE` exists, the
 builder starts from that snapshot by default instead of reinstalling the full
 OS/toolchain from Ubuntu. Use `npm run deploy:runtime -- --full-base-image` only
-for base OS or runtime dependency rebuilds.
+for base OS or runtime dependency rebuilds. An image activated with
+`bh image activate` overrides the env-configured default for that provider at
+runtime until it is deactivated.
 
 Both deploy commands forward your SSH agent so the Droplet can fetch the private
 GitHub repo without storing a GitHub token. Override the target with

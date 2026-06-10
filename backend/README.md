@@ -119,15 +119,25 @@ Environment:
 - `BOXHAVEN_BACKEND_LISTEN`: listen address, default `127.0.0.1:8787`.
 - `BOXHAVEN_BACKEND_STATE`: JSON state file path.
 - `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_BACKEND_STATE`.
-- `BOXHAVEN_BACKEND_PROVIDER`: provider adapter, default `digitalocean`.
-- `DIGITALOCEAN_ACCESS_TOKEN`: DigitalOcean token for self-hosted provisioning.
+- `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
+- `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
+- `DIGITALOCEAN_ACCESS_TOKEN`: DigitalOcean token; setting it enables the DigitalOcean provider.
 - `DIGITALOCEAN_REGION`: default `nyc3`.
 - `DIGITALOCEAN_SIZE`: default provider size for creates without an explicit tier, default `s-2vcpu-4gb-amd`.
 - Create-time tiers map to DigitalOcean AMD sizes: `small` is 2 vCPU / 4 GB, `medium` is 4 vCPU / 8 GB, and `large` is 8 vCPU / 16 GB.
-- `BOXHAVEN_REMOTE_IMAGE`: provider image id, snapshot id, or slug for a prebuilt BoxHaven VM image. Numeric DigitalOcean snapshot ids are sent as image IDs when creating Droplets. Machines created from this image are treated as backend-bootstrapped. When unset, DigitalOcean falls back to `DIGITALOCEAN_IMAGE` and then `ubuntu-24-04-x64`; the CLI does not bootstrap plain hosts.
+- `BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` or `BOXHAVEN_REMOTE_IMAGE`: provider image id, snapshot id, or slug for a prebuilt BoxHaven VM image. Numeric DigitalOcean snapshot ids are sent as image IDs when creating Droplets. Machines created from this image are treated as backend-bootstrapped. When unset, DigitalOcean falls back to `DIGITALOCEAN_IMAGE` and then `ubuntu-24-04-x64`; the CLI does not bootstrap plain hosts.
 - `DIGITALOCEAN_IMAGE`: DigitalOcean image fallback, default `ubuntu-24-04-x64`.
 - `DIGITALOCEAN_TAGS`: comma-separated tags, default `boxhaven`.
 - `DIGITALOCEAN_VPC_UUID`: optional VPC UUID.
+- `HCLOUD_TOKEN`: Hetzner Cloud token; setting it enables the Hetzner provider.
+- `HETZNER_LOCATION`: default `nbg1`. Other locations include `fsn1`, `hel1`, `ash`, `hil`, and `sin`.
+- `HETZNER_SERVER_TYPE`: default server type for creates without an explicit tier, default `cpx22`. Tiers map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large).
+- `HETZNER_IMAGE`: Hetzner image fallback, default `ubuntu-24.04`.
+- `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
+
+An image activated through `POST /v1/images/activate` becomes the default image
+for new boxes on that provider and overrides the `BOXHAVEN_REMOTE_IMAGE*` env
+defaults until it is deactivated.
 
 Normal user VMs do not receive reusable DigitalOcean account SSH keys. The
 backend uses a one-time no-login key during DigitalOcean create only to prevent
@@ -182,6 +192,37 @@ Routes:
 - `POST /v1/machines/:name/commands/ssh`
 - `POST /v1/machines/:name/commands/record`
 - `DELETE /v1/machines/:name`
+
+Image management routes (admin-only, gated by `BOXHAVEN_ADMIN_EMAILS`):
+
+- `GET /v1/images` — list golden images, optionally filtered with `?provider=<name>`.
+- `POST /v1/images` — snapshot one of the caller's machines into a golden image; the backend prefixes the image name with `boxhaven-remote-`.
+- `POST /v1/images/activate` — make an available image the default for new boxes on its provider, overriding the env-configured image.
+- `POST /v1/images/deactivate` — fall back to the env-configured image for a provider.
+- `DELETE /v1/images/:id?provider=<name>` — delete an image; returns `409` while the image is active.
+
+Team routes (Better Auth organization plugin, mounted under `/v1/auth`):
+
+- `POST /v1/auth/organization/create`
+- `GET /v1/auth/organization/list`
+- `GET /v1/auth/organization/list-members`
+- `POST /v1/auth/organization/invite-member`
+- `GET /v1/auth/organization/list-invitations`
+- `GET /v1/auth/organization/get-invitation`
+- `POST /v1/auth/organization/accept-invitation`
+- `POST /v1/auth/organization/cancel-invitation`
+- `POST /v1/auth/organization/remove-member`
+- `POST /v1/auth/organization/update-member-role`
+- `POST /v1/auth/organization/leave`
+
+Roles are `owner`, `admin`, and `member`. The backend does not send invitation
+emails; invite links are shared manually as `<app_url>/invite?id=<invitation-id>`
+and accepted by the signed-in user whose email matches the invitation.
+
+Org-scoped machine routes:
+
+- `GET /v1/orgs/:orgID/machines` — list team boxes with owner email/name plus the caller's role; available to any member.
+- `DELETE /v1/orgs/:orgID/machines/:userID/:name` — destroy a team member's box; owners and admins only.
 
 Preview requests arrive at Caddy over HTTPS for
 `*.BOXHAVEN_PREVIEW_BASE_DOMAIN`, are rewritten through the backend preview

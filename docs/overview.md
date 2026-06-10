@@ -73,9 +73,25 @@ For agent tools, the CLI forwards selected local Codex and Claude login/config
 files directly to the VM over SSH. This avoids repeated agent logins on fresh
 boxes without sending those files through the backend.
 
-## Current Provider
+## Providers
 
-The current provider implementation is DigitalOcean. The provider creates boxes
-from a prebuilt BoxHaven snapshot when `BOXHAVEN_REMOTE_IMAGE` is configured.
+A backend can serve multiple providers at once. DigitalOcean and Hetzner Cloud
+are implemented: each is enabled by its credentials (`DIGITALOCEAN_ACCESS_TOKEN`
+or `HCLOUD_TOKEN`), and `BOXHAVEN_BACKEND_PROVIDER` selects the default for
+creates that do not request one. `bh create --provider <name>` targets a
+specific provider, and `--region` and `--image` are passed through to the
+provider verbatim.
+
+Providers create boxes from a prebuilt BoxHaven snapshot when
+`BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` (or legacy `BOXHAVEN_REMOTE_IMAGE`) or
+`BOXHAVEN_REMOTE_IMAGE_HETZNER` is configured, or when a backend admin has
+activated a managed golden image for that provider with `bh image activate`.
 Plain Ubuntu fallback images are not considered fully bootstrapped for normal
 CLI use.
+
+## Teams
+
+Teams are Better Auth organizations with `owner`, `admin`, and `member` roles.
+Members see the team's boxes and owners, and owners and admins can destroy
+team members' boxes. Invitations are shared as manual links from the console or
+`bh team invite <email>`; the backend does not send email.
