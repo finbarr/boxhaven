@@ -105,6 +105,9 @@ export function InvitePanel({ invitationId }: { invitationId: string }) {
                 </p>
               ) : null}
             </div>
+            {invitation.data && !invitation.error ? (
+              <p className="hint">Accepting joins the team and makes it your active team — new boxes land there until you switch.</p>
+            ) : null}
             {invitation.isLoading ? <p className="hint">Loading invitation</p> : null}
             {invitation.error ? (
               <>

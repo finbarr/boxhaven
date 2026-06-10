@@ -3,12 +3,20 @@ export type AuthUser = {
   email: string;
 };
 
+export type TeamInfo = {
+  id: string;
+  name: string;
+  slug?: string;
+};
+
 export type WhoamiResponse = {
   authenticated: boolean;
   provider: string;
   providers?: string[];
   admin?: boolean;
   app_url?: string;
+  team?: TeamInfo | null;
+  teams?: TeamInfo[];
   user: AuthUser;
 };
 
@@ -22,6 +30,10 @@ export type ProviderInfo = {
 export type Machine = {
   name: string;
   user_id?: string;
+  org_id?: string;
+  team_id?: string;
+  team_slug?: string;
+  team_name?: string;
   provider?: string;
   provider_label?: string;
   provider_id?: string;
