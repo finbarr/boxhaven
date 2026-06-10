@@ -6,6 +6,7 @@ import websocket from "@fastify/websocket";
 import Fastify, { FastifyInstance } from "fastify";
 import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
+import { BillingService, StripeEvent, billingRecordAllowsPaidBoxes, billingStatusForRecord, defaultFreeMachines } from "./billing.js";
 import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
@@ -19,6 +20,7 @@ export type BackendOptions = {
   sshCA: SSHCertificateAuthority;
   adminEmails?: string[];
   maxMachinesPerUser?: number;
+  billing?: BillingService;
   appDir?: string;
   apiPublicURL?: string;
   appPublicURL?: string;
@@ -187,6 +189,90 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
   });
 
+  app.get("/v1/billing", async (request, reply) => {
+    const auth = await requireAuth(options, request, reply);
+    if (!auth) return;
+    const machinesUsed = (await options.store.listMachinesForUser(auth.userID)).length;
+    if (!options.billing) {
+      return {
+        enabled: false,
+        status: "free",
+        free_machines: defaultFreeMachines,
+        machines_used: machinesUsed,
+        portal_available: false,
+      };
+    }
+    const record = await options.store.getBillingRecord(auth.userID);
+    return {
+      enabled: true,
+      status: billingStatusForRecord(record),
+      free_machines: options.billing.freeMachines,
+      machines_used: machinesUsed,
+      portal_available: !!record?.customer_id,
+    };
+  });
+
+  app.post("/v1/billing/checkout", async (request, reply) => {
+    const auth = await requireAuth(options, request, reply);
+    if (!auth) return;
+    const billing = options.billing;
+    if (!billing) {
+      return reply.code(400).send({ id: "bad_request", message: "billing is not enabled on this backend" });
+    }
+    const existing = await options.store.getBillingRecord(auth.userID);
+    if (billingRecordAllowsPaidBoxes(existing)) {
+      return reply.code(400).send({ id: "bad_request", message: "subscription is already active; manage it through the billing portal" });
+    }
+    const record = await billing.ensureCustomer(auth.userID, auth.email);
+    const billingURL = `${options.appPublicURL || ""}/?section=billing`;
+    const url = await billing.createCheckoutSession(auth.userID, record.customer_id, `${billingURL}&checkout=success`, `${billingURL}&checkout=canceled`);
+    return { url };
+  });
+
+  app.post("/v1/billing/portal", async (request, reply) => {
+    const auth = await requireAuth(options, request, reply);
+    if (!auth) return;
+    const billing = options.billing;
+    if (!billing) {
+      return reply.code(400).send({ id: "bad_request", message: "billing is not enabled on this backend" });
+    }
+    const record = await options.store.getBillingRecord(auth.userID);
+    if (!record?.customer_id) {
+      return reply.code(400).send({ id: "bad_request", message: "no billing customer exists yet; subscribe first" });
+    }
+    const url = await billing.createPortalSession(record.customer_id, `${options.appPublicURL || ""}/?section=billing`);
+    return { url };
+  });
+
+  // Stripe signs the exact raw request bytes, so the webhook route lives in
+  // an encapsulated scope whose content type parser keeps the body as a
+  // Buffer instead of parsed JSON.
+  void app.register(async (scope) => {
+    scope.removeAllContentTypeParsers();
+    scope.addContentTypeParser("*", { parseAs: "buffer" }, (_request, body, done) => {
+      done(null, body);
+    });
+    scope.post("/v1/billing/webhook", async (request, reply) => {
+      const billing = options.billing;
+      if (!billing) {
+        return reply.code(400).send({ id: "bad_request", message: "billing is not enabled on this backend" });
+      }
+      const header = request.headers["stripe-signature"];
+      const rawBody = Buffer.isBuffer(request.body) ? request.body : Buffer.from(String(request.body ?? ""), "utf8");
+      if (!billing.verifyWebhookSignature(rawBody, Array.isArray(header) ? header[0] : header)) {
+        return reply.code(400).send({ id: "bad_request", message: "invalid stripe webhook signature" });
+      }
+      let event: StripeEvent;
+      try {
+        event = JSON.parse(rawBody.toString("utf8")) as StripeEvent;
+      } catch {
+        return reply.code(400).send({ id: "bad_request", message: "invalid stripe webhook payload" });
+      }
+      await billing.handleEvent(event);
+      return { received: true };
+    });
+  });
+
   app.post("/v1/agent/heartbeat", async (request, reply) => {
     const machine = await requireAgentMachine(options, request, reply);
     if (!machine) return;
@@ -224,6 +310,18 @@ export function createBackend(options: BackendOptions): FastifyInstance {
         id: "limit_reached",
         message: `you have reached the limit of ${limit} boxes; destroy one with bh destroy <name> first`,
       });
+    }
+    // BOXHAVEN_MAX_MACHINES_PER_USER above stays the hard abuse cap; billing
+    // gates the free tier below it.
+    if (options.billing) {
+      const used = (await options.store.listMachinesForUser(auth.userID)).length;
+      if (used >= options.billing.freeMachines && !billingRecordAllowsPaidBoxes(await options.store.getBillingRecord(auth.userID))) {
+        const free = options.billing.freeMachines;
+        return reply.code(403).send({
+          id: "payment_required",
+          message: `You are on the free tier (${free} ${free === 1 ? "box" : "boxes"}). Subscribe at ${options.appPublicURL || ""}/?section=billing to run more boxes.`,
+        });
+      }
     }
     let orgID = auth.orgID;
     if (body.team) {
