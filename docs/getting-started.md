@@ -171,9 +171,11 @@ local GitHub CLI. The token is written to `/run/boxhaven/session.env` on the VM.
 The remote image includes a Git credential helper that uses those variables for
 HTTPS GitHub operations.
 
-The same remote commands also forward selected Codex and Claude login/config
-files from your local home directory, so a newly created box can reuse your local
-agent logins without copying histories, sessions, caches, or databases.
+The same remote commands also forward selected agent login/config files
+(Claude, Codex, Gemini, Copilot, opencode) from your local home directory, so
+a newly created box reuses your local agent logins. Recent claude/codex
+sessions for the current project are forwarded when you start those agents;
+broader histories, caches, and databases are never copied.
 
 ## Inspect And Clean Up
 

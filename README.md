@@ -220,10 +220,13 @@ token for the remote session. For the smoothest agent workflow, use an HTTPS
 GitHub origin and either export a token with the repository scopes your team
 allows or run `gh auth login` before starting the remote session.
 
-`bh create`, `bh run`, `bh connect`, and `bh sync up` also forward selected local
-agent login files for Codex and Claude, including `~/.codex/auth.json`,
-`~/.codex/config.toml`, `~/.claude.json`, and `~/.claude/settings.json`. It does
-not copy histories, sessions, caches, or databases.
+`bh create`, `bh run`, `bh connect`, and `bh sync up` also forward selected
+local agent login files for Claude, Codex, Gemini, GitHub Copilot, and
+opencode (for example `~/.codex/auth.json`, `~/.claude.json`,
+`~/.claude/.credentials.json` on Linux, and `~/.claude/settings.json`).
+Recent claude/codex sessions for the current project are forwarded when you
+start those agents so they can resume; broader histories, caches, and
+databases are never copied.
 
 Those commands also forward the effective local Git author identity for the
 current project by setting `user.name` and `user.email` in the remote SSH user's
