@@ -421,13 +421,16 @@ if [ -n "$archive_path" ]; then
   log "uploading committed source archive"
   rsync -az -e "$rsync_ssh" "$archive_path" "${ssh_target}:/root/boxhaven-source.tgz"
   log "installing remote VM runtime from source archive"
+  # Clear the ready marker: incremental builders boot from the active
+  # snapshot, and the installer exits immediately when the marker exists,
+  # which silently turned incremental rebuilds into no-op re-snapshots.
   ssh "${ssh_opts[@]}" "$ssh_target" \
-    "rm -rf /root/boxhaven-source && mkdir -p /root/boxhaven-source && tar -xzf /root/boxhaven-source.tgz -C /root/boxhaven-source && env BOXHAVEN_SOURCE_DIR=/root/boxhaven-source /root/boxhaven-source/cmd/bh/assets/remote-vm-install.sh"
+    "rm -f /opt/boxhaven/remote/ready && rm -rf /root/boxhaven-source && mkdir -p /root/boxhaven-source && tar -xzf /root/boxhaven-source.tgz -C /root/boxhaven-source && env BOXHAVEN_SOURCE_DIR=/root/boxhaven-source /root/boxhaven-source/cmd/bh/assets/remote-vm-install.sh"
 else
   log "installing remote VM runtime from GitHub ref ${image_ref}"
   install_url="https://raw.githubusercontent.com/finbarr/boxhaven/${image_ref}/cmd/bh/assets/remote-vm-install.sh"
   ssh "${ssh_opts[@]}" "$ssh_target" \
-    "curl -fsSL $(shell_quote "$install_url") -o /root/boxhaven-remote-vm-install.sh && chmod +x /root/boxhaven-remote-vm-install.sh && env BOXHAVEN_REMOTE_REPO_REF=$(shell_quote "$image_ref") /root/boxhaven-remote-vm-install.sh"
+    "rm -f /opt/boxhaven/remote/ready && curl -fsSL $(shell_quote "$install_url") -o /root/boxhaven-remote-vm-install.sh && chmod +x /root/boxhaven-remote-vm-install.sh && env BOXHAVEN_REMOTE_REPO_REF=$(shell_quote "$image_ref") /root/boxhaven-remote-vm-install.sh"
 fi
 
 log "verifying remote runtime"
