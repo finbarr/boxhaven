@@ -91,11 +91,20 @@ export type ActiveImage = {
   activated_at?: string;
 };
 
+export type BillingRecord = {
+  customer_id: string;
+  subscription_id?: string;
+  status?: string;
+  last_reported_hour?: string;
+  updated_at?: string;
+};
+
 export type BackendState = {
   version: number;
   provider: string;
   machines: Record<string, RemoteMachine>;
   active_images?: Record<string, ActiveImage>;
+  billing?: Record<string, BillingRecord>;
   updated_at?: string;
 };
 

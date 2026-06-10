@@ -135,6 +135,16 @@ Environment:
 - `HETZNER_SERVER_TYPE`: default server type for creates without an explicit tier, default `cpx22`. Tiers map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large).
 - `HETZNER_IMAGE`: Hetzner image fallback, default `ubuntu-24.04`.
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
+- `STRIPE_SECRET_KEY`: Stripe API key; setting it enables billing. Self-hosted deployments normally leave it unset, which keeps every billing gate off.
+- `STRIPE_PRICE_ID`: metered Stripe price id used for checkout subscriptions.
+- `STRIPE_WEBHOOK_SECRET`: signing secret for `POST /v1/billing/webhook` deliveries.
+- `STRIPE_METER_EVENT_NAME`: Billing Meter event name for box-hour usage, default `boxhaven_box_hours`.
+- `BOXHAVEN_FREE_MACHINES`: boxes each account can run without a subscription, default `1`.
+- `BOXHAVEN_BILLING_USAGE_REPORTER`: set to `off` to stop this backend from reporting box-hour meter events (for example on a secondary instance).
+- `BOXHAVEN_STRIPE_API_URL`: Stripe API base URL override for tests.
+- `RESEND_API_KEY`: Resend API key; setting it enables password reset and team invitation emails.
+- `BOXHAVEN_EMAIL_FROM`: From address for transactional email, default `BoxHaven <noreply@boxhaven.dev>`.
+- `BOXHAVEN_RESEND_API_URL`: Resend API base URL override for tests.
 
 An image activated through `POST /v1/images/activate` becomes the default image
 for new boxes on that provider and overrides the `BOXHAVEN_REMOTE_IMAGE*` env
@@ -176,6 +186,10 @@ Routes:
 - `POST /v1/auth/device/deny`
 - `POST /v1/auth/device/token`
 - `GET /v1/auth/whoami`
+- `GET /v1/billing`
+- `POST /v1/billing/checkout`
+- `POST /v1/billing/portal`
+- `POST /v1/billing/webhook`
 - `GET /v1/providers`
 - `GET /v1/preview/tls-check`
 - `ANY /v1/preview/proxy/:hostname/*`
@@ -198,6 +212,30 @@ Routes:
 `GET /v1/auth/whoami` returns the authenticated user plus the session's teams:
 `team` is the session's active team (`{id, name, slug}`, or `null` before the
 personal team exists) and `teams` lists every team the user belongs to.
+
+Billing (enabled by setting `STRIPE_SECRET_KEY`; every route except the
+webhook requires a bearer session):
+
+- `GET /v1/billing` — `{enabled, status, free_machines, machines_used, portal_available}` where `status` is `free`, `active`, `past_due`, or `canceled`.
+- `POST /v1/billing/checkout` — returns `{url}` for a Stripe Checkout subscription session; `400` when billing is disabled or a subscription is already active.
+- `POST /v1/billing/portal` — returns `{url}` for the Stripe customer portal; `400` when no Stripe customer exists yet.
+- `POST /v1/billing/webhook` — Stripe webhook endpoint; deliveries are verified against `STRIPE_WEBHOOK_SECRET` using the raw request body. Subscribe it to `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`.
+
+Each account can run `BOXHAVEN_FREE_MACHINES` boxes (default 1) for free.
+When billing is enabled and an account at or over that allowance has no
+active subscription, `POST /v1/machines` returns `403` with
+`{ "id": "payment_required" }`. With an active subscription, the backend
+reports one `STRIPE_METER_EVENT_NAME` meter event unit per extra box per
+started hour (`payload[stripe_customer_id]`, `payload[value]`), persisting the
+last reported hour per account so restarts never double-bill.
+`BOXHAVEN_MAX_MACHINES_PER_USER` stays the hard abuse cap above the billing
+gate.
+
+Transactional email (enabled by setting `RESEND_API_KEY`) sends password
+reset links and team invitation links (`<app_url>/invite?id=<invitation-id>`)
+through Resend from `BOXHAVEN_EMAIL_FROM`. Without it, both hooks log to the
+backend console instead, and invitation links remain copyable from the team
+console.
 
 Image management routes (admin-only, gated by `BOXHAVEN_ADMIN_EMAILS`):
 
@@ -222,9 +260,11 @@ Team routes (Better Auth organization plugin, mounted under `/v1/auth`):
 - `POST /v1/auth/organization/set-active`
 - `POST /v1/auth/organization/leave`
 
-Roles are `owner`, `admin`, and `member`. The backend does not send invitation
-emails; invite links are shared manually as `<app_url>/invite?id=<invitation-id>`
-and accepted by the signed-in user whose email matches the invitation.
+Roles are `owner`, `admin`, and `member`. Invite links take the form
+`<app_url>/invite?id=<invitation-id>` and are accepted by the signed-in user
+whose email matches the invitation. When `RESEND_API_KEY` is set the backend
+emails that link to the invitee; otherwise the link is shared manually from
+the console.
 
 Each session has an active team. `POST /v1/auth/organization/set-active`
 switches it for that session only — CLI login sessions and browser sessions
