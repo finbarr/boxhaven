@@ -260,10 +260,11 @@ function GettingStarted() {
           <div>
             <strong>Create a box and hand it to your agent</strong>
             <CommandBlock label="Create" value="bh create work" />
-            <CommandBlock label="Run" value="bh run work claude --continue" />
+            <CommandBlock label="Run" value="bh run work claude" />
           </div>
         </li>
       </ol>
+      <p className="hint">Mid-conversation locally? <code>bh run work claude --continue</code> resumes it on the box.</p>
       <p className="hint">Prefer clicking? The form on the left creates a box right from the console.</p>
     </div>
   );

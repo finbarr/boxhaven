@@ -18,10 +18,14 @@ work:
 
 ```bash
 bh login
-bh create work                  # provisions the box and syncs this project once
-bh run work claude --continue   # resume your local claude session on the box
-bh connect work                 # reattach to the tmux session any time
+bh create work        # provisions a box and syncs this project once
+bh run work claude    # claude starts working in the box's tmux session
+# close the laptop — the agent keeps going. Reattach any time:
+bh connect work
 ```
+
+Mid-conversation with Claude locally? `bh run work claude --continue` resumes
+that exact session on the box.
 
 Run as many agents in parallel as you want, each on its own box:
 

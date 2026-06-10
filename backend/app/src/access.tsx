@@ -53,8 +53,10 @@ export function AccessPanel({ onToken, deviceUserCode, notice }: {
             </div>
             <pre>{`$ bh create work
 box "work" ready
-$ bh run work claude --continue
-$ bh connect work`}</pre>
+$ bh run work claude
+claude is working — close the laptop anytime
+$ bh connect work
+right where you left off`}</pre>
           </div>
           <div className="landing-install">
             <CommandBlock label="Install" value={installCommand} />
