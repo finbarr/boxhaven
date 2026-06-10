@@ -13,6 +13,10 @@
 - Fixed the golden image so `claude` is runnable by the box user (the
   installer left it behind an unreadable `/root` symlink); the image build
   and the remote smoke now verify that agents execute as the box user.
+- Fixed incremental image rebuilds, which exited at the installer's ready
+  marker and silently re-snapshotted the old runtime without applying any
+  changes, and pre-trusted the box project path for codex so detached
+  sessions are not blocked by its first-run trust prompt.
 - Shell commands with arguments (`bash -lc '...'`) now run over direct SSH
   instead of being treated as interactive sessions, and starting an already
   running session from a non-terminal prints a hint instead of failing.
