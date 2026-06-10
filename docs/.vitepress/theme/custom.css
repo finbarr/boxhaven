@@ -1,0 +1,370 @@
+/* ============================================
+   BOXHAVEN — "The Cozy Cabin Console"
+   Warm cream. Wood-brown joinery. Deep green.
+   Dark terminal cards glowing in the windows.
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ---------- Core Tokens ---------- */
+
+:root {
+  --bhv-cream: #f4f0e5;
+  --bhv-parchment: #fff8e7;
+  --bhv-panel: rgba(255, 252, 243, 0.88);
+  --bhv-green: #2f6f5c;
+  --bhv-green-deep: #285f4f;
+  --bhv-green-bright: #3d8a73;
+  --bhv-green-dim: rgba(47, 111, 92, 0.09);
+  --bhv-ink: #24352f;
+  --bhv-ink-strong: #22342d;
+  --bhv-ink-muted: #6a776f;
+  --bhv-wood-border: rgba(96, 75, 53, 0.16);
+  --bhv-wood-border-strong: rgba(96, 75, 53, 0.28);
+  --bhv-card-shadow: 0 10px 28px rgba(90, 67, 41, 0.1);
+  --bhv-card-shadow-hover: 0 20px 60px rgba(90, 67, 41, 0.14);
+  --bhv-terminal-bg: #26352f;
+  --bhv-terminal-header-bg: rgba(255, 255, 255, 0.04);
+  --bhv-terminal-border: rgba(96, 75, 53, 0.28);
+  --bhv-terminal-text: #d9f6dd;
+  --bhv-terminal-muted: rgba(217, 246, 221, 0.55);
+  --bhv-terminal-faint: rgba(217, 246, 221, 0.32);
+  --bhv-inline-code-bg: rgba(47, 111, 92, 0.08);
+  --bhv-inline-code-border: rgba(47, 111, 92, 0.16);
+  --bhv-accent-soft: rgba(47, 111, 92, 0.08);
+  --bhv-accent-border: rgba(47, 111, 92, 0.18);
+  --bhv-accent-border-strong: rgba(47, 111, 92, 0.34);
+  --bhv-ember: #e1664c;
+  --bhv-lantern: #e0b24b;
+  --bhv-leaf: #63b88b;
+
+  --vp-c-brand-1: var(--bhv-green);
+  --vp-c-brand-2: var(--bhv-green-deep);
+  --vp-c-brand-3: var(--bhv-green-bright);
+  --vp-c-brand-soft: var(--bhv-green-dim);
+
+  --vp-c-bg: var(--bhv-cream);
+  --vp-c-bg-alt: #ece6d6;
+  --vp-c-bg-elv: var(--bhv-parchment);
+  --vp-c-bg-soft: #ece6d6;
+
+  --vp-c-text-1: var(--bhv-ink);
+  --vp-c-text-2: #51635b;
+  --vp-c-text-3: var(--bhv-ink-muted);
+
+  --vp-c-divider: var(--bhv-wood-border);
+  --vp-c-gutter: rgba(96, 75, 53, 0.12);
+
+  --vp-c-default-1: #d8d0bd;
+  --vp-c-default-2: #e2dbc9;
+  --vp-c-default-3: #ece6d6;
+  --vp-c-default-soft: rgba(96, 75, 53, 0.08);
+
+  --vp-code-block-bg: var(--bhv-terminal-bg);
+  --vp-code-block-color: var(--bhv-terminal-text);
+  --vp-code-tab-divider: rgba(217, 246, 221, 0.12);
+  --vp-code-copy-code-bg: rgba(217, 246, 221, 0.08);
+  --vp-code-copy-code-hover-bg: rgba(217, 246, 221, 0.16);
+  --vp-code-copy-code-border-color: rgba(217, 246, 221, 0.16);
+  --vp-code-lang-color: var(--bhv-terminal-faint);
+  --vp-code-line-number-color: var(--bhv-terminal-faint);
+
+  --vp-c-tip-1: var(--bhv-green);
+  --vp-c-tip-2: rgba(47, 111, 92, 0.16);
+  --vp-c-tip-3: rgba(47, 111, 92, 0.08);
+  --vp-c-tip-soft: rgba(47, 111, 92, 0.06);
+
+  --vp-button-brand-bg: var(--bhv-green);
+  --vp-button-brand-hover-bg: var(--bhv-green-deep);
+  --vp-button-brand-active-bg: var(--bhv-green-deep);
+
+  --vp-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --vp-font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ---------- Global Base ---------- */
+
+::selection {
+  background: rgba(47, 111, 92, 0.25);
+  color: var(--bhv-ink-strong);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Warm graph-paper texture, echoing the console backdrop */
+body {
+  background:
+    linear-gradient(90deg, rgba(39, 120, 98, 0.05) 1px, transparent 1px),
+    linear-gradient(rgba(39, 120, 98, 0.05) 1px, transparent 1px),
+    var(--bhv-cream);
+  background-size: 40px 40px, 40px 40px, auto;
+}
+
+/* ---------- Typography ---------- */
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--bhv-ink-strong);
+}
+
+.vp-doc h1 {
+  font-size: 2rem;
+}
+
+/* ---------- Navigation ---------- */
+
+.VPNav {
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+  background: rgba(244, 240, 229, 0.86) !important;
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+}
+
+.VPNavBar:not(.home) {
+  background: transparent !important;
+}
+
+.VPNavBarTitle .title {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  color: var(--bhv-ink-strong) !important;
+}
+
+.VPNavBarTitle .logo {
+  height: 30px;
+}
+
+.VPNavBarMenuLink:hover,
+.VPNavBarMenuLink.active {
+  color: var(--bhv-green) !important;
+}
+
+/* ---------- Sidebar ---------- */
+
+.VPSidebar {
+  background: var(--bhv-cream) !important;
+  border-right: 1px solid var(--vp-c-divider) !important;
+}
+
+.VPSidebarItem.is-active > .item > .link > .text {
+  color: var(--bhv-green) !important;
+  font-weight: 600;
+}
+
+.VPSidebarItem.level-0 > .item > .text {
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bhv-ink-muted);
+}
+
+/* ---------- Landing Page ---------- */
+
+.landing-page .VPDoc {
+  padding: 0 !important;
+}
+
+.landing-page .container,
+.landing-page .content,
+.landing-page .content-container {
+  max-width: none !important;
+}
+
+.landing-page .content-container {
+  padding: 0 !important;
+}
+
+.landing-page .vp-doc {
+  padding: 0 !important;
+}
+
+.landing-page .vp-doc > div:first-child {
+  margin-top: 0 !important;
+}
+
+/* ---------- Code Blocks: dark terminal cards ---------- */
+
+div[class*='language-'] {
+  border-radius: 8px !important;
+  border: 1px solid var(--bhv-terminal-border);
+  background: var(--bhv-terminal-bg) !important;
+  box-shadow: var(--bhv-card-shadow);
+  position: relative;
+}
+
+div[class*='language-'] code {
+  color: var(--bhv-terminal-text);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+div[class*='language-'] .lang {
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+  color: var(--bhv-terminal-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+div[class*='language-']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 24px;
+  right: 24px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(217, 246, 221, 0.18), transparent);
+}
+
+.vp-code-group .tabs {
+  background: var(--bhv-terminal-bg);
+}
+
+.vp-code-group .tabs label {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--bhv-terminal-muted);
+}
+
+/* ---------- Custom Containers (tip, warning, etc.) ---------- */
+
+.custom-block.tip {
+  background: rgba(47, 111, 92, 0.06);
+  border-color: rgba(47, 111, 92, 0.28);
+}
+
+.custom-block.tip .custom-block-title {
+  color: var(--bhv-green);
+}
+
+.custom-block.warning {
+  background: rgba(224, 178, 75, 0.1);
+  border-color: rgba(224, 178, 75, 0.4);
+}
+
+.custom-block.danger {
+  background: rgba(225, 102, 76, 0.08);
+  border-color: rgba(225, 102, 76, 0.35);
+}
+
+.custom-block div[class*='language-'] code {
+  color: var(--bhv-terminal-text);
+}
+
+/* ---------- Tables ---------- */
+
+.vp-doc table {
+  border-collapse: collapse;
+}
+
+.vp-doc tr {
+  border-color: var(--bhv-wood-border);
+  background: transparent;
+}
+
+.vp-doc tr:nth-child(2n) {
+  background: rgba(255, 252, 243, 0.6);
+}
+
+.vp-doc th {
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bhv-ink-muted);
+  background: rgba(255, 252, 243, 0.88);
+  border-color: var(--bhv-wood-border);
+}
+
+.vp-doc td {
+  border-color: var(--bhv-wood-border);
+}
+
+.vp-doc td code {
+  color: var(--bhv-green);
+  background: var(--bhv-inline-code-bg);
+  border: 1px solid var(--bhv-inline-code-border);
+}
+
+/* ---------- Inline Code ---------- */
+
+.vp-doc :not(pre) > code {
+  background: var(--bhv-inline-code-bg);
+  border: 1px solid var(--bhv-inline-code-border);
+  border-radius: 4px;
+  color: var(--bhv-green-deep);
+  font-size: 0.9em;
+  padding: 2px 6px;
+}
+
+/* ---------- Links ---------- */
+
+.vp-doc a {
+  color: var(--bhv-green);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(47, 111, 92, 0.3);
+  transition: all 0.2s ease;
+}
+
+.vp-doc a:hover {
+  color: var(--bhv-green-deep);
+  border-bottom-color: var(--bhv-green-deep);
+}
+
+.vp-doc a > code {
+  color: var(--bhv-green);
+}
+
+/* ---------- Footer ---------- */
+
+.VPFooter {
+  border-top: 1px solid var(--vp-c-divider) !important;
+  background: var(--bhv-cream) !important;
+}
+
+.VPFooter .message,
+.VPFooter .copyright {
+  font-size: 13px;
+  color: var(--vp-c-text-3);
+}
+
+/* ---------- Search ---------- */
+
+.DocSearch-Button {
+  background: var(--bhv-parchment) !important;
+  border: 1px solid var(--bhv-wood-border) !important;
+  border-radius: 8px !important;
+}
+
+.DocSearch-Button:hover {
+  border-color: var(--bhv-accent-border-strong) !important;
+  box-shadow: 0 0 12px rgba(47, 111, 92, 0.12);
+}
+
+/* ---------- Scrollbar ---------- */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(96, 75, 53, 0.25);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 75, 53, 0.4);
+}

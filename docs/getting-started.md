@@ -1,8 +1,46 @@
 # Getting Started
 
-This guide covers the local developer workflow for using BoxHaven from source.
+This guide installs the `bh` CLI, logs in to a backend, creates your first
+box, and resumes an agent session on it.
 
 ## Install The CLI
+
+### Install script
+
+One-liner (macOS and Linux, installs the latest release):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh
+```
+
+The script downloads the latest `bh` release for your platform, verifies it
+against the release's `SHA256SUMS`, and installs it to `/usr/local/bin`
+(sudo when needed) or `~/.local/bin` as a fallback. Set `BOXHAVEN_VERSION`
+to install a specific release tag and `BOXHAVEN_INSTALL_DIR` to choose the
+install directory.
+
+### Homebrew
+
+Via the `finbarr/tap` tap:
+
+```bash
+brew install finbarr/tap/boxhaven
+```
+
+### From a release archive
+
+Tagged releases publish prebuilt `bh` archives for Linux and macOS (amd64 and
+arm64) on the [GitHub releases page](https://github.com/finbarr/boxhaven/releases).
+Download the archive for your platform, extract it, and put `bh` on your
+`PATH`:
+
+```bash
+tar -xzf bh_<version>_<os>_<arch>.tar.gz
+install -m 0755 bh ~/.local/bin/bh
+bh version
+```
+
+### From source
 
 ```bash
 git clone https://github.com/finbarr/boxhaven.git
@@ -15,6 +53,12 @@ Install it to `~/.local/bin` when you want `bh` on your shell path:
 
 ```bash
 make install
+```
+
+A plain Go build also works:
+
+```bash
+go build -o bh ./cmd/bh
 ```
 
 ## Log In
@@ -31,7 +75,8 @@ Use a local or self-hosted backend:
 bh login --backend-url http://127.0.0.1:8787
 ```
 
-The CLI stores the resulting session token in
+The CLI prints a browser URL, tries to open it, and waits for the web app to
+grant access. The resulting session token is stored in
 `~/.config/boxhaven/config.toml`. `BOXHAVEN_BACKEND_URL` and `BOXHAVEN_TOKEN`
 override the stored config when set.
 
@@ -65,6 +110,7 @@ bh create work --provider hetzner --region fsn1
 
 Without `--provider`, the backend default applies. Set a sticky default with
 the `provider` key under `[remote]` in `.boxhaven.toml` or the global config.
+See [Cloud Providers](/providers) for the full provider configuration.
 
 Skip the initial sync only when you intentionally want an empty project path:
 
@@ -74,32 +120,8 @@ bh create work --no-sync
 
 Every account automatically gets a personal team, and your first box lands
 there: new boxes go to your session's active team, which `bh login` pins to
-your personal team until you join or switch to another one.
-
-## Work In A Team
-
-To share boxes with teammates, create a shared team and invite them:
-
-```bash
-bh team create acme
-bh team invite teammate@example.com
-```
-
-The invite is a shareable link; the teammate signs in with the invited email
-address and accepts it, which also switches that session's active team to the
-new team. Creating a team likewise makes it your session's active team, as
-does selecting a team in the console's Team view. When you belong to more
-than one team, control where boxes go explicitly:
-
-```bash
-bh create work --team acme   # create a box directly in a team
-bh team switch acme          # change the CLI default team for new boxes
-bh move work acme            # move one of your boxes into the team
-```
-
-Team members see exactly the boxes in that team; boxes in your other teams
-stay invisible to them. Owners and admins can destroy team boxes; members can
-only destroy their own.
+your personal team until you join or switch to another one. See
+[Teams](/teams) for sharing boxes with teammates.
 
 ## Run Commands
 
@@ -125,6 +147,8 @@ SSH.
 the box is created and when you run `bh sync up` (which mirrors deletions).
 Work done by agents on the box stays put until you pull it back with
 `bh sync down`. Pass `--sync` to a run to mirror local files first.
+
+## Resume Your Local Agent Session
 
 Starting `claude` or `codex` forwards your newest local sessions for this
 project, so you can resume the conversation you were having on your laptop:
@@ -175,7 +199,8 @@ The same remote commands also forward selected agent login/config files
 (Claude, Codex, Gemini, Copilot, opencode) from your local home directory, so
 a newly created box reuses your local agent logins. Recent claude/codex
 sessions for the current project are forwarded when you start those agents;
-broader histories, caches, and databases are never copied.
+broader histories, caches, and databases are never copied. See the
+[Security Model](/security) for exactly what is forwarded.
 
 ## Inspect And Clean Up
 
