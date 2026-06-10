@@ -87,8 +87,9 @@ bh team invite teammate@example.com
 
 The invite is a shareable link; the teammate signs in with the invited email
 address and accepts it, which also switches that session's active team to the
-new team. When you belong to more than one team, control where boxes go
-explicitly:
+new team. Creating a team likewise makes it your session's active team, as
+does selecting a team in the console's Team view. When you belong to more
+than one team, control where boxes go explicitly:
 
 ```bash
 bh create work --team acme   # create a box directly in a team

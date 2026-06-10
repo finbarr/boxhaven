@@ -407,3 +407,26 @@ func captureStderr(t *testing.T, fn func()) string {
 	}
 	return string(data)
 }
+
+func TestSelectTeamOrganizationPrecedenceAndAmbiguity(t *testing.T) {
+	orgs := []teamOrganization{
+		{ID: "id-1", Slug: "alpha", Name: "acme"},
+		{ID: "id-2", Slug: "acme", Name: "Beta"},
+		{ID: "id-3", Slug: "same", Name: "Twin"},
+		{ID: "id-4", Slug: "same-2", Name: "Twin"},
+	}
+
+	bySlug, err := selectTeamOrganization(orgs, "acme")
+	if err != nil {
+		t.Fatalf("expected slug match, got error: %v", err)
+	}
+	if bySlug.ID != "id-2" {
+		t.Fatalf("expected exact slug match to win over name match, got %s", bySlug.ID)
+	}
+
+	if _, err := selectTeamOrganization(orgs, "Twin"); err == nil {
+		t.Fatal("expected ambiguous name selection to error")
+	} else if !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("expected ambiguity error, got: %v", err)
+	}
+}

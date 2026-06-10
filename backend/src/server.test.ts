@@ -917,6 +917,85 @@ test("backend scopes team machine listing and destroy to the box's team", async 
   assert.equal(outsiderView.statusCode, 403, outsiderView.body);
 });
 
+test("backend never places a removed member's boxes in the old team", async () => {
+  const { app, token } = await createTestBackend("boss@example.com");
+  const memberToken = await signUp(app, "kicked@example.com");
+  const ownerHeaders = { authorization: `Bearer ${token}` };
+  const memberHeaders = { authorization: `Bearer ${memberToken}` };
+
+  const orgCreated = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers: ownerHeaders,
+    payload: { name: "Strict Co", slug: "strict-co" },
+  });
+  assert.equal(orgCreated.statusCode, 200, orgCreated.body);
+  const orgID = orgCreated.json().id || orgCreated.json().organization?.id;
+
+  const invited = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/invite-member",
+    headers: ownerHeaders,
+    payload: { email: "kicked@example.com", role: "member", organizationId: orgID },
+  });
+  assert.equal(invited.statusCode, 200, invited.body);
+  // The member joins without ever creating a personal team, so the joined
+  // team becomes their session's active team.
+  const accepted = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/accept-invitation",
+    headers: memberHeaders,
+    payload: { invitationId: invited.json().id },
+  });
+  assert.equal(accepted.statusCode, 200, accepted.body);
+
+  const removed = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/remove-member",
+    headers: ownerHeaders,
+    payload: { memberIdOrEmail: "kicked@example.com", organizationId: orgID },
+  });
+  assert.equal(removed.statusCode, 200, removed.body);
+
+  // The removed member's session still claims the old team as active; the
+  // backend must not honor it.
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers: memberHeaders });
+  assert.equal(whoami.statusCode, 200, whoami.body);
+  assert.notEqual(whoami.json().team?.id, orgID);
+  assert.equal(typeof whoami.json().team?.id, "string");
+
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers: memberHeaders, payload: { name: "after-kick" } });
+  assert.equal(created.statusCode, 201, created.body);
+  assert.notEqual(created.json().machine.team_id, orgID);
+  assert.equal(created.json().machine.team_id, whoami.json().team.id);
+
+  const ownerView = await app.inject({ method: "GET", url: `/v1/orgs/${orgID}/machines`, headers: ownerHeaders });
+  assert.equal(ownerView.statusCode, 200, ownerView.body);
+  assert.deepEqual(ownerView.json().machines, []);
+});
+
+test("backend rejects ambiguous team name references", async () => {
+  const { app, token } = await createTestBackend("dupes@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  for (const slug of ["same-a", "same-b"]) {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/auth/organization/create",
+      headers,
+      payload: { name: "Same Name", slug },
+    });
+    assert.equal(created.statusCode, 200, created.body);
+  }
+
+  const ambiguous = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "box", team: "Same Name" } });
+  assert.equal(ambiguous.statusCode, 400, ambiguous.body);
+  assert.match(ambiguous.body, /ambiguous/);
+
+  const bySlug = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "box", team: "same-b" } });
+  assert.equal(bySlug.statusCode, 201, bySlug.body);
+  assert.equal(bySlug.json().machine.team_slug, "same-b");
+});
+
 test("backend moves boxes between the owner's teams", async () => {
   const { app, token } = await createTestBackend("mover@example.com");
   const headers = { authorization: `Bearer ${token}` };

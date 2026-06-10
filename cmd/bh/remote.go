@@ -405,7 +405,7 @@ func runRemoteList(args []string, projectDir string) error {
 		return err
 	}
 	for _, m := range machines {
-		if _, err := fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\n", m.Name, valueOrDash(m.TeamSlug), valueOrDash(m.Provider), configValueOrNotSet(m.Size), remoteListURL(m)); err != nil {
+		if _, err := fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\n", m.Name, remoteMachineTeamLabel(m), valueOrDash(m.Provider), configValueOrNotSet(m.Size), remoteListURL(m)); err != nil {
 			return err
 		}
 	}

@@ -194,12 +194,32 @@ func listTeamOrganizations(cfg Config) ([]teamOrganization, error) {
 func selectTeamOrganization(orgs []teamOrganization, selector string) (teamOrganization, error) {
 	selector = strings.TrimSpace(selector)
 	if selector != "" {
+		// Only ids and slugs are unique; display names can collide, and a
+		// colliding name must not silently pick an arbitrary team.
 		for _, org := range orgs {
-			if org.ID == selector || strings.EqualFold(org.Slug, selector) || strings.EqualFold(org.Name, selector) {
+			if org.ID == selector {
 				return org, nil
 			}
 		}
-		return teamOrganization{}, fmt.Errorf("no team matches %q (teams: %s)", selector, teamSlugList(orgs))
+		for _, org := range orgs {
+			if strings.EqualFold(org.Slug, selector) {
+				return org, nil
+			}
+		}
+		var byName []teamOrganization
+		for _, org := range orgs {
+			if strings.EqualFold(org.Name, selector) {
+				byName = append(byName, org)
+			}
+		}
+		switch len(byName) {
+		case 1:
+			return byName[0], nil
+		case 0:
+			return teamOrganization{}, fmt.Errorf("no team matches %q (teams: %s)", selector, teamSlugList(orgs))
+		default:
+			return teamOrganization{}, fmt.Errorf("team name %q is ambiguous (%s); use the slug or id", selector, teamSlugList(byName))
+		}
 	}
 	switch len(orgs) {
 	case 0:

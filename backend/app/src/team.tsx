@@ -55,8 +55,13 @@ export function TeamView({ token, user, activeTeamId }: { token: string; user?: 
   const activeOrg = orgList.find((org) => org.id === orgId) || orgList.find((org) => org.id === activeTeamId) || orgList[0];
 
   function selectOrg(id: string) {
-    setOrgId(id);
-    if (id && id !== activeTeamId) setActive.mutate(id);
+    if (!id || id === activeTeamId) {
+      setOrgId(id);
+      return;
+    }
+    // Switch the view only once the session's active team actually changed,
+    // so the dropdown never disagrees with where new boxes land.
+    setActive.mutate(id, { onSuccess: () => setOrgId(id) });
   }
 
   if (orgs.isLoading) {
@@ -100,6 +105,9 @@ function useCreateTeam(token: string, onCreated: () => void) {
     onSuccess: () => {
       onCreated();
       void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
+      // Creating a team makes it the session's active team (Better Auth
+      // behavior), so the whoami snapshot must refresh too.
+      void queryClient.invalidateQueries({ queryKey: ["session", token] });
     },
   });
 }
