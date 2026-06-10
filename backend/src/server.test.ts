@@ -57,7 +57,10 @@ class FakeProvider implements MachineProvider {
     };
   }
 
+  failList = false;
+
   async listMachines() {
+    if (this.failList) throw new Error(`${this.name} API is unavailable`);
     return this.discovered.map((machine) => ({
       status: "active",
       machine: {
@@ -678,6 +681,39 @@ test("backend routes machine operations to the machine's provider", async () => 
   });
   assert.equal(unknown.statusCode, 400, unknown.body);
   assert.match(unknown.body, /provider aws is not configured/);
+});
+
+test("backend keeps listing machines when one provider is down", async () => {
+  const second = new FakeProvider("fake2", "Fake Cloud 2");
+  const { app, token } = await createTestBackend("degraded@example.com", "password123", { extraProviders: [second] });
+  const headers = { authorization: `Bearer ${token}` };
+
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "survivor" } });
+  assert.equal(created.statusCode, 201, created.body);
+
+  second.failList = true;
+  const listed = await app.inject({ method: "GET", url: "/v1/machines", headers });
+  assert.equal(listed.statusCode, 200, listed.body);
+  assert.deepEqual(listed.json().machines.map((machine: RemoteMachine) => machine.name), ["survivor"]);
+});
+
+test("backend handles non-string image request fields without 500s", async () => {
+  const { app, provider, token } = await createTestBackend("admin@example.com", "password123", { adminEmails: ["admin@example.com"] });
+  const headers = { authorization: `Bearer ${token}` };
+  provider.images = [{ id: "222", name: "boxhaven-remote-new", status: "available", bootstrapped: true }];
+
+  const numericID = await app.inject({ method: "POST", url: "/v1/images/activate", headers, payload: { provider: "fake", id: 222 } });
+  assert.equal(numericID.statusCode, 200, numericID.body);
+  assert.equal(numericID.json().active.id, "222");
+
+  const numericMachine = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: 123 } });
+  assert.equal(numericMachine.statusCode, 404, numericMachine.body);
+
+  const objectMachine = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: { name: "x" } } });
+  assert.equal(objectMachine.statusCode, 400, objectMachine.body);
+
+  const numericProvider = await app.inject({ method: "POST", url: "/v1/images/deactivate", headers, payload: { provider: 5 } });
+  assert.equal(numericProvider.statusCode, 400, numericProvider.body);
 });
 
 test("backend gates image management behind admin emails", async () => {

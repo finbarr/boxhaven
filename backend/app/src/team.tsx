@@ -196,7 +196,9 @@ function TeamDetail({ token, user, org, orgList, onSelectOrg }: {
 
   const memberList = members.data || [];
   const callerRole = memberList.find((member) => member.userId === user?.id)?.role || orgMachines.data?.role || "member";
-  const canManage = callerRole === "owner" || callerRole === "admin";
+  // Better Auth stores multiple roles as a comma-separated string.
+  const callerRoles = callerRole.split(",").map((role) => role.trim());
+  const canManage = callerRoles.includes("owner") || callerRoles.includes("admin");
   const pendingInvitations = (invitations.data || []).filter((invitation) => invitation.status === "pending");
   const machineList = orgMachines.data?.machines || [];
 
@@ -251,7 +253,7 @@ function TeamDetail({ token, user, org, orgList, onSelectOrg }: {
             <p className="hint">Share this link with <strong>{lastInvitation.email}</strong> — it only works for that email.</p>
           </div>
         ) : null}
-        {callerRole !== "owner" ? (
+        {!callerRoles.includes("owner") ? (
           <button
             className="danger-button"
             type="button"

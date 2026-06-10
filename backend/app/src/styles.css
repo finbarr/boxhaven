@@ -355,6 +355,18 @@ select:focus {
   background: rgba(255, 252, 243, 0.78);
 }
 
+.link-button {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2f6f5c;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.58;

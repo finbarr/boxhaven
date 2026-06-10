@@ -130,7 +130,7 @@ Environment:
 - `DIGITALOCEAN_TAGS`: comma-separated tags, default `boxhaven`.
 - `DIGITALOCEAN_VPC_UUID`: optional VPC UUID.
 - `HCLOUD_TOKEN`: Hetzner Cloud token; setting it enables the Hetzner provider.
-- `HETZNER_LOCATION`: default `nbg1`. Other locations include `fsn1`, `hel1`, `ash`, `hil`, and `sin`.
+- `HETZNER_LOCATION`: default `nbg1`. The tier server types (`cpx22`/`cpx32`/`cpx42`) are also orderable in `fsn1`, `hel1`, and `sin`; the US locations `ash` and `hil` only offer other plans, so they need `HETZNER_SERVER_TYPE` set accordingly and creates without a tier.
 - `HETZNER_SERVER_TYPE`: default server type for creates without an explicit tier, default `cpx22`. Tiers map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large).
 - `HETZNER_IMAGE`: Hetzner image fallback, default `ubuntu-24.04`.
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.

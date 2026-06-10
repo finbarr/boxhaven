@@ -479,7 +479,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   app.post<{ Body: CreateImageRequest }>("/v1/images", async (request, reply) => {
     const auth = await requireAdmin(options, request, reply);
     if (!auth) return;
-    const machineName = normalizeMachineName(request.body?.machine || "");
+    const machineName = normalizeMachineName(bodyString(request.body?.machine));
     const nameError = validateName(machineName);
     if (nameError) return reply.code(400).send({ id: "bad_request", message: nameError });
     const machine = await options.store.getMachine(auth.userID, machineName);
@@ -489,7 +489,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (typeof provider.createImage !== "function") {
       return reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support snapshots` });
     }
-    const imageName = normalizeImageName(request.body?.name, machineName);
+    const imageName = normalizeImageName(bodyString(request.body?.name), machineName);
     const image = await provider.createImage(machine, imageName);
     return reply.code(202).send({ image: { ...image, provider: provider.name } });
   });
@@ -497,14 +497,14 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   app.post<{ Body: ActivateImageRequest }>("/v1/images/activate", async (request, reply) => {
     const auth = await requireAdmin(options, request, reply);
     if (!auth) return;
-    const provider = options.providers.get(request.body?.provider || options.providers.defaultName);
+    const provider = options.providers.get(bodyString(request.body?.provider) || options.providers.defaultName);
     if (!provider) {
       return reply.code(400).send({ id: "bad_request", message: "unknown provider" });
     }
     if (typeof provider.listImages !== "function") {
       return reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support managed images` });
     }
-    const id = request.body?.id?.trim() || "";
+    const id = bodyString(request.body?.id).trim();
     if (!id) return reply.code(400).send({ id: "bad_request", message: "image id is required" });
     const images = await provider.listImages();
     const image = images.find((candidate) => candidate.id === id);
@@ -525,7 +525,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   app.post<{ Body: DeactivateImageRequest }>("/v1/images/deactivate", async (request, reply) => {
     const auth = await requireAdmin(options, request, reply);
     if (!auth) return;
-    const provider = options.providers.get(request.body?.provider || options.providers.defaultName);
+    const provider = options.providers.get(bodyString(request.body?.provider) || options.providers.defaultName);
     if (!provider) {
       return reply.code(400).send({ id: "bad_request", message: "unknown provider" });
     }
@@ -675,13 +675,27 @@ async function listAccountMachines(options: BackendOptions, auth: AuthContext): 
 async function syncProviderMachines(options: BackendOptions, auth: AuthContext): Promise<void> {
   const known = await options.store.listMachinesForUser(auth.userID);
   for (const provider of options.providers.list()) {
-    const discovered = await provider.listMachines({
-      provider_name_suffix: providerUserHash(auth.userID),
-      ssh_user: defaultSSHUser,
-    });
+    let discovered: Array<{ machine: RemoteMachine; status?: string }>;
+    try {
+      discovered = await provider.listMachines({
+        provider_name_suffix: providerUserHash(auth.userID),
+        ssh_user: defaultSSHUser,
+      });
+    } catch (err) {
+      // One provider being down or misconfigured must not take out listing
+      // for machines on the remaining providers; known machines stay served
+      // from the store.
+      console.error(`provider ${provider.name} machine sync failed: ${(err as Error).message}`);
+      continue;
+    }
     for (const item of discovered) {
       const existing = await options.store.getMachine(auth.userID, item.machine.name)
         || known.find((machine) => providerMachineMatches(machine, item.machine));
+      if (existing?.provider && item.machine.provider && existing.provider !== item.machine.provider) {
+        // A discovered machine on another provider must not overwrite the
+        // record of a same-named machine that lives elsewhere.
+        continue;
+      }
       const name = existing?.name || item.machine.name;
       const machine = normalizeMachine(options, {
         ...existing,
@@ -709,18 +723,25 @@ function normalizeCreateRequest(body: CreateMachineRequest | undefined, provider
   const input = body || { name: "" };
   return {
     ...input,
-    name: normalizeMachineName(input.name || ""),
-    provider: input.provider?.trim().toLowerCase() || providerName,
-    provider_name: input.provider_name?.trim(),
-    tier: input.tier?.trim().toLowerCase(),
-    region: input.region?.trim().toLowerCase(),
-    image: input.image?.trim(),
+    name: normalizeMachineName(bodyString(input.name)),
+    provider: bodyString(input.provider).trim().toLowerCase() || providerName,
+    provider_name: bodyString(input.provider_name).trim() || undefined,
+    tier: bodyString(input.tier).trim().toLowerCase() || undefined,
+    region: bodyString(input.region).trim().toLowerCase() || undefined,
+    image: bodyString(input.image).trim() || undefined,
     image_bootstrapped: undefined,
-    ssh_user: input.ssh_user?.trim() || defaultSSHUser,
-    source_path: input.source_path?.trim(),
-    repo_url: input.repo_url?.trim(),
-    branch: input.branch?.trim(),
+    ssh_user: bodyString(input.ssh_user).trim() || defaultSSHUser,
+    source_path: bodyString(input.source_path).trim() || undefined,
+    repo_url: bodyString(input.repo_url).trim() || undefined,
+    branch: bodyString(input.branch).trim() || undefined,
   };
+}
+
+function bodyString(value: unknown): string {
+  if (typeof value === "string") return value;
+  // Hetzner image and server ids are numeric; accept them as strings.
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
 }
 
 function normalizeMachineName(name: string): string {
@@ -744,12 +765,13 @@ function normalizeMachine(options: BackendOptions, machine: RemoteMachine): Remo
   const previewHostname = preview && machine.user_id
     ? normalizeHostname(machine.preview_hostname || generatedPreviewHostname(machine.user_id, name, preview.baseDomain))
     : normalizeHostname(machine.preview_hostname || "");
-  const provider = options.providers.get(machine.provider) || options.providers.default;
+  const provider = options.providers.get(machine.provider);
+  const providerName = machine.provider || options.providers.defaultName;
   return {
     ...machine,
     name,
-    provider: machine.provider || provider.name,
-    provider_label: machine.provider_label || provider.label || provider.name,
+    provider: providerName,
+    provider_label: machine.provider_label || provider?.label || provider?.name || providerName,
     project_path: machine.project_path || defaultProjectPath,
     ssh_user: machine.ssh_user || defaultSSHUser,
     ssh_principal: machine.ssh_principal || sshPrincipalForMachine(machine),
