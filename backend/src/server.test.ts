@@ -7,20 +7,29 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createBackendAuth, migrateBackendAuth } from "./auth.js";
+import { ProviderRegistry } from "./providers.js";
 import { StateStore } from "./state.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
-import { CreateMachineRequest, MachineProvider, RemoteMachine, defaultSSHUser } from "./types.js";
+import { CreateMachineRequest, MachineImage, MachineProvider, RemoteMachine, defaultSSHUser } from "./types.js";
 
 const testSSHUserPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBxsqJzPGdcbwFthXVe2lyIImV6BwTw4Ee5WcoeczwJf test";
 
 class FakeProvider implements MachineProvider {
-  readonly name = "fake";
-  readonly label = "Fake Cloud";
+  readonly name: string;
+  readonly label: string;
   created: CreateMachineRequest[] = [];
   released: string[] = [];
   discovered: RemoteMachine[] = [];
+  images: MachineImage[] = [];
+  snapshotted: Array<{ machine: string; name: string }> = [];
+  deletedImages: string[] = [];
   publicIPv4 = "203.0.113.10";
+
+  constructor(name = "fake", label = "Fake Cloud") {
+    this.name = name;
+    this.label = label;
+  }
 
   async createMachine(request: CreateMachineRequest) {
     this.created.push(request);
@@ -61,6 +70,19 @@ class FakeProvider implements MachineProvider {
 
   async releaseMachine(machine: RemoteMachine) {
     this.released.push(machine.name);
+  }
+
+  async listImages() {
+    return this.images;
+  }
+
+  async createImage(machine: RemoteMachine, name: string) {
+    this.snapshotted.push({ machine: machine.name, name });
+    return { id: `img-${this.snapshotted.length}`, name, status: "creating" };
+  }
+
+  async deleteImage(imageID: string) {
+    this.deletedImages.push(imageID);
   }
 }
 
@@ -619,9 +641,215 @@ test("backend supports browser-approved CLI device login", async () => {
   assert.equal(whoami.json().user.email, "cli@example.com");
 });
 
-async function createTestBackend(email = "user@example.com", password = "password123", options: { previewTargetPort?: number; machineReadyTimeoutMs?: number } = {}) {
+test("backend routes machine operations to the machine's provider", async () => {
+  const second = new FakeProvider("fake2", "Fake Cloud 2");
+  const { app, provider, token } = await createTestBackend("multi@example.com", "password123", { extraProviders: [second] });
+  const headers = { authorization: `Bearer ${token}` };
+
+  const providersResponse = await app.inject({ method: "GET", url: "/v1/providers" });
+  assert.equal(providersResponse.statusCode, 200);
+  const providerNames = providersResponse.json().providers.map((info: { name: string }) => info.name);
+  assert.deepEqual(providerNames.sort(), ["fake", "fake2"]);
+  const defaultInfo = providersResponse.json().providers.find((info: { default?: boolean }) => info.default);
+  assert.equal(defaultInfo.name, "fake");
+
+  const created = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "foo", provider: "fake2" },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  assert.equal(created.json().machine.provider, "fake2");
+  assert.equal(created.json().machine.provider_label, "Fake Cloud 2");
+  assert.equal(second.created.length, 1);
+  assert.equal(provider.created.length, 0);
+
+  const deleted = await app.inject({ method: "DELETE", url: "/v1/machines/foo", headers });
+  assert.equal(deleted.statusCode, 204);
+  assert.deepEqual(second.released, ["foo"]);
+  assert.deepEqual(provider.released, []);
+
+  const unknown = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "bar", provider: "aws" },
+  });
+  assert.equal(unknown.statusCode, 400, unknown.body);
+  assert.match(unknown.body, /provider aws is not configured/);
+});
+
+test("backend gates image management behind admin emails", async () => {
+  const { app, token } = await createTestBackend("user@example.com", "password123", { adminEmails: ["admin@example.com"] });
+  const denied = await app.inject({ method: "GET", url: "/v1/images", headers: { authorization: `Bearer ${token}` } });
+  assert.equal(denied.statusCode, 403, denied.body);
+  assert.match(denied.body, /BOXHAVEN_ADMIN_EMAILS/);
+});
+
+test("backend lists, activates, and deletes provider images for admins", async () => {
+  const { app, provider, token } = await createTestBackend("admin@example.com", "password123", { adminEmails: ["Admin@example.com"] });
+  const headers = { authorization: `Bearer ${token}` };
+  provider.images = [
+    { id: "111", name: "boxhaven-remote-old", status: "available", bootstrapped: true },
+    { id: "222", name: "boxhaven-remote-new", status: "available", bootstrapped: true },
+  ];
+
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  assert.equal(whoami.json().admin, true);
+
+  const listed = await app.inject({ method: "GET", url: "/v1/images", headers });
+  assert.equal(listed.statusCode, 200, listed.body);
+  assert.equal(listed.json().images.length, 2);
+  assert.equal(listed.json().images.every((image: MachineImage) => image.active === false), true);
+
+  const activated = await app.inject({
+    method: "POST",
+    url: "/v1/images/activate",
+    headers,
+    payload: { provider: "fake", id: "222" },
+  });
+  assert.equal(activated.statusCode, 200, activated.body);
+  assert.equal(activated.json().active.id, "222");
+
+  const listedAfter = await app.inject({ method: "GET", url: "/v1/images", headers });
+  const activeImage = listedAfter.json().images.find((image: MachineImage) => image.active);
+  assert.equal(activeImage.id, "222");
+
+  const created = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "uses-active" },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  assert.equal(provider.created[0].image, "222");
+  assert.equal(provider.created[0].image_bootstrapped, true);
+
+  const deleteActive = await app.inject({ method: "DELETE", url: "/v1/images/222?provider=fake", headers });
+  assert.equal(deleteActive.statusCode, 409, deleteActive.body);
+
+  const deleteOld = await app.inject({ method: "DELETE", url: "/v1/images/111?provider=fake", headers });
+  assert.equal(deleteOld.statusCode, 204, deleteOld.body);
+  assert.deepEqual(provider.deletedImages, ["111"]);
+
+  const deactivated = await app.inject({ method: "POST", url: "/v1/images/deactivate", headers, payload: { provider: "fake" } });
+  assert.equal(deactivated.statusCode, 204, deactivated.body);
+
+  const explicitImage = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "explicit-image", image: "333", region: "fra1" },
+  });
+  assert.equal(explicitImage.statusCode, 201, explicitImage.body);
+  const explicitRequest = provider.created.find((request) => request.name === "explicit-image");
+  assert.equal(explicitRequest?.image, "333");
+  assert.equal(explicitRequest?.region, "fra1");
+  assert.equal(explicitRequest?.image_bootstrapped, undefined);
+});
+
+test("backend snapshots a machine into a managed image", async () => {
+  const { app, provider, token } = await createTestBackend("admin@example.com", "password123", { adminEmails: ["admin@example.com"] });
+  const headers = { authorization: `Bearer ${token}` };
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "golden" } });
+  assert.equal(created.statusCode, 201, created.body);
+
+  const snapshot = await app.inject({
+    method: "POST",
+    url: "/v1/images",
+    headers,
+    payload: { machine: "golden", name: "My Custom Build" },
+  });
+  assert.equal(snapshot.statusCode, 202, snapshot.body);
+  assert.equal(snapshot.json().image.name, "boxhaven-remote-my-custom-build");
+  assert.deepEqual(provider.snapshotted, [{ machine: "golden", name: "boxhaven-remote-my-custom-build" }]);
+});
+
+test("backend exposes team machines to members and destroy to admins", async () => {
+  const { app, provider, token } = await createTestBackend("owner@example.com");
+  const memberToken = await signUp(app, "member@example.com");
+  const ownerHeaders = { authorization: `Bearer ${token}` };
+  const memberHeaders = { authorization: `Bearer ${memberToken}` };
+
+  const orgCreated = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers: ownerHeaders,
+    payload: { name: "Acme", slug: "acme" },
+  });
+  assert.equal(orgCreated.statusCode, 200, orgCreated.body);
+  const orgID = orgCreated.json().id || orgCreated.json().organization?.id;
+  assert.equal(typeof orgID, "string");
+
+  const invited = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/invite-member",
+    headers: ownerHeaders,
+    payload: { email: "member@example.com", role: "member", organizationId: orgID },
+  });
+  assert.equal(invited.statusCode, 200, invited.body);
+  const invitationID = invited.json().id;
+  assert.equal(typeof invitationID, "string");
+
+  const accepted = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/accept-invitation",
+    headers: memberHeaders,
+    payload: { invitationId: invitationID },
+  });
+  assert.equal(accepted.statusCode, 200, accepted.body);
+
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "owner-box" } })).statusCode, 201);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: memberHeaders, payload: { name: "member-box" } })).statusCode, 201);
+
+  const memberView = await app.inject({ method: "GET", url: `/v1/orgs/${orgID}/machines`, headers: memberHeaders });
+  assert.equal(memberView.statusCode, 200, memberView.body);
+  assert.equal(memberView.json().role, "member");
+  const names = memberView.json().machines.map((machine: { name: string }) => machine.name).sort();
+  assert.deepEqual(names, ["member-box", "owner-box"]);
+  const ownerBox = memberView.json().machines.find((machine: { name: string }) => machine.name === "owner-box");
+  assert.equal(ownerBox.owner_email, "owner@example.com");
+  assert.equal(ownerBox.agent_token_hash, undefined);
+
+  const memberDestroy = await app.inject({
+    method: "DELETE",
+    url: `/v1/orgs/${orgID}/machines/${ownerBox.user_id}/owner-box`,
+    headers: memberHeaders,
+  });
+  assert.equal(memberDestroy.statusCode, 403, memberDestroy.body);
+
+  const memberBox = memberView.json().machines.find((machine: { name: string }) => machine.name === "member-box");
+  const ownerDestroy = await app.inject({
+    method: "DELETE",
+    url: `/v1/orgs/${orgID}/machines/${memberBox.user_id}/member-box`,
+    headers: ownerHeaders,
+  });
+  assert.equal(ownerDestroy.statusCode, 204, ownerDestroy.body);
+  assert.deepEqual(provider.released, ["member-box"]);
+
+  const outsiderToken = await signUp(app, "outsider@example.com");
+  const outsiderView = await app.inject({
+    method: "GET",
+    url: `/v1/orgs/${orgID}/machines`,
+    headers: { authorization: `Bearer ${outsiderToken}` },
+  });
+  assert.equal(outsiderView.statusCode, 403, outsiderView.body);
+});
+
+async function createTestBackend(
+  email = "user@example.com",
+  password = "password123",
+  options: {
+    previewTargetPort?: number;
+    machineReadyTimeoutMs?: number;
+    adminEmails?: string[];
+    extraProviders?: MachineProvider[];
+  } = {},
+) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
   const provider = new FakeProvider();
+  const providers = new ProviderRegistry([provider, ...(options.extraProviders || [])], provider.name);
   const store = new StateStore(join(dir, "state.json"), provider.name);
   const sshCA = new SSHCertificateAuthority(join(dir, "ssh_ca_ed25519"));
   const authOptions = {
@@ -634,10 +862,12 @@ async function createTestBackend(email = "user@example.com", password = "passwor
   const auth = createBackendAuth(authOptions);
   const app = createBackend({
     auth,
-    provider,
+    providers,
     store,
     sshCA,
+    adminEmails: options.adminEmails,
     apiPublicURL: "https://api.hosted.test",
+    appPublicURL: "https://app.hosted.test",
     previewBaseDomain: "hosted.test",
     previewTargetPort: options.previewTargetPort,
     machineReadyTimeoutMs: options.machineReadyTimeoutMs ?? 0,

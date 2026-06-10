@@ -6,15 +6,18 @@ import websocket from "@fastify/websocket";
 import Fastify, { FastifyInstance } from "fastify";
 import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
+import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
+import { ProviderRegistry, providerInfo } from "./providers.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { StateStore } from "./state.js";
-import { CreateMachineRequest, MachineProvider, MachineProviderInfo, RemoteMachine, defaultProjectPath, defaultSSHUser } from "./types.js";
+import { ActiveImage, CreateMachineRequest, MachineImage, MachineProvider, RemoteMachine, defaultProjectPath, defaultSSHUser } from "./types.js";
 
 export type BackendOptions = {
   auth: BackendAuth;
-  provider: MachineProvider;
+  providers: ProviderRegistry;
   store: StateStore;
   sshCA: SSHCertificateAuthority;
+  adminEmails?: string[];
   appDir?: string;
   apiPublicURL?: string;
   appPublicURL?: string;
@@ -87,6 +90,32 @@ type SSHCertificateRequest = {
   ttl_seconds?: number;
 };
 
+type CreateImageRequest = {
+  machine?: string;
+  name?: string;
+};
+
+type ActivateImageRequest = {
+  provider?: string;
+  id?: string;
+};
+
+type DeactivateImageRequest = {
+  provider?: string;
+};
+
+type OrgMachine = RemoteMachine & {
+  owner_email?: string;
+  owner_name?: string;
+};
+
+type OrgMember = {
+  id: string;
+  userId: string;
+  role: string;
+  user?: { email?: string; name?: string };
+};
+
 const namePattern = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const agentTokenBytes = 48;
 const agentRPCDefaultTimeout = 60_000;
@@ -106,7 +135,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   app.get("/healthz", async () => "ok\n");
 
   app.get("/v1/providers", async () => ({
-    providers: [providerInfo(options.provider)],
+    providers: options.providers.list().map((provider) => providerInfo(provider, options.providers.defaultName)),
   }));
 
   app.get<{ Querystring: { domain?: string } }>("/v1/preview/tls-check", async (request, reply) => {
@@ -126,7 +155,10 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!auth) return;
     return {
       authenticated: true,
-      provider: options.provider.name,
+      provider: options.providers.defaultName,
+      providers: options.providers.names(),
+      admin: isAdmin(options, auth),
+      app_url: options.appPublicURL || "",
       user: {
         id: auth.userID,
         email: auth.email,
@@ -153,15 +185,23 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   app.post<{ Body: CreateMachineRequest }>("/v1/machines", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
-    const body = normalizeCreateRequest(request.body, options.provider.name);
-    if (body.provider && body.provider !== options.provider.name) {
-      return reply.code(400).send({ id: "bad_request", message: `provider ${body.provider} is not configured` });
+    const body = normalizeCreateRequest(request.body, options.providers.defaultName);
+    const provider = options.providers.get(body.provider);
+    if (!provider) {
+      return reply.code(400).send({
+        id: "bad_request",
+        message: `provider ${body.provider} is not configured (configured: ${options.providers.names().join(", ")})`,
+      });
     }
     const error = validateName(body.name);
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
     const tierError = validateMachineTier(body.tier);
     if (tierError) return reply.code(400).send({ id: "bad_request", message: tierError });
-    return createMachine(options, agents, auth, body, reply);
+    const imageError = validateCreateOverride("image", body.image);
+    if (imageError) return reply.code(400).send({ id: "bad_request", message: imageError });
+    const regionError = validateCreateOverride("region", body.region);
+    if (regionError) return reply.code(400).send({ id: "bad_request", message: regionError });
+    return createMachine(options, agents, auth, provider, body, reply);
   });
 
   app.get("/v1/machines", async (request, reply) => {
@@ -184,7 +224,9 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       existing = await options.store.getMachine(auth.userID, name);
     }
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
-    const refreshed = await options.provider.getMachine(existing);
+    const provider = providerForMachine(options, existing, reply);
+    if (!provider) return;
+    const refreshed = await provider.getMachine(existing);
     const machine = normalizeMachine(options, { ...existing, ...refreshed.machine, name, user_id: auth.userID });
     await options.store.putMachine(machine);
     return { machine: publicMachine(machine), status: refreshed.status || "leased" };
@@ -202,7 +244,9 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       existing = await options.store.getMachine(auth.userID, name);
     }
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
-    const refreshed = await options.provider.getMachine(existing);
+    const provider = providerForMachine(options, existing, reply);
+    if (!provider) return;
+    const refreshed = await provider.getMachine(existing);
     const machine = normalizeMachine(options, { ...existing, ...refreshed.machine, name, user_id: auth.userID });
     await options.store.putMachine(machine);
     return {
@@ -398,8 +442,152 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       existing = await options.store.getMachine(auth.userID, name);
     }
     if (existing) {
-      await options.provider.releaseMachine(existing);
+      const provider = providerForMachine(options, existing, reply);
+      if (!provider) return;
+      await provider.releaseMachine(existing);
       await options.store.deleteMachine(auth.userID, name);
+    }
+    return reply.code(204).send();
+  });
+
+  app.get<{ Querystring: { provider?: string } }>("/v1/images", async (request, reply) => {
+    const auth = await requireAdmin(options, request, reply);
+    if (!auth) return;
+    const providers = imageProvidersForQuery(options, request.query.provider, reply);
+    if (!providers) return;
+    const images: MachineImage[] = [];
+    for (const provider of providers) {
+      const active = await options.store.getActiveImage(provider.name);
+      const listed = await (provider.listImages as () => Promise<MachineImage[]>)();
+      for (const image of listed) {
+        images.push({ ...image, provider: provider.name, active: !!active && active.id === image.id });
+      }
+      if (active && !listed.some((image) => image.id === active.id)) {
+        images.push({
+          id: active.id,
+          name: active.name || active.id,
+          provider: provider.name,
+          status: "missing",
+          bootstrapped: active.bootstrapped,
+          active: true,
+        });
+      }
+    }
+    return { images };
+  });
+
+  app.post<{ Body: CreateImageRequest }>("/v1/images", async (request, reply) => {
+    const auth = await requireAdmin(options, request, reply);
+    if (!auth) return;
+    const machineName = normalizeMachineName(request.body?.machine || "");
+    const nameError = validateName(machineName);
+    if (nameError) return reply.code(400).send({ id: "bad_request", message: nameError });
+    const machine = await options.store.getMachine(auth.userID, machineName);
+    if (!machine) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+    const provider = providerForMachine(options, machine, reply);
+    if (!provider) return;
+    if (typeof provider.createImage !== "function") {
+      return reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support snapshots` });
+    }
+    const imageName = normalizeImageName(request.body?.name, machineName);
+    const image = await provider.createImage(machine, imageName);
+    return reply.code(202).send({ image: { ...image, provider: provider.name } });
+  });
+
+  app.post<{ Body: ActivateImageRequest }>("/v1/images/activate", async (request, reply) => {
+    const auth = await requireAdmin(options, request, reply);
+    if (!auth) return;
+    const provider = options.providers.get(request.body?.provider || options.providers.defaultName);
+    if (!provider) {
+      return reply.code(400).send({ id: "bad_request", message: "unknown provider" });
+    }
+    if (typeof provider.listImages !== "function") {
+      return reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support managed images` });
+    }
+    const id = request.body?.id?.trim() || "";
+    if (!id) return reply.code(400).send({ id: "bad_request", message: "image id is required" });
+    const images = await provider.listImages();
+    const image = images.find((candidate) => candidate.id === id);
+    if (!image) return reply.code(404).send({ id: "not_found", message: `image ${id} was not found on ${provider.name}` });
+    if (image.status && image.status !== "available") {
+      return reply.code(409).send({ id: "not_ready", message: `image ${id} is not available yet (status: ${image.status})` });
+    }
+    const active: ActiveImage = {
+      id: image.id,
+      name: image.name,
+      bootstrapped: image.bootstrapped ?? imageNameIsBoxHavenRemote(image.name),
+      activated_at: new Date().toISOString(),
+    };
+    await options.store.setActiveImage(provider.name, active);
+    return { provider: provider.name, active };
+  });
+
+  app.post<{ Body: DeactivateImageRequest }>("/v1/images/deactivate", async (request, reply) => {
+    const auth = await requireAdmin(options, request, reply);
+    if (!auth) return;
+    const provider = options.providers.get(request.body?.provider || options.providers.defaultName);
+    if (!provider) {
+      return reply.code(400).send({ id: "bad_request", message: "unknown provider" });
+    }
+    await options.store.clearActiveImage(provider.name);
+    return reply.code(204).send();
+  });
+
+  app.delete<{ Params: { id: string }; Querystring: { provider?: string } }>("/v1/images/:id", async (request, reply) => {
+    const auth = await requireAdmin(options, request, reply);
+    if (!auth) return;
+    const provider = options.providers.get(request.query.provider || options.providers.defaultName);
+    if (!provider) {
+      return reply.code(400).send({ id: "bad_request", message: "unknown provider" });
+    }
+    if (typeof provider.deleteImage !== "function") {
+      return reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support managed images` });
+    }
+    const id = request.params.id.trim();
+    const active = await options.store.getActiveImage(provider.name);
+    if (active && active.id === id) {
+      return reply.code(409).send({ id: "conflict", message: "image is active; deactivate it or activate another image first" });
+    }
+    await provider.deleteImage(id);
+    return reply.code(204).send();
+  });
+
+  app.get<{ Params: { orgID: string } }>("/v1/orgs/:orgID/machines", async (request, reply) => {
+    const context = await requireOrgMembership(options, request, reply, request.params.orgID);
+    if (!context) return;
+    const machines: OrgMachine[] = [];
+    for (const member of context.members) {
+      const owned = await options.store.listMachinesForUser(member.userId);
+      for (const machine of owned) {
+        machines.push({
+          ...publicMachine(normalizeMachine(options, machine)),
+          owner_email: member.user?.email,
+          owner_name: member.user?.name,
+        });
+      }
+    }
+    return { machines, role: context.role };
+  });
+
+  app.delete<{ Params: { orgID: string; userID: string; name: string } }>("/v1/orgs/:orgID/machines/:userID/:name", async (request, reply) => {
+    const context = await requireOrgMembership(options, request, reply, request.params.orgID);
+    if (!context) return;
+    if (!orgRoleCanManage(context.role)) {
+      return reply.code(403).send({ id: "forbidden", message: "destroying team machines requires the owner or admin role" });
+    }
+    const targetUserID = request.params.userID;
+    if (!context.members.some((member) => member.userId === targetUserID)) {
+      return reply.code(404).send({ id: "not_found", message: "machine owner is not a member of this team" });
+    }
+    const name = normalizeMachineName(request.params.name);
+    const error = validateName(name);
+    if (error) return reply.code(400).send({ id: "bad_request", message: error });
+    const existing = await options.store.getMachine(targetUserID, name);
+    if (existing) {
+      const provider = providerForMachine(options, existing, reply);
+      if (!provider) return;
+      await provider.releaseMachine(existing);
+      await options.store.deleteMachine(targetUserID, name);
     }
     return reply.code(204).send();
   });
@@ -415,6 +603,7 @@ async function createMachine(
   options: BackendOptions,
   agents: Map<string, AgentConnection>,
   auth: AuthContext,
+  provider: MachineProvider,
   body: CreateMachineRequest,
   reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
 ) {
@@ -430,6 +619,14 @@ async function createMachine(
   body.ssh_user_ca_public_key = await options.sshCA.publicKey();
   body.ssh_authorized_principal = sshPrincipal;
 
+  if (!body.image) {
+    const active = await options.store.getActiveImage(provider.name);
+    if (active) {
+      body.image = active.id;
+      body.image_bootstrapped = active.bootstrapped;
+    }
+  }
+
   await syncProviderMachines(options, auth);
   const existing = await options.store.getMachine(auth.userID, body.name);
   if (existing) {
@@ -438,7 +635,7 @@ async function createMachine(
 
   let provisioned: { machine: RemoteMachine; status?: string };
   try {
-    provisioned = await options.provider.createMachine(body);
+    provisioned = await provider.createMachine(body);
   } catch (err) {
     if ((err as Error).message.includes("already exists")) {
       return reply.code(409).send(machineNameConflict(body.name));
@@ -476,29 +673,32 @@ async function listAccountMachines(options: BackendOptions, auth: AuthContext): 
 }
 
 async function syncProviderMachines(options: BackendOptions, auth: AuthContext): Promise<void> {
-  const discovered = await options.provider.listMachines({
-    provider_name_suffix: providerUserHash(auth.userID),
-    ssh_user: defaultSSHUser,
-  });
   const known = await options.store.listMachinesForUser(auth.userID);
-  for (const item of discovered) {
-    const existing = await options.store.getMachine(auth.userID, item.machine.name)
-      || known.find((machine) => providerMachineMatches(machine, item.machine));
-    const name = existing?.name || item.machine.name;
-    const machine = normalizeMachine(options, {
-      ...existing,
-      ...item.machine,
-      name,
-      user_id: auth.userID,
+  for (const provider of options.providers.list()) {
+    const discovered = await provider.listMachines({
+      provider_name_suffix: providerUserHash(auth.userID),
+      ssh_user: defaultSSHUser,
     });
-    await options.store.putMachine(machine);
-    const index = known.findIndex((knownMachine) => knownMachine.name === machine.name);
-    if (index === -1) known.push(machine);
-    else known[index] = machine;
+    for (const item of discovered) {
+      const existing = await options.store.getMachine(auth.userID, item.machine.name)
+        || known.find((machine) => providerMachineMatches(machine, item.machine));
+      const name = existing?.name || item.machine.name;
+      const machine = normalizeMachine(options, {
+        ...existing,
+        ...item.machine,
+        name,
+        user_id: auth.userID,
+      });
+      await options.store.putMachine(machine);
+      const index = known.findIndex((knownMachine) => knownMachine.name === machine.name);
+      if (index === -1) known.push(machine);
+      else known[index] = machine;
+    }
   }
 }
 
 function providerMachineMatches(left: RemoteMachine, right: RemoteMachine): boolean {
+  if (left.provider && right.provider && left.provider !== right.provider) return false;
   return !!(
     (left.provider_id && right.provider_id && left.provider_id === right.provider_id)
     || (left.provider_name && right.provider_name && left.provider_name === right.provider_name)
@@ -513,6 +713,9 @@ function normalizeCreateRequest(body: CreateMachineRequest | undefined, provider
     provider: input.provider?.trim().toLowerCase() || providerName,
     provider_name: input.provider_name?.trim(),
     tier: input.tier?.trim().toLowerCase(),
+    region: input.region?.trim().toLowerCase(),
+    image: input.image?.trim(),
+    image_bootstrapped: undefined,
     ssh_user: input.ssh_user?.trim() || defaultSSHUser,
     source_path: input.source_path?.trim(),
     repo_url: input.repo_url?.trim(),
@@ -541,11 +744,12 @@ function normalizeMachine(options: BackendOptions, machine: RemoteMachine): Remo
   const previewHostname = preview && machine.user_id
     ? normalizeHostname(machine.preview_hostname || generatedPreviewHostname(machine.user_id, name, preview.baseDomain))
     : normalizeHostname(machine.preview_hostname || "");
+  const provider = options.providers.get(machine.provider) || options.providers.default;
   return {
     ...machine,
     name,
-    provider: machine.provider || options.provider.name,
-    provider_label: machine.provider_label || options.provider.label || options.provider.name,
+    provider: machine.provider || provider.name,
+    provider_label: machine.provider_label || provider.label || provider.name,
     project_path: machine.project_path || defaultProjectPath,
     ssh_user: machine.ssh_user || defaultSSHUser,
     ssh_principal: machine.ssh_principal || sshPrincipalForMachine(machine),
@@ -564,12 +768,114 @@ function publicMachine(machine: RemoteMachine): RemoteMachine {
   return safe as RemoteMachine;
 }
 
-function providerInfo(provider: MachineProvider): MachineProviderInfo {
-  return provider.info || {
-    name: provider.name,
-    label: provider.label || provider.name,
-    capabilities: ["create", "destroy", "list", "connect"],
+function providerForMachine(
+  options: BackendOptions,
+  machine: RemoteMachine,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+): MachineProvider | undefined {
+  const provider = options.providers.get(machine.provider);
+  if (!provider) {
+    reply.code(409).send({
+      id: "provider_not_configured",
+      message: `machine ${machine.name} uses provider ${machine.provider}, which is not configured on this backend`,
+    });
+    return undefined;
+  }
+  return provider;
+}
+
+function isAdmin(options: BackendOptions, auth: AuthContext): boolean {
+  const admins = (options.adminEmails || []).map((email) => email.trim().toLowerCase()).filter(Boolean);
+  return admins.includes(auth.email.trim().toLowerCase());
+}
+
+async function requireAdmin(
+  options: BackendOptions,
+  request: { headers: Record<string, string | string[] | undefined> },
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+): Promise<AuthContext | undefined> {
+  const auth = await requireAuth(options, request, reply);
+  if (!auth) return undefined;
+  if (!isAdmin(options, auth)) {
+    reply.code(403).send({
+      id: "forbidden",
+      message: "image management requires admin access; add your email to BOXHAVEN_ADMIN_EMAILS on the backend",
+    });
+    return undefined;
+  }
+  return auth;
+}
+
+function imageProvidersForQuery(
+  options: BackendOptions,
+  providerName: string | undefined,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+): MachineProvider[] | undefined {
+  if (providerName) {
+    const provider = options.providers.get(providerName);
+    if (!provider) {
+      reply.code(400).send({ id: "bad_request", message: "unknown provider" });
+      return undefined;
+    }
+    if (typeof provider.listImages !== "function") {
+      reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support managed images` });
+      return undefined;
+    }
+    return [provider];
+  }
+  return options.providers.list().filter((provider) => typeof provider.listImages === "function");
+}
+
+function normalizeImageName(name: string | undefined, machineName: string): string {
+  const fallback = `boxhaven-remote-${machineName}-${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}`;
+  const cleaned = (name || "").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120);
+  if (!cleaned) return fallback;
+  return imageNameIsBoxHavenRemote(cleaned) ? cleaned : `boxhaven-remote-${cleaned}`;
+}
+
+function validateCreateOverride(field: "image" | "region", value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (value.length > 128 || !/^[a-z0-9][a-z0-9._-]*$/i.test(value)) {
+    return `invalid machine ${field}`;
+  }
+  return undefined;
+}
+
+function orgRoleCanManage(role: string): boolean {
+  const roles = role.split(",").map((part) => part.trim().toLowerCase());
+  return roles.includes("owner") || roles.includes("admin");
+}
+
+async function requireOrgMembership(
+  options: BackendOptions,
+  request: { headers: Record<string, string | string[] | undefined> },
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+  orgID: string,
+): Promise<{ auth: AuthContext; members: OrgMember[]; role: string } | undefined> {
+  const auth = await requireAuth(options, request, reply);
+  if (!auth) return undefined;
+  const api = options.auth.api as unknown as {
+    listMembers: (input: { query: { organizationId: string; limit?: number }; headers: Headers }) => Promise<
+      { members: OrgMember[] } | OrgMember[]
+    >;
   };
+  let response: { members: OrgMember[] } | OrgMember[];
+  try {
+    response = await api.listMembers({
+      query: { organizationId: orgID, limit: 500 },
+      headers: toHeaders(request.headers),
+    });
+  } catch (err) {
+    reply.code(403).send({ id: "forbidden", message: (err as Error).message || "not a member of this team" });
+    return undefined;
+  }
+  const members = Array.isArray(response) ? response : response.members || [];
+  const self = members.find((member) => member.userId === auth.userID);
+  if (!self) {
+    reply.code(403).send({ id: "forbidden", message: "not a member of this team" });
+    return undefined;
+  }
+  return { auth, members, role: self.role || "member" };
 }
 
 function validateName(name: string): string | undefined {

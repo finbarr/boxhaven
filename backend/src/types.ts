@@ -31,6 +31,9 @@ export type CreateMachineRequest = {
   provider?: string;
   provider_name?: string;
   tier?: string;
+  region?: string;
+  image?: string;
+  image_bootstrapped?: boolean;
   ssh_user?: string;
   source_path?: string;
   repo_url?: string;
@@ -46,10 +49,24 @@ export type ListProviderMachinesRequest = {
   ssh_user?: string;
 };
 
+export type MachineImage = {
+  id: string;
+  name: string;
+  provider?: string;
+  status?: string;
+  created_at?: string;
+  size_gb?: number;
+  bootstrapped?: boolean;
+  active?: boolean;
+};
+
+export type MachineProviderCapability = "create" | "destroy" | "list" | "connect" | "images" | "snapshot";
+
 export type MachineProviderInfo = {
   name: string;
   label: string;
-  capabilities: Array<"create" | "destroy" | "list" | "connect">;
+  capabilities: MachineProviderCapability[];
+  default?: boolean;
 };
 
 export type MachineProvider = {
@@ -60,15 +77,26 @@ export type MachineProvider = {
   getMachine(machine: RemoteMachine): Promise<{ machine: RemoteMachine; status?: string }>;
   listMachines(request: ListProviderMachinesRequest): Promise<Array<{ machine: RemoteMachine; status?: string }>>;
   releaseMachine(machine: RemoteMachine): Promise<void>;
+  listImages?(): Promise<MachineImage[]>;
+  createImage?(machine: RemoteMachine, name: string): Promise<MachineImage>;
+  deleteImage?(imageID: string): Promise<void>;
+};
+
+export type ActiveImage = {
+  id: string;
+  name?: string;
+  bootstrapped?: boolean;
+  activated_at?: string;
 };
 
 export type BackendState = {
   version: number;
   provider: string;
   machines: Record<string, RemoteMachine>;
+  active_images?: Record<string, ActiveImage>;
   updated_at?: string;
 };
 
-export const stateVersion = 3;
+export const stateVersion = 4;
 export const defaultProjectPath = "/opt/boxhaven/project";
 export const defaultSSHUser = "boxhaven";

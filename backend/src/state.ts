@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { BackendState, RemoteMachine, stateVersion } from "./types.js";
+import { ActiveImage, BackendState, RemoteMachine, stateVersion } from "./types.js";
 
 export class StateStore {
   private state: BackendState | undefined;
@@ -25,6 +25,7 @@ export class StateStore {
           version: parsed.version || stateVersion,
           provider: parsed.provider || this.provider,
           machines: parsed.machines || {},
+          active_images: parsed.active_images || {},
           updated_at: parsed.updated_at,
         };
       }
@@ -71,6 +72,23 @@ export class StateStore {
     });
   }
 
+  async getActiveImage(provider: string): Promise<ActiveImage | undefined> {
+    const state = await this.load();
+    return state.active_images?.[provider];
+  }
+
+  async setActiveImage(provider: string, image: ActiveImage): Promise<void> {
+    await this.update((state) => {
+      state.active_images = { ...(state.active_images || {}), [provider]: image };
+    });
+  }
+
+  async clearActiveImage(provider: string): Promise<void> {
+    await this.update((state) => {
+      if (state.active_images) delete state.active_images[provider];
+    });
+  }
+
   private async update(fn: (state: BackendState) => void): Promise<void> {
     const state = await this.load();
     fn(state);
@@ -88,6 +106,7 @@ export class StateStore {
     return {
       ...this.state,
       machines: { ...this.state.machines },
+      active_images: { ...(this.state.active_images || {}) },
     };
   }
 }

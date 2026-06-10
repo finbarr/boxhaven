@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { digitalOceanAgentUserData, digitalOceanImageForCreate, digitalOceanImageIsBoxHavenRemote, digitalOceanProviderFromEnv, digitalOceanSizeForTier } from "./digitalocean.js";
+import { agentCloudInitUserData } from "./cloudinit.js";
+import { digitalOceanImageForCreate, digitalOceanImageIsBoxHavenRemote, digitalOceanProviderFromEnv, digitalOceanSizeForTier } from "./digitalocean.js";
 import { defaultSSHUser } from "./types.js";
 
 test("DigitalOcean provider prefers generic BoxHaven image override", () => {
@@ -108,8 +109,8 @@ test("DigitalOcean creates machines with a throwaway no-login SSH key", async ()
   }
 });
 
-test("DigitalOcean agent user data carries token credentials and SSH CA trust", () => {
-  const userData = digitalOceanAgentUserData({
+test("agent cloud-init user data carries token credentials and SSH CA trust", () => {
+  const userData = agentCloudInitUserData({
     name: "victim-name",
     agent_token: "test-token",
     agent_backend_url: "https://api.example.com/",

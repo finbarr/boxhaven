@@ -4,7 +4,16 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { CreateMachineRequest, ListProviderMachinesRequest, MachineProvider, MachineProviderInfo, RemoteMachine, defaultSSHUser } from "./types.js";
+import { agentCloudInitUserData, imageNameIsBoxHavenRemote, machineResourceName, sanitizeResourceName } from "./cloudinit.js";
+import {
+  CreateMachineRequest,
+  ListProviderMachinesRequest,
+  MachineImage,
+  MachineProvider,
+  MachineProviderInfo,
+  RemoteMachine,
+  defaultSSHUser,
+} from "./types.js";
 
 const execFileAsync = promisify(execFile);
 const apiBaseURL = "https://api.digitalocean.com";
@@ -47,6 +56,22 @@ type DropletList = {
   };
 };
 
+type Snapshot = {
+  id: string | number;
+  name?: string;
+  created_at?: string;
+  size_gigabytes?: number;
+};
+
+type SnapshotList = {
+  snapshots: Snapshot[];
+  links?: {
+    pages?: {
+      next?: string;
+    };
+  };
+};
+
 type SSHKey = {
   id: number;
 };
@@ -57,7 +82,7 @@ export class DigitalOceanProvider implements MachineProvider {
   readonly info: MachineProviderInfo = {
     name: this.name,
     label: this.label,
-    capabilities: ["create", "destroy", "list", "connect"],
+    capabilities: ["create", "destroy", "list", "connect", "images", "snapshot"],
   };
   private readonly apiURL: string;
 
@@ -72,7 +97,8 @@ export class DigitalOceanProvider implements MachineProvider {
       throw new Error(`DigitalOcean droplet for ${request.name} already exists`);
     }
 
-    const agentUserData = digitalOceanAgentUserData(request);
+    const agentUserData = agentCloudInitUserData(request);
+    const image = (request.image?.trim() || this.config.image).trim();
     let throwawaySSHKeyID = 0;
     try {
       throwawaySSHKeyID = await this.createThrowawaySSHKey(providerName);
@@ -80,9 +106,9 @@ export class DigitalOceanProvider implements MachineProvider {
         method: "POST",
         body: {
           name: machineResourceName(providerName),
-          region: this.config.region,
+          region: request.region?.trim() || this.config.region,
           size: digitalOceanSizeForRequest(request, this.config),
-          image: digitalOceanImageForCreate(this.config.image),
+          image: digitalOceanImageForCreate(image),
           ssh_keys: [throwawaySSHKeyID],
           tags: this.machineTags(providerName),
           monitoring: true,
@@ -91,7 +117,9 @@ export class DigitalOceanProvider implements MachineProvider {
         },
       });
       const ready = publicIPv4(droplet.droplet) ? droplet.droplet : await this.waitForAddress(droplet.droplet.id);
-      return { machine: this.machineFromDroplet(request.name, providerName, request.ssh_user, ready), status: ready.status };
+      const machine = this.machineFromDroplet(request.name, providerName, request.ssh_user, ready);
+      if (request.image_bootstrapped) machine.bootstrap_complete = true;
+      return { machine, status: ready.status };
     } finally {
       if (throwawaySSHKeyID) await this.deleteSSHKey(throwawaySSHKeyID);
     }
@@ -126,6 +154,50 @@ export class DigitalOceanProvider implements MachineProvider {
     const id = machine.provider_id || (await this.findDroplet(machine.provider_name || machine.name))?.id;
     if (!id) return;
     await this.request(`/v2/droplets/${encodeURIComponent(String(id))}`, { method: "DELETE" });
+  }
+
+  async listImages(): Promise<MachineImage[]> {
+    const images: MachineImage[] = [];
+    let path = "/v2/snapshots?resource_type=droplet&per_page=200";
+    while (path) {
+      const response = await this.request<SnapshotList>(path);
+      for (const snapshot of response.snapshots) {
+        if (!imageNameIsBoxHavenRemote(snapshot.name)) continue;
+        images.push({
+          id: String(snapshot.id),
+          name: snapshot.name || String(snapshot.id),
+          provider: this.name,
+          status: "available",
+          created_at: snapshot.created_at,
+          size_gb: snapshot.size_gigabytes,
+          bootstrapped: true,
+        });
+      }
+      path = nextPath(response.links?.pages?.next);
+    }
+    return images;
+  }
+
+  async createImage(machine: RemoteMachine, name: string): Promise<MachineImage> {
+    const id = machine.provider_id || (await this.findDroplet(machine.provider_name || machine.name))?.id;
+    if (!id) throw new Error(`DigitalOcean droplet for ${machine.name} was not found`);
+    await this.request(`/v2/droplets/${encodeURIComponent(String(id))}/actions`, {
+      method: "POST",
+      body: { type: "snapshot", name },
+    });
+    // DigitalOcean snapshot creation is asynchronous and the image ID is not
+    // known until the action completes; the image appears in listImages later.
+    return {
+      id: "",
+      name,
+      provider: this.name,
+      status: "creating",
+      bootstrapped: imageNameIsBoxHavenRemote(name),
+    };
+  }
+
+  async deleteImage(imageID: string): Promise<void> {
+    await this.request(`/v2/images/${encodeURIComponent(imageID)}`, { method: "DELETE" });
   }
 
   private async findDroplet(machineName: string): Promise<Droplet | undefined> {
@@ -171,7 +243,7 @@ export class DigitalOceanProvider implements MachineProvider {
       const created = await this.request<{ ssh_key: SSHKey }>("/v2/account/keys", {
         method: "POST",
         body: {
-          name: `boxhaven-no-login-${sanitize(providerName)}-${hash}`,
+          name: `boxhaven-no-login-${sanitizeResourceName(providerName)}-${hash}`,
           public_key: publicKey,
         },
       });
@@ -249,8 +321,8 @@ export function digitalOceanProviderFromEnv(env = process.env): DigitalOceanProv
     token,
     region: env.DIGITALOCEAN_REGION || "nyc3",
     size: env.DIGITALOCEAN_SIZE || digitalOceanDefaultSize,
-    image: env.BOXHAVEN_REMOTE_IMAGE || env.DIGITALOCEAN_IMAGE || "ubuntu-24-04-x64",
-    imageBootstrapped: Boolean(env.BOXHAVEN_REMOTE_IMAGE),
+    image: env.BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN || env.BOXHAVEN_REMOTE_IMAGE || env.DIGITALOCEAN_IMAGE || "ubuntu-24-04-x64",
+    imageBootstrapped: Boolean(env.BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN || env.BOXHAVEN_REMOTE_IMAGE),
     tags: splitList(env.DIGITALOCEAN_TAGS, ["boxhaven"]),
     vpcUUID: env.DIGITALOCEAN_VPC_UUID,
     apiURL: env.BOXHAVEN_DIGITALOCEAN_API_URL,
@@ -272,87 +344,15 @@ export function digitalOceanImageForCreate(image: string): string | number {
 }
 
 export function digitalOceanImageIsBoxHavenRemote(image: string | undefined): boolean {
-  return Boolean(image?.trim().toLowerCase().startsWith("boxhaven-remote-"));
-}
-
-export function digitalOceanAgentUserData(request: CreateMachineRequest): string {
-  const token = request.agent_token?.trim();
-  const backendURL = request.agent_backend_url?.trim().replace(/\/+$/, "");
-  const userCA = request.ssh_user_ca_public_key?.trim();
-  const principal = request.ssh_authorized_principal?.trim();
-  if (!token || !backendURL) return "";
-  return `#cloud-config
-disable_root: false
-ssh_pwauth: false
-write_files:
-  - path: /etc/boxhaven/agent.env
-    owner: root:root
-    permissions: '0600'
-    content: |
-      ${shellEnvAssignment("BOXHAVEN_AGENT_TOKEN", token)}
-      ${shellEnvAssignment("BOXHAVEN_AGENT_BACKEND_URL", backendURL)}
-runcmd:
-  - [sh, -lc, ${cloudInitSingleQuote(ensureSudoUserCommand(request.ssh_user))}]
-  - [sh, -lc, ${cloudInitSingleQuote(sshCertificateTrustCommand(userCA, principal, request.ssh_user))}]
-  - [sh, -lc, 'systemctl enable --now boxhaven-agent || true']
-`;
-}
-
-function shellEnvAssignment(name: string, value: string): string {
-  return `${name}='${value.replace(/'/g, "'\"'\"'")}'`;
-}
-
-function ensureSudoUserCommand(sshUser: string | undefined): string {
-  const user = safeLinuxUser(sshUser || defaultSSHUser);
-  if (user === "root") return "true";
-  return [
-    `if ! id -u ${shellSingleQuote(user)} >/dev/null 2>&1; then useradd -m -s /bin/bash ${shellSingleQuote(user)}; fi`,
-    `usermod -aG sudo ${shellSingleQuote(user)} || true`,
-    `if getent group docker >/dev/null 2>&1; then usermod -aG docker ${shellSingleQuote(user)} || true; fi`,
-    `printf '%s\\n' ${shellSingleQuote(`${user} ALL=(ALL) NOPASSWD:ALL`)} > /etc/sudoers.d/${shellSingleQuote(user)}`,
-    `chmod 0440 /etc/sudoers.d/${shellSingleQuote(user)}`,
-    `install -d -o ${shellSingleQuote(user)} -g ${shellSingleQuote(user)} -m 0755 /home/${shellSingleQuote(user)}`,
-    `install -d -o ${shellSingleQuote(user)} -g ${shellSingleQuote(user)} -m 0755 /opt/boxhaven/project`,
-  ].join(" && ");
-}
-
-function sshCertificateTrustCommand(userCA: string | undefined, principal: string | undefined, sshUser: string | undefined): string {
-  if (!userCA || !principal) return "true";
-  const user = safeLinuxUser(sshUser || defaultSSHUser);
-  return [
-    "install -d -m 0755 /run/sshd /etc/ssh/auth_principals /etc/ssh/sshd_config.d",
-    `printf '%s\\n' ${shellSingleQuote(userCA)} > /etc/ssh/boxhaven_user_ca_keys`,
-    "chmod 0644 /etc/ssh/boxhaven_user_ca_keys",
-    `printf '%s\\n' ${shellSingleQuote(principal)} > /etc/ssh/auth_principals/${shellSingleQuote(user)}`,
-    `chmod 0644 /etc/ssh/auth_principals/${shellSingleQuote(user)}`,
-    "printf '%s\\n' 'TrustedUserCAKeys /etc/ssh/boxhaven_user_ca_keys' 'AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u' 'PasswordAuthentication no' 'KbdInteractiveAuthentication no' > /etc/ssh/sshd_config.d/90-boxhaven-user-ca.conf",
-    "sshd -t",
-    "(systemctl reload ssh >/dev/null 2>&1 || systemctl reload sshd >/dev/null 2>&1 || systemctl restart ssh >/dev/null 2>&1 || systemctl restart sshd >/dev/null 2>&1 || pkill -HUP sshd >/dev/null 2>&1 || true)",
-  ].join(" && ");
-}
-
-function safeLinuxUser(value: string): string {
-  return /^[a-z_][a-z0-9_-]*[$]?$/i.test(value) ? value : defaultSSHUser;
-}
-
-function cloudInitSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function shellSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\"'\"'")}'`;
+  return imageNameIsBoxHavenRemote(image);
 }
 
 function publicIPv4(droplet: Droplet): string {
   return droplet.networks?.v4?.find((network) => network.type === "public")?.ip_address || "";
 }
 
-function machineResourceName(name: string): string {
-  return `boxhaven-${sanitize(name)}`;
-}
-
 function machineTag(name: string): string {
-  return `boxhaven-${sanitize(name)}`;
+  return `boxhaven-${sanitizeResourceName(name)}`;
 }
 
 function providerNameFromDroplet(droplet: Droplet): string {
@@ -369,10 +369,6 @@ function nextPath(next: string | undefined): string {
   } catch {
     return next.startsWith("/") ? next : "";
   }
-}
-
-function sanitize(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "default";
 }
 
 function splitList(value: string | undefined, fallback: string[] = []): string[] {

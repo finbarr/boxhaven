@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createBackendAuth, migrateBackendAuth } from "./auth.js";
 import { StateStore } from "./state.js";
 import { createBackend } from "./server.js";
-import { digitalOceanProviderFromEnv } from "./digitalocean.js";
+import { providerRegistryFromEnv } from "./providers.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 
 const listen = process.env.BOXHAVEN_BACKEND_LISTEN || "127.0.0.1:8787";
@@ -13,13 +13,10 @@ if (!authSecret) {
   throw new Error("BETTER_AUTH_SECRET is required");
 }
 
-const providerName = (process.env.BOXHAVEN_BACKEND_PROVIDER || "digitalocean").toLowerCase();
-const provider = providerName === "digitalocean"
-  ? digitalOceanProviderFromEnv()
-  : (() => { throw new Error(`unknown backend provider ${providerName}`); })();
+const providers = providerRegistryFromEnv();
 
 const statePath = process.env.BOXHAVEN_BACKEND_STATE || join(homedir(), ".local", "state", "boxhaven", "backend.json");
-const store = new StateStore(statePath, provider.name);
+const store = new StateStore(statePath, providers.defaultName);
 const sshCA = new SSHCertificateAuthority(process.env.BOXHAVEN_SSH_CA_KEY || join(dirname(statePath), "ssh_ca_ed25519"));
 const { host, port } = parseListen(listen);
 const defaultAppDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "dist-app");
@@ -39,9 +36,10 @@ await migrateBackendAuth(authOptions);
 const auth = createBackendAuth(authOptions);
 const app = createBackend({
   auth,
-  provider,
+  providers,
   store,
   sshCA,
+  adminEmails: splitList(process.env.BOXHAVEN_ADMIN_EMAILS),
   appDir: process.env.BOXHAVEN_BACKEND_APP_DIR || defaultAppDir,
   apiPublicURL,
   appPublicURL,
@@ -51,7 +49,7 @@ const app = createBackend({
 });
 
 await app.listen({ host, port });
-console.error(`boxhaven backend listening on ${host}:${port} with ${provider.name}`);
+console.error(`boxhaven backend listening on ${host}:${port} with providers ${providers.names().join(", ")} (default ${providers.defaultName})`);
 
 function parseListen(value: string): { host: string; port: number } {
   const lastColon = value.lastIndexOf(":");
