@@ -99,6 +99,13 @@ button {
 .section-heading strong,
 .metric strong {
   display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.metric {
+  min-width: 0;
 }
 
 .brand strong {
@@ -562,9 +569,17 @@ a.primary-button {
 
 .machine-row code {
   flex: 0 1 190px;
+  min-width: 70px;
+  overflow: hidden;
   color: #2a6470;
   font-size: 12px;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.machine-id {
+  flex: 1;
+  min-width: 0;
 }
 
 .empty {
@@ -642,8 +657,10 @@ a.primary-button {
 .command-block code {
   min-width: 0;
   flex: 1;
+  overflow-x: auto;
   color: #2a6470;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  scrollbar-width: thin;
 }
 
 .command-block em {
@@ -815,12 +832,17 @@ a.primary-button {
 .badge {
   display: inline-flex;
   align-items: center;
+  max-width: 160px;
   margin-left: 8px;
   padding: 2px 8px;
+  overflow: hidden;
   border: 1px solid rgba(47, 111, 92, 0.28);
   border-radius: 999px;
   background: rgba(47, 111, 92, 0.12);
   color: #2f6f5c;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-transform: none;
   font-size: 11px;
   text-transform: uppercase;
 }
