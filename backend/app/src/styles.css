@@ -1064,6 +1064,23 @@ a.primary-button {
   color: #6e4e12;
 }
 
+@media (max-width: 1180px) {
+  /* The welcome panel's two inner columns cannot honor their minimums next
+     to the sign-up card at this width; stack the landing instead of letting
+     the hero overflow underneath the card. */
+  .access-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-panel {
+    min-height: auto;
+  }
+
+  .logo-stage {
+    min-height: 200px;
+  }
+}
+
 @media (max-width: 1120px) {
   .dashboard,
   .dashboard.two-col {
