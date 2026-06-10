@@ -200,7 +200,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
                 <strong>{machine.name}</strong>
                 <small>{machine.provider_label || machine.provider || "provider"} / {machine.region || "region"}</small>
               </span>
-              {teams.length > 1 && machine.team_slug ? <span className="badge">{machine.team_slug}</span> : null}
+              {machine.team_id && activeTeam && machine.team_id !== activeTeam.id ? <span className="badge">{machine.team_slug || machine.team_name}</span> : null}
               <code title={machine.preview_hostname || machine.public_ipv4 || ""}>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code>
             </Link>
           ))}
