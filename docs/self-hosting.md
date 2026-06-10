@@ -168,6 +168,10 @@ Or use the checked-in npm entrypoint:
 npm run deploy:runtime
 ```
 
+Each build snapshots a fresh image and prunes older `boxhaven-remote-*`
+snapshots beyond the newest two (the new image plus one rollback). Set
+`BOXHAVEN_IMAGE_KEEP` to keep more, or `0` to disable pruning.
+
 The runtime deploy creates and snapshots a temporary DigitalOcean builder
 Droplet, updates `BOXHAVEN_REMOTE_IMAGE`, then restarts and verifies the
 backend so new boxes use the image. When an active `BOXHAVEN_REMOTE_IMAGE`
