@@ -6,7 +6,7 @@ import websocket from "@fastify/websocket";
 import Fastify, { FastifyInstance } from "fastify";
 import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
-import { BillingService, StripeEvent, billingRecordAllowsPaidBoxes, billingStatusForRecord, defaultFreeMachines } from "./billing.js";
+import { BillingService, StripeEvent, billingRecordAllowsPaidBoxes, billingStatusForRecord } from "./billing.js";
 import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
@@ -41,6 +41,7 @@ type TeamInfo = {
   id: string;
   name: string;
   slug?: string;
+  personal: boolean;
 };
 
 type TeamMachine = RemoteMachine & {
@@ -189,54 +190,65 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
   });
 
-  app.get("/v1/billing", async (request, reply) => {
+  // Billing attaches to teams, never users: GET reports the team's billing
+  // state to any member, while checkout and portal require the owner or
+  // admin role on that team.
+  app.get<{ Querystring: { team?: string } }>("/v1/billing", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
-    const machinesUsed = (await options.store.listMachinesForUser(auth.userID)).length;
+    const team = resolveBillingTeam(auth, request.query.team, reply);
+    if (!team) return;
     if (!options.billing) {
-      return {
-        enabled: false,
-        status: "free",
-        free_machines: defaultFreeMachines,
-        machines_used: machinesUsed,
-        portal_available: false,
-      };
+      return { enabled: false, team: billingTeamInfo(team) };
     }
-    const record = await options.store.getBillingRecord(auth.userID);
+    const record = await options.store.getBillingRecord(team.id);
+    const role = await orgRoleForUser(options, request.headers, team.id, auth.userID);
     return {
       enabled: true,
+      team: billingTeamInfo(team),
       status: billingStatusForRecord(record),
-      free_machines: options.billing.freeMachines,
-      machines_used: machinesUsed,
+      free_machines: options.billing.freeAllowance(team.personal),
+      machines_used: (await options.store.listMachinesForOrg(team.id)).length,
+      can_manage: orgRoleCanManage(role),
       portal_available: !!record?.customer_id,
     };
   });
 
-  app.post("/v1/billing/checkout", async (request, reply) => {
+  app.post<{ Body: { team?: string } }>("/v1/billing/checkout", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
     const billing = options.billing;
     if (!billing) {
       return reply.code(400).send({ id: "bad_request", message: "billing is not enabled on this backend" });
     }
-    const existing = await options.store.getBillingRecord(auth.userID);
+    const team = resolveBillingTeam(auth, bodyString(request.body?.team), reply);
+    if (!team) return;
+    if (!orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID))) {
+      return reply.code(403).send({ id: "forbidden", message: "subscribing a team requires the owner or admin role" });
+    }
+    const existing = await options.store.getBillingRecord(team.id);
     if (billingRecordAllowsPaidBoxes(existing)) {
       return reply.code(400).send({ id: "bad_request", message: "subscription is already active; manage it through the billing portal" });
     }
-    const record = await billing.ensureCustomer(auth.userID, auth.email);
+    const record = await billing.ensureCustomer(team.id, auth.email, team.name || team.slug || team.id, team.personal);
     const billingURL = `${options.appPublicURL || ""}/?section=billing`;
-    const url = await billing.createCheckoutSession(auth.userID, record.customer_id, `${billingURL}&checkout=success`, `${billingURL}&checkout=canceled`);
+    const url = await billing.createCheckoutSession(team.id, record.customer_id, `${billingURL}&checkout=success`, `${billingURL}&checkout=canceled`);
     return { url };
   });
 
-  app.post("/v1/billing/portal", async (request, reply) => {
+  app.post<{ Body: { team?: string } }>("/v1/billing/portal", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
     const billing = options.billing;
     if (!billing) {
       return reply.code(400).send({ id: "bad_request", message: "billing is not enabled on this backend" });
     }
-    const record = await options.store.getBillingRecord(auth.userID);
+    const team = resolveBillingTeam(auth, bodyString(request.body?.team), reply);
+    if (!team) return;
+    if (!orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID))) {
+      return reply.code(403).send({ id: "forbidden", message: "managing a team subscription requires the owner or admin role" });
+    }
+    const record = await options.store.getBillingRecord(team.id);
     if (!record?.customer_id) {
       return reply.code(400).send({ id: "bad_request", message: "no billing customer exists yet; subscribe first" });
     }
@@ -311,19 +323,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
         message: `you have reached the limit of ${limit} boxes; destroy one with bh destroy <name> first`,
       });
     }
-    // BOXHAVEN_MAX_MACHINES_PER_USER above stays the hard abuse cap; billing
-    // gates the free tier below it.
-    if (options.billing) {
-      const used = (await options.store.listMachinesForUser(auth.userID)).length;
-      if (used >= options.billing.freeMachines && !billingRecordAllowsPaidBoxes(await options.store.getBillingRecord(auth.userID))) {
-        const free = options.billing.freeMachines;
-        return reply.code(403).send({
-          id: "payment_required",
-          message: `You are on the free tier (${free} ${free === 1 ? "box" : "boxes"}). Subscribe at ${options.appPublicURL || ""}/?section=billing to run more boxes.`,
-        });
-      }
-    }
-    let orgID = auth.orgID;
+    let team = auth.teams.find((candidate) => candidate.id === auth.orgID);
     if (body.team) {
       const found = findTeam(auth.teams, body.team);
       if (found.error) {
@@ -332,7 +332,20 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       if (!found.team) {
         return reply.code(400).send({ id: "bad_request", message: `you are not a member of team ${body.team}` });
       }
-      orgID = found.team.id;
+      team = found.team;
+    }
+    const orgID = team?.id || auth.orgID;
+    // BOXHAVEN_MAX_MACHINES_PER_USER above stays the hard abuse cap; billing
+    // gates the target team's free allowance below it.
+    if (options.billing && team) {
+      const used = (await options.store.listMachinesForOrg(team.id)).length;
+      const free = options.billing.freeAllowance(team.personal);
+      if (used >= free && !billingRecordAllowsPaidBoxes(await options.store.getBillingRecord(team.id))) {
+        return reply.code(403).send({
+          id: "payment_required",
+          message: `Team ${team.slug || team.name || team.id} is on the free tier (${free} ${free === 1 ? "box" : "boxes"}). A team owner or admin can subscribe at ${options.appPublicURL || ""}/?section=billing to run more boxes.`,
+        });
+      }
     }
     return createMachine(options, agents, auth, provider, body, orgID, auth.teams, reply);
   });
@@ -1026,6 +1039,40 @@ function orgRoleCanManage(role: string): boolean {
   return roles.includes("owner") || roles.includes("admin");
 }
 
+async function listOrgMembers(
+  options: BackendOptions,
+  headers: Record<string, string | string[] | undefined>,
+  orgID: string,
+): Promise<OrgMember[]> {
+  const api = options.auth.api as unknown as {
+    listMembers: (input: { query: { organizationId: string; limit?: number }; headers: Headers }) => Promise<
+      { members: OrgMember[] } | OrgMember[]
+    >;
+  };
+  const response = await api.listMembers({
+    query: { organizationId: orgID, limit: 500 },
+    headers: toHeaders(headers),
+  });
+  return Array.isArray(response) ? response : response.members || [];
+}
+
+// Membership is established before this is called (the team came from the
+// caller's own team list), so a failed member lookup degrades to the
+// non-managing member role instead of an error.
+async function orgRoleForUser(
+  options: BackendOptions,
+  headers: Record<string, string | string[] | undefined>,
+  orgID: string,
+  userID: string,
+): Promise<string> {
+  try {
+    const members = await listOrgMembers(options, headers, orgID);
+    return members.find((member) => member.userId === userID)?.role || "member";
+  } catch {
+    return "member";
+  }
+}
+
 async function requireOrgMembership(
   options: BackendOptions,
   request: { headers: Record<string, string | string[] | undefined> },
@@ -1034,28 +1081,52 @@ async function requireOrgMembership(
 ): Promise<{ auth: AuthContext; members: OrgMember[]; role: string } | undefined> {
   const auth = await requireAuth(options, request, reply);
   if (!auth) return undefined;
-  const api = options.auth.api as unknown as {
-    listMembers: (input: { query: { organizationId: string; limit?: number }; headers: Headers }) => Promise<
-      { members: OrgMember[] } | OrgMember[]
-    >;
-  };
-  let response: { members: OrgMember[] } | OrgMember[];
+  let members: OrgMember[];
   try {
-    response = await api.listMembers({
-      query: { organizationId: orgID, limit: 500 },
-      headers: toHeaders(request.headers),
-    });
+    members = await listOrgMembers(options, request.headers, orgID);
   } catch (err) {
     reply.code(403).send({ id: "forbidden", message: (err as Error).message || "not a member of this team" });
     return undefined;
   }
-  const members = Array.isArray(response) ? response : response.members || [];
   const self = members.find((member) => member.userId === auth.userID);
   if (!self) {
     reply.code(403).send({ id: "forbidden", message: "not a member of this team" });
     return undefined;
   }
   return { auth, members, role: self.role || "member" };
+}
+
+// Billing routes accept any team reference the caller is a member of;
+// non-members get a 403 so team ids cannot be probed for billing state. An
+// omitted reference targets the session's active team.
+function resolveBillingTeam(
+  auth: AuthContext,
+  reference: string | undefined,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+): TeamInfo | undefined {
+  const want = (reference || "").trim();
+  if (!want) {
+    const active = auth.teams.find((team) => team.id === auth.orgID);
+    if (!active) {
+      reply.code(400).send({ id: "bad_request", message: "no active team; pass a team id or slug" });
+      return undefined;
+    }
+    return active;
+  }
+  const found = findTeam(auth.teams, want);
+  if (found.error) {
+    reply.code(400).send({ id: "bad_request", message: found.error });
+    return undefined;
+  }
+  if (!found.team) {
+    reply.code(403).send({ id: "forbidden", message: `you are not a member of team ${want}` });
+    return undefined;
+  }
+  return found.team;
+}
+
+function billingTeamInfo(team: TeamInfo): { id: string; slug?: string; name: string; personal: boolean } {
+  return { id: team.id, slug: team.slug, name: team.name, personal: team.personal };
 }
 
 function validateName(name: string): string | undefined {
@@ -1264,8 +1335,8 @@ async function requireAuth(options: BackendOptions, request: { headers: Record<s
 
 function orgAPI(options: BackendOptions) {
   return options.auth.api as unknown as {
-    listOrganizations: (input: { headers: Headers }) => Promise<Array<{ id: string; name: string; slug?: string }> | null>;
-    createOrganization: (input: { headers: Headers; body: { name: string; slug: string } }) => Promise<
+    listOrganizations: (input: { headers: Headers }) => Promise<Array<{ id: string; name: string; slug?: string; metadata?: unknown }> | null>;
+    createOrganization: (input: { headers: Headers; body: { name: string; slug: string; metadata?: Record<string, unknown> } }) => Promise<
       { id?: string; organization?: { id?: string } } | null
     >;
     setActiveOrganization: (input: { headers: Headers; body: { organizationId: string } }) => Promise<unknown>;
@@ -1288,7 +1359,9 @@ async function ensureActiveTeam(
     try {
       const created = await api.createOrganization({
         headers,
-        body: { name: defaultTeamName(user), slug: defaultTeamSlug(user) },
+        // The personal marker drives the team's free billing allowance;
+        // teams created without it are treated as shared.
+        body: { name: defaultTeamName(user), slug: defaultTeamSlug(user), metadata: { personal: true } },
       });
       orgID = created?.id || created?.organization?.id || "";
     } catch {
@@ -1320,7 +1393,21 @@ function defaultTeamSlug(user: { id: string; email: string }): string {
 
 async function listUserTeams(options: BackendOptions, headers: Headers): Promise<TeamInfo[]> {
   const orgs = await orgAPI(options).listOrganizations({ headers });
-  return (orgs || []).map((org) => ({ id: org.id, name: org.name, slug: org.slug }));
+  return (orgs || []).map((org) => ({ id: org.id, name: org.name, slug: org.slug, personal: organizationIsPersonal(org.metadata) }));
+}
+
+// Better Auth stores organization metadata as a JSON string and
+// listOrganizations returns it unparsed, while other surfaces hand back the
+// parsed object; accept both and treat anything unreadable as a shared team.
+function organizationIsPersonal(metadata: unknown): boolean {
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch {
+      return false;
+    }
+  }
+  return !!metadata && typeof metadata === "object" && (metadata as { personal?: unknown }).personal === true;
 }
 
 // Team references resolve by id, then slug, then display name. Only slugs and

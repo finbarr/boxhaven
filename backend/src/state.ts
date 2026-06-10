@@ -46,6 +46,11 @@ export class StateStore {
     return Object.values(state.machines).filter((machine) => machine.user_id === userID);
   }
 
+  async listMachinesForOrg(orgID: string): Promise<RemoteMachine[]> {
+    const state = await this.load();
+    return Object.values(state.machines).filter((machine) => machine.org_id === orgID);
+  }
+
   async getMachine(userID: string, name: string): Promise<RemoteMachine | undefined> {
     const state = await this.load();
     return state.machines[machineKey(userID, name)];
@@ -90,14 +95,14 @@ export class StateStore {
     });
   }
 
-  async getBillingRecord(userID: string): Promise<BillingRecord | undefined> {
+  async getBillingRecord(orgID: string): Promise<BillingRecord | undefined> {
     const state = await this.load();
-    return state.billing?.[userID];
+    return state.billing?.[orgID];
   }
 
-  async putBillingRecord(userID: string, record: BillingRecord): Promise<void> {
+  async putBillingRecord(orgID: string, record: BillingRecord): Promise<void> {
     await this.update((state) => {
-      state.billing = { ...(state.billing || {}), [userID]: record };
+      state.billing = { ...(state.billing || {}), [orgID]: record };
     });
   }
 

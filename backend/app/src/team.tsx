@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, LogOut, Plus, Send, Server, Trash2, Users, XCircle } from "lucide-react";
+import { Copy, CreditCard, LogOut, Plus, Send, Server, Trash2, Users, XCircle } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { apiFetch, AuthUser, formatDate, inviteLink, Machine } from "./api";
+import { apiFetch, AuthUser, BillingResponse, formatDate, inviteLink, Machine } from "./api";
 import { CommandBlock } from "./access";
+import { statusLabel } from "./billing";
 
 type Organization = {
   id: string;
@@ -37,7 +38,12 @@ type OrgMachinesResponse = {
 
 const memberRoles = ["member", "admin", "owner"] as const;
 
-export function TeamView({ token, user, activeTeamId }: { token: string; user?: AuthUser; activeTeamId?: string }) {
+export function TeamView({ token, user, activeTeamId, onShowBilling }: {
+  token: string;
+  user?: AuthUser;
+  activeTeamId?: string;
+  onShowBilling: (teamRef?: string) => void;
+}) {
   const [orgId, setOrgId] = useState("");
   const queryClient = useQueryClient();
   const orgs = useQuery({
@@ -90,6 +96,7 @@ export function TeamView({ token, user, activeTeamId }: { token: string; user?: 
       orgList={orgList}
       activeTeamId={activeTeamId}
       onSelectOrg={selectOrg}
+      onShowBilling={onShowBilling}
       switchError={setActive.error ? (setActive.error as Error).message : ""}
     />
   );
@@ -143,13 +150,14 @@ function CreateTeamPanel({ token }: { token: string }) {
   );
 }
 
-function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, switchError }: {
+function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, onShowBilling, switchError }: {
   token: string;
   user?: AuthUser;
   org: Organization;
   orgList: Organization[];
   activeTeamId?: string;
   onSelectOrg: (id: string) => void;
+  onShowBilling: (teamRef?: string) => void;
   switchError: string;
 }) {
   const queryClient = useQueryClient();
@@ -264,6 +272,7 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
           </label>
         ) : null}
         {switchError ? <p className="error">{switchError}</p> : null}
+        <TeamBillingHint token={token} org={org} onShowBilling={onShowBilling} />
         <form className="create-form" onSubmit={submitInvite}>
           <div className="panel-heading small">
             <span>invite</span>
@@ -509,6 +518,29 @@ function NewTeamForm({ token }: { token: string }) {
       </button>
       {create.error ? <p className="error">{(create.error as Error).message}</p> : null}
     </form>
+  );
+}
+
+// Small billing status line so owners/admins discover team billing from here.
+// Hidden while loading, on error, or when billing is disabled on the backend.
+function TeamBillingHint({ token, org, onShowBilling }: {
+  token: string;
+  org: Organization;
+  onShowBilling: (teamRef?: string) => void;
+}) {
+  const teamRef = org.slug || org.id;
+  const billing = useQuery({
+    queryKey: ["billing", teamRef, token],
+    queryFn: () => apiFetch<BillingResponse>(`/v1/billing?team=${encodeURIComponent(teamRef)}`, token),
+  });
+  const info = billing.data;
+  if (!info?.enabled) return null;
+  return (
+    <p className="hint billing-hint">
+      <CreditCard size={14} />
+      <span className={info.status === "past_due" ? "badge warn" : "badge"}>{statusLabel(info.status)}</span>
+      <button className="link-button" type="button" onClick={() => onShowBilling(teamRef)}>Open Billing</button>
+    </p>
   );
 }
 

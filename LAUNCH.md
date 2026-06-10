@@ -18,13 +18,18 @@ done or scripted.
   codex pre-trusts the project path, incremental rebuilds actually rebuild.
 - [x] Daily state backups on the droplet (systemd timer, verified armed).
 - [x] Installer script, Homebrew tap formula, VitePress docs site, Stripe
-  billing (1 free box, usage-billed beyond), transactional email plumbing —
-  all landed in this release; see sections below for the pieces only you can
-  finish.
+  billing (per team: personal teams get 1 free box, shared teams are
+  subscription-first, usage-billed beyond the allowance), transactional
+  email plumbing — all landed in this release; see sections below for the
+  pieces only you can finish.
 
 ## Needs you: accounts and keys
 
-- [ ] **(you) Stripe**: create the products in the Stripe dashboard —
+- [ ] **(you) Stripe**: billing is per team — each subscribed team gets its
+  own Stripe customer, personal teams include `BOXHAVEN_FREE_MACHINES` free
+  boxes (default 1), and shared teams are subscription-first
+  (`BOXHAVEN_TEAM_FREE_MACHINES`, default 0). Create the products in the
+  Stripe dashboard —
   1. Billing → Meters → create meter with event name `boxhaven_box_hours`.
   2. A usage-based price on that meter (pick the $/box-hour number) →
      `STRIPE_PRICE_ID`.
@@ -82,6 +87,5 @@ done or scripted.
 - [ ] Error tracking (Sentry) in the backend.
 - [ ] Status page.
 - [ ] Analytics on the docs/landing (Plausible or similar).
-- [ ] Per-team access controls beyond owner/admin/member roles, and
-  team-level billing (current billing is per account).
+- [ ] Per-team access controls beyond owner/admin/member roles.
 - [ ] `apt`/distro packages — the install script and brew cover launch.
