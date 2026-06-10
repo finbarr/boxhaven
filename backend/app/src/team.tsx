@@ -37,14 +37,27 @@ type OrgMachinesResponse = {
 
 const memberRoles = ["member", "admin", "owner"] as const;
 
-export function TeamView({ token, user }: { token: string; user?: AuthUser }) {
+export function TeamView({ token, user, activeTeamId }: { token: string; user?: AuthUser; activeTeamId?: string }) {
   const [orgId, setOrgId] = useState("");
+  const queryClient = useQueryClient();
   const orgs = useQuery({
     queryKey: ["orgs", token],
     queryFn: () => apiFetch<Organization[]>("/v1/auth/organization/list", token),
   });
+  const setActive = useMutation({
+    mutationFn: (organizationId: string) => apiFetch("/v1/auth/organization/set-active", token, {
+      method: "POST",
+      body: { organizationId },
+    }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["session", token] }),
+  });
   const orgList = orgs.data || [];
-  const activeOrg = orgList.find((org) => org.id === orgId) || orgList[0];
+  const activeOrg = orgList.find((org) => org.id === orgId) || orgList.find((org) => org.id === activeTeamId) || orgList[0];
+
+  function selectOrg(id: string) {
+    setOrgId(id);
+    if (id && id !== activeTeamId) setActive.mutate(id);
+  }
 
   if (orgs.isLoading) {
     return (
@@ -63,26 +76,41 @@ export function TeamView({ token, user }: { token: string; user?: AuthUser }) {
   if (!activeOrg) {
     return <CreateTeamPanel token={token} />;
   }
-  return <TeamDetail key={activeOrg.id} token={token} user={user} org={activeOrg} orgList={orgList} onSelectOrg={setOrgId} />;
+  return (
+    <TeamDetail
+      key={activeOrg.id}
+      token={token}
+      user={user}
+      org={activeOrg}
+      orgList={orgList}
+      activeTeamId={activeTeamId}
+      onSelectOrg={selectOrg}
+      switchError={setActive.error ? (setActive.error as Error).message : ""}
+    />
+  );
 }
 
-function CreateTeamPanel({ token }: { token: string }) {
-  const [name, setName] = useState("");
+function useCreateTeam(token: string, onCreated: () => void) {
   const queryClient = useQueryClient();
-  const create = useMutation({
-    mutationFn: () => apiFetch<Organization>("/v1/auth/organization/create", token, {
+  return useMutation({
+    mutationFn: (name: string) => apiFetch<Organization>("/v1/auth/organization/create", token, {
       method: "POST",
       body: { name, slug: teamSlug(name) },
     }),
     onSuccess: () => {
-      setName("");
+      onCreated();
       void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
     },
   });
+}
+
+function CreateTeamPanel({ token }: { token: string }) {
+  const [name, setName] = useState("");
+  const create = useCreateTeam(token, () => setName(""));
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    create.mutate();
+    create.mutate(name);
   }
 
   return (
@@ -107,12 +135,14 @@ function CreateTeamPanel({ token }: { token: string }) {
   );
 }
 
-function TeamDetail({ token, user, org, orgList, onSelectOrg }: {
+function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, switchError }: {
   token: string;
   user?: AuthUser;
   org: Organization;
   orgList: Organization[];
+  activeTeamId?: string;
   onSelectOrg: (id: string) => void;
+  switchError: string;
 }) {
   const queryClient = useQueryClient();
   const [inviteEmail, setInviteEmail] = useState("");
@@ -183,6 +213,7 @@ function TeamDetail({ token, user, org, orgList, onSelectOrg }: {
     onSuccess: () => {
       onSelectOrg("");
       void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
+      void queryClient.invalidateQueries({ queryKey: ["session", token] });
     },
   });
   const destroyMachine = useMutation({
@@ -219,11 +250,12 @@ function TeamDetail({ token, user, org, orgList, onSelectOrg }: {
             Team
             <select value={org.id} onChange={(event) => onSelectOrg(event.target.value)}>
               {orgList.map((option) => (
-                <option value={option.id} key={option.id}>{option.name}</option>
+                <option value={option.id} key={option.id}>{option.name}{option.id === activeTeamId ? " (active)" : ""}</option>
               ))}
             </select>
           </label>
         ) : null}
+        {switchError ? <p className="error">{switchError}</p> : null}
         <form className="create-form" onSubmit={submitInvite}>
           <div className="panel-heading small">
             <span>invite</span>
@@ -253,6 +285,7 @@ function TeamDetail({ token, user, org, orgList, onSelectOrg }: {
             <p className="hint">Share this link with <strong>{lastInvitation.email}</strong> — it only works for that email.</p>
           </div>
         ) : null}
+        <NewTeamForm token={token} />
         {!callerRoles.includes("owner") ? (
           <button
             className="danger-button"
@@ -376,8 +409,11 @@ function TeamDetail({ token, user, org, orgList, onSelectOrg }: {
         <div className="panel">
           <div className="panel-heading small">
             <span>team boxes</span>
-            <h2>Shared rooms</h2>
+            <h2>This team's rooms</h2>
           </div>
+          <p className="hint">
+            Boxes created while <strong>{org.name}</strong> is your active team land here. <code>bh create --team {org.slug || org.name}</code> targets it explicitly.
+          </p>
           {orgMachines.error ? <p className="error">{(orgMachines.error as Error).message}</p> : null}
           <table className="data-table">
             <thead>
@@ -421,11 +457,39 @@ function TeamDetail({ token, user, org, orgList, onSelectOrg }: {
               ))}
             </tbody>
           </table>
-          {!machineList.length && !orgMachines.isLoading ? <p className="hint">No team boxes yet.</p> : null}
+          {!machineList.length && !orgMachines.isLoading ? <p className="hint">No boxes in this team yet.</p> : null}
           {destroyMachine.error ? <p className="error">{(destroyMachine.error as Error).message}</p> : null}
         </div>
       </div>
     </section>
+  );
+}
+
+function NewTeamForm({ token }: { token: string }) {
+  const [name, setName] = useState("");
+  const create = useCreateTeam(token, () => setName(""));
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    create.mutate(name);
+  }
+
+  return (
+    <form className="create-form" onSubmit={submit}>
+      <div className="panel-heading small">
+        <span>teams</span>
+        <h2>New team</h2>
+      </div>
+      <label>
+        Team name
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="The Treehouse" required />
+      </label>
+      <button className="primary-button" type="submit" disabled={create.isPending || !teamSlug(name)}>
+        <Plus size={16} />
+        {create.isPending ? "Creating" : "Create team"}
+      </button>
+      {create.error ? <p className="error">{(create.error as Error).message}</p> : null}
+    </form>
   );
 }
 

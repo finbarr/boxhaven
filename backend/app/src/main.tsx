@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from "@tanstack/react-router";
-import { Activity, Check, Cloud, Home, Layers, LogOut, MonitorDot, Plus, RefreshCw, Server, ShieldCheck, Trash2, Users, XCircle } from "lucide-react";
+import { Activity, ArrowRightLeft, Check, Cloud, Home, Layers, LogOut, MonitorDot, Plus, RefreshCw, Server, ShieldCheck, Trash2, Users, XCircle } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AccessPanel, CommandBlock } from "./access";
@@ -15,6 +15,7 @@ import {
   ProvidersResponse,
   sectionKey,
   slugName,
+  TeamInfo,
   tokenKey,
   WhoamiResponse,
 } from "./api";
@@ -172,11 +173,11 @@ function ConsoleRoute() {
         deviceUserCode ? (
           <DeviceGrantPanel token={token} user={session.data?.user} userCode={deviceUserCode} onDone={clearDevicePrompt} />
         ) : activeSection === "team" ? (
-          <TeamView token={token} user={session.data?.user} />
+          <TeamView token={token} user={session.data?.user} activeTeamId={session.data?.team?.id} />
         ) : activeSection === "images" ? (
           <ImagesView token={token} />
         ) : (
-          <Dashboard token={token} user={session.data?.user} />
+          <Dashboard token={token} user={session.data?.user} teams={session.data?.teams || []} activeTeam={session.data?.team || undefined} />
         )
       ) : (
         <AccessPanel onToken={handleToken} deviceUserCode={deviceUserCode} />
@@ -256,10 +257,11 @@ code: ${formatUserCode(userCode)}`}</pre>
   );
 }
 
-function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
+function Dashboard({ token, user, teams, activeTeam }: { token: string; user?: AuthUser; teams: TeamInfo[]; activeTeam?: TeamInfo }) {
   const [name, setName] = useState("");
   const [tier, setTier] = useState<MachineTier>("small");
   const [provider, setProvider] = useState("");
+  const [team, setTeam] = useState("");
   const [selected, setSelected] = useState<string>("");
   const queryClient = useQueryClient();
   const providers = useQuery({
@@ -273,10 +275,11 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
   });
   const providerList = providers.data?.providers || [];
   const defaultProvider = providerList.find((option) => option.default)?.name || providerList[0]?.name || "";
+  const defaultTeam = activeTeam ? activeTeam.slug || activeTeam.id : teams[0]?.slug || teams[0]?.id || "";
   const createMachine = useMutation({
     mutationFn: () => apiFetch<MachineResponse>("/v1/machines", token, {
       method: "POST",
-      body: { name, tier, ...(provider ? { provider } : {}) },
+      body: { name, tier, ...(provider ? { provider } : {}), ...(team ? { team } : {}) },
     }),
     onSuccess: (data) => {
       setName("");
@@ -290,6 +293,13 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
       setSelected("");
       void queryClient.invalidateQueries({ queryKey: ["machines", token] });
     },
+  });
+  const moveMachine = useMutation({
+    mutationFn: (input: { machineName: string; team: string }) => apiFetch<MachineResponse>(`/v1/machines/${encodeURIComponent(input.machineName)}/move`, token, {
+      method: "POST",
+      body: { team: input.team },
+    }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["machines", token] }),
   });
   const machineList = useMemo(() => [...(machines.data?.machines || [])].sort((a, b) => a.name.localeCompare(b.name)), [machines.data]);
   const selectedMachine = machineList.find((machine) => machine.name === selected) || machineList[0];
@@ -341,6 +351,16 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
               ))}
             </select>
           </label>
+          {teams.length ? (
+            <label>
+              Team
+              <select value={team || defaultTeam} onChange={(event) => setTeam(event.target.value)}>
+                {teams.map((option) => (
+                  <option value={option.slug || option.id} key={option.id}>{option.name}{option.id === activeTeam?.id ? " (active)" : ""}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <button className="primary-button" type="submit" disabled={createMachine.isPending}>
             <Plus size={16} />
             {createMachine.isPending ? "Creating" : "Create"}
@@ -375,6 +395,7 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
                 <strong>{machine.name}</strong>
                 <small>{machine.provider_label || machine.provider || "provider"} / {machine.region || "region"}</small>
               </span>
+              {machine.team_slug ? <span className="badge">{machine.team_slug}</span> : null}
               <code>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code>
             </button>
           ))}
@@ -389,21 +410,29 @@ function Dashboard({ token, user }: { token: string; user?: AuthUser }) {
 
       <MachineDetail
         machine={selectedMachine}
+        teams={teams}
         connect={connect.data}
         loading={machines.isLoading || connect.isLoading}
         onDestroy={(machineName) => destroyMachine.mutate(machineName)}
         destroying={destroyMachine.isPending}
+        onMove={(machineName, targetTeam) => moveMachine.mutate({ machineName, team: targetTeam })}
+        moving={moveMachine.isPending}
+        moveError={moveMachine.error ? (moveMachine.error as Error).message : ""}
       />
     </section>
   );
 }
 
-function MachineDetail({ machine, connect, loading, onDestroy, destroying }: {
+function MachineDetail({ machine, teams, connect, loading, onDestroy, destroying, onMove, moving, moveError }: {
   machine?: Machine;
+  teams: TeamInfo[];
   connect?: ConnectResponse;
   loading: boolean;
   onDestroy: (name: string) => void;
   destroying: boolean;
+  onMove: (name: string, team: string) => void;
+  moving: boolean;
+  moveError: string;
 }) {
   if (!machine) {
     return (
@@ -417,7 +446,7 @@ function MachineDetail({ machine, connect, loading, onDestroy, destroying }: {
     <div className="detail">
       <div className="detail-header">
         <div>
-          <span>{connect?.status || "box"}</span>
+          <span>{connect?.status || "box"}{machine.team_slug ? ` / ${machine.team_slug}` : ""}</span>
           <h1>{machine.name}</h1>
         </div>
         <button className="danger-button" type="button" onClick={() => onDestroy(machine.name)} disabled={destroying} title="Destroy machine">
@@ -435,6 +464,7 @@ function MachineDetail({ machine, connect, loading, onDestroy, destroying }: {
       <CommandBlock label="Connect" value={connect?.connect.cli || `bh connect ${machine.name}`} />
       <CommandBlock label="Run" value={connect?.connect.cli_run || `bh run ${machine.name}`} />
       <dl className="meta">
+        <div><dt>Team</dt><dd>{machine.team_name || machine.team_slug || "-"}</dd></div>
         <div><dt>Provider ID</dt><dd>{machine.provider_id || "-"}</dd></div>
         <div><dt>Project path</dt><dd>{machine.project_path || "/opt/boxhaven/project"}</dd></div>
         <div><dt>Repo</dt><dd>{machine.repo_url || "-"}</dd></div>
@@ -442,6 +472,37 @@ function MachineDetail({ machine, connect, loading, onDestroy, destroying }: {
         <div><dt>Last sync</dt><dd>{formatDate(machine.last_synced_at)}</dd></div>
         <div><dt>Updated</dt><dd>{formatDate(machine.updated_at)}</dd></div>
       </dl>
+      <MoveTeamControl key={machine.name} machine={machine} teams={teams} onMove={onMove} moving={moving} moveError={moveError} />
+    </div>
+  );
+}
+
+function MoveTeamControl({ machine, teams, onMove, moving, moveError }: {
+  machine: Machine;
+  teams: TeamInfo[];
+  onMove: (name: string, team: string) => void;
+  moving: boolean;
+  moveError: string;
+}) {
+  const [target, setTarget] = useState("");
+  const otherTeams = teams.filter((team) => team.id !== (machine.team_id || machine.org_id));
+  if (!otherTeams.length) return null;
+  return (
+    <div className="move-team">
+      <label>
+        Move to team
+        <select value={target} onChange={(event) => setTarget(event.target.value)}>
+          <option value="">Choose a team</option>
+          {otherTeams.map((team) => (
+            <option value={team.slug || team.id} key={team.id}>{team.name}</option>
+          ))}
+        </select>
+      </label>
+      <button className="primary-button" type="button" disabled={!target || moving} onClick={() => onMove(machine.name, target)}>
+        <ArrowRightLeft size={16} />
+        {moving ? "Moving" : "Move"}
+      </button>
+      {moveError ? <p className="error">{moveError}</p> : null}
     </div>
   );
 }

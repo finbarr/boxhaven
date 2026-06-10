@@ -655,6 +655,20 @@ button:disabled {
   color: #31473f;
 }
 
+.move-team {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.move-team .error {
+  grid-column: 1 / -1;
+}
+
 .section-tabs {
   display: inline-flex;
   gap: 4px;
@@ -788,6 +802,13 @@ button:disabled {
   color: #2f6f5c;
   font-size: 11px;
   text-transform: uppercase;
+}
+
+.machine-row .badge {
+  flex: 0 0 auto;
+  max-width: 130px;
+  margin-left: 0;
+  overflow: hidden;
 }
 
 .invite-result {
