@@ -72,7 +72,13 @@ type teamInvitation struct {
 }
 
 type teamWhoamiResponse struct {
-	AppURL string `json:"app_url"`
+	AppURL string             `json:"app_url"`
+	Team   *teamOrganization  `json:"team"`
+	Teams  []teamOrganization `json:"teams"`
+}
+
+type teamSetActiveRequest struct {
+	OrganizationID string `json:"organizationId"`
 }
 
 type teamMachine struct {
@@ -97,6 +103,10 @@ func runTeam(args []string, projectDir string) error {
 		return runTeamList(args[1:], projectDir)
 	case "create":
 		return runTeamCreate(args[1:], projectDir)
+	case "switch":
+		return runTeamSwitch(args[1:], projectDir)
+	case "status":
+		return runTeamStatus(args[1:], projectDir)
 	case "members":
 		return runTeamMembers(args[1:], projectDir)
 	case "invite":
@@ -112,6 +122,8 @@ func printTeamUsage() {
 	fmt.Fprintln(os.Stderr, "USAGE:")
 	fmt.Fprintln(os.Stderr, "  bh team list")
 	fmt.Fprintln(os.Stderr, "  bh team create <name>")
+	fmt.Fprintln(os.Stderr, "  bh team switch <team>")
+	fmt.Fprintln(os.Stderr, "  bh team status")
 	fmt.Fprintln(os.Stderr, "  bh team members [--team <slug-or-id>]")
 	fmt.Fprintln(os.Stderr, "  bh team invite <email> [--role member|admin|owner] [--team <slug-or-id>]")
 	fmt.Fprintln(os.Stderr, "  bh team boxes [--team <slug-or-id>]")
@@ -234,6 +246,10 @@ func runTeamList(args []string, projectDir string) error {
 		}
 		return nil
 	}
+	return printTeamOrganizationsTable(orgs)
+}
+
+func printTeamOrganizationsTable(orgs []teamOrganization) error {
 	sort.Slice(orgs, func(i, j int) bool {
 		return orgs[i].Name < orgs[j].Name
 	})
@@ -276,6 +292,92 @@ func runTeamCreate(args []string, projectDir string) error {
 	success("Created team %s (slug: %s)", firstNonEmpty(org.Name, name), firstNonEmpty(org.Slug, slug))
 	info("Invite teammates with `bh team invite <email>`.")
 	return nil
+}
+
+func runTeamSwitch(args []string, projectDir string) error {
+	selector, team, role, err := parseTeamArgs("switch", args, true)
+	if err != nil {
+		return err
+	}
+	if role != "" {
+		return fmt.Errorf("bh team switch does not take --role")
+	}
+	if selector == "" {
+		selector = team
+	} else if team != "" {
+		return fmt.Errorf("bh team switch takes a single team")
+	}
+	if selector == "" {
+		return fmt.Errorf("bh team switch requires a team")
+	}
+	cfg, err := loadConfig(projectDir)
+	if err != nil {
+		return err
+	}
+	org, err := resolveTeamOrganization(cfg, selector)
+	if err != nil {
+		return err
+	}
+	req := teamSetActiveRequest{OrganizationID: org.ID}
+	if err := remoteBackendRequest(cfg, http.MethodPost, "/v1/auth/organization/set-active", req, nil); err != nil {
+		return err
+	}
+	label := firstNonEmpty(org.Slug, org.Name, org.ID)
+	success("Switched active team to %s", label)
+	info("New boxes default to %s for this CLI login.", label)
+	return nil
+}
+
+func runTeamStatus(args []string, projectDir string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("unexpected bh team status args: %v", args)
+	}
+	cfg, err := loadConfig(projectDir)
+	if err != nil {
+		return err
+	}
+	var whoami teamWhoamiResponse
+	if err := remoteBackendRequest(cfg, http.MethodGet, "/v1/auth/whoami", nil, &whoami); err != nil {
+		return err
+	}
+	fmt.Printf("%sactive_team:%s %s\n", colorBold, colorReset, teamActiveLabel(whoami.Team))
+	if len(whoami.Teams) == 0 {
+		if _, err := fmt.Fprintln(os.Stdout, "No teams yet. Run `bh team create <name>` to start one."); err != nil {
+			return err
+		}
+		return nil
+	}
+	return printTeamOrganizationsTable(whoami.Teams)
+}
+
+func teamActiveLabel(team *teamOrganization) string {
+	if team == nil {
+		return "-"
+	}
+	name := strings.TrimSpace(team.Name)
+	slug := strings.TrimSpace(team.Slug)
+	switch {
+	case name != "" && slug != "":
+		return name + " (" + slug + ")"
+	case name != "":
+		return name
+	case slug != "":
+		return slug
+	}
+	return valueOrDash(team.ID)
+}
+
+func printLoginDefaultTeam(cfg Config) {
+	var whoami teamWhoamiResponse
+	if err := remoteBackendRequest(cfg, http.MethodGet, "/v1/auth/whoami", nil, &whoami); err != nil {
+		return
+	}
+	if whoami.Team == nil {
+		return
+	}
+	if label := firstNonEmpty(whoami.Team.Slug, whoami.Team.Name); label != "" {
+		info("Default team: %s", label)
+	}
 }
 
 func runTeamMembers(args []string, projectDir string) error {

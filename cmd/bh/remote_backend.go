@@ -32,6 +32,7 @@ type remoteBackendCreateRequest struct {
 	Provider   string `json:"provider,omitempty"`
 	Region     string `json:"region,omitempty"`
 	Image      string `json:"image,omitempty"`
+	Team       string `json:"team,omitempty"`
 	SourcePath string `json:"source_path,omitempty"`
 	RepoURL    string `json:"repo_url,omitempty"`
 	Branch     string `json:"branch,omitempty"`
@@ -69,6 +70,10 @@ type remoteBackendSyncCompleteRequest struct {
 
 type remoteBackendRenameRequest struct {
 	Name string `json:"name"`
+}
+
+type remoteBackendMoveRequest struct {
+	Team string `json:"team"`
 }
 
 type remoteBackendSetupRequest struct {
@@ -111,6 +116,7 @@ func createRemoteBackendMachine(cfg Config, projectDir string, opts remoteProvis
 		Provider:   opts.Provider,
 		Region:     opts.Region,
 		Image:      opts.Image,
+		Team:       opts.Team,
 		SourcePath: sourcePath,
 		RepoURL:    repo.URL,
 		Branch:     repo.Branch,
@@ -198,6 +204,19 @@ func renameRemoteBackendMachine(cfg Config, fromName string, toName string) (rem
 	}
 	if machine.ProjectPath == "" {
 		machine.ProjectPath = remoteProjectPath()
+	}
+	return machine, nil
+}
+
+func moveRemoteBackendMachine(cfg Config, name string, team string) (remoteMachine, error) {
+	req := remoteBackendMoveRequest{Team: team}
+	var response remoteBackendMachineResponse
+	if err := remoteBackendRequest(cfg, http.MethodPost, "/v1/machines/"+url.PathEscape(name)+"/move", req, &response); err != nil {
+		return remoteMachine{}, err
+	}
+	machine := response.Machine
+	if machine.Name == "" {
+		machine.Name = name
 	}
 	return machine, nil
 }
@@ -392,6 +411,11 @@ func mergeRemoteBackendMachine(local remoteMachine, remote remoteMachine) remote
 	}
 	if remote.ProviderID == "" {
 		remote.ProviderID = local.ProviderID
+	}
+	if remote.TeamID == "" {
+		remote.TeamID = local.TeamID
+		remote.TeamSlug = local.TeamSlug
+		remote.TeamName = local.TeamName
 	}
 	remote.SSHKeyPath = local.SSHKeyPath
 	remote.SSHCertificatePath = local.SSHCertificatePath
