@@ -279,7 +279,7 @@ function Dashboard({ token, user, teams, activeTeam }: { token: string; user?: A
   const createMachine = useMutation({
     mutationFn: () => apiFetch<MachineResponse>("/v1/machines", token, {
       method: "POST",
-      body: { name, tier, ...(provider ? { provider } : {}), ...(team ? { team } : {}) },
+      body: { name, tier, ...(provider ? { provider } : {}), ...((team || defaultTeam) ? { team: team || defaultTeam } : {}) },
     }),
     onSuccess: (data) => {
       setName("");
@@ -472,7 +472,7 @@ function MachineDetail({ machine, teams, connect, loading, onDestroy, destroying
         <div><dt>Last sync</dt><dd>{formatDate(machine.last_synced_at)}</dd></div>
         <div><dt>Updated</dt><dd>{formatDate(machine.updated_at)}</dd></div>
       </dl>
-      <MoveTeamControl key={machine.name} machine={machine} teams={teams} onMove={onMove} moving={moving} moveError={moveError} />
+      <MoveTeamControl key={`${machine.name}:${machine.team_id || ""}`} machine={machine} teams={teams} onMove={onMove} moving={moving} moveError={moveError} />
     </div>
   );
 }

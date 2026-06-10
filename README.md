@@ -148,7 +148,8 @@ teammate, who accepts it after signing in with the invited email address.
 BoxHaven does not send invitation emails.
 
 New boxes land in the session's active team: `bh login` pins it, and accepting
-an invitation switches it for that session. Control placement explicitly:
+an invitation, creating a team, or selecting a team in the console's Team view
+switches it for that session. Control placement explicitly:
 
 ```bash
 bh create work --team acme   # create a box directly in a team
@@ -160,6 +161,10 @@ Members have one of three roles: `owner`, `admin`, or `member`. Team members
 see exactly the boxes in that team and who owns each one; boxes in your other
 teams stay invisible to them. Owners and admins can destroy team boxes;
 members can only destroy their own.
+
+When you leave a team (or are removed), your boxes in it move back to your
+active team the next time you list them; until that next listing, the old
+team can still see and destroy them.
 
 Moving or sharing never copies a box. To hand a teammate a box like yours,
 snapshot it and create a new box from the resulting image — snapshotting is

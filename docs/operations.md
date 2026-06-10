@@ -174,7 +174,13 @@ session's active team to the joined team.
 Every box belongs to a team, and every account gets a personal team
 automatically. New boxes land in the session's active team; `bh create --team`
 targets a team explicitly, `bh team switch <team>` changes the CLI default,
-and `bh move <name> <team>` moves a box between the owner's teams.
+and `bh move <name> <team>` moves a box between the owner's teams. Creating a
+team or selecting one in the console's Team view also switches that session's
+active team.
+
+When a member leaves or is removed from a team, their boxes in it move back
+to their active team the next time they list their boxes; until then the old
+team can still see and destroy those boxes.
 
 Roles are `owner`, `admin`, and `member`. Members see exactly the boxes in
 that team and their owners — not every box of every member. Owners and admins

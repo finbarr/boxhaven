@@ -32,6 +32,7 @@ type AuthContext = {
   userID: string;
   email: string;
   orgID: string;
+  teams: TeamInfo[];
 };
 
 type TeamInfo = {
@@ -167,15 +168,14 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   app.get("/v1/auth/whoami", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
-    const teams = await listUserTeams(options, toHeaders(request.headers));
     return {
       authenticated: true,
       provider: options.providers.defaultName,
       providers: options.providers.names(),
       admin: isAdmin(options, auth),
       app_url: options.appPublicURL || "",
-      team: teams.find((team) => team.id === auth.orgID) || null,
-      teams,
+      team: auth.teams.find((team) => team.id === auth.orgID) || null,
+      teams: auth.teams,
       user: {
         id: auth.userID,
         email: auth.email,
@@ -225,27 +225,28 @@ export function createBackend(options: BackendOptions): FastifyInstance {
         message: `you have reached the limit of ${limit} boxes; destroy one with bh destroy <name> first`,
       });
     }
-    const teams = await listUserTeams(options, toHeaders(request.headers));
     let orgID = auth.orgID;
     if (body.team) {
-      const team = findTeam(teams, body.team);
-      if (!team) {
+      const found = findTeam(auth.teams, body.team);
+      if (found.error) {
+        return reply.code(400).send({ id: "bad_request", message: found.error });
+      }
+      if (!found.team) {
         return reply.code(400).send({ id: "bad_request", message: `you are not a member of team ${body.team}` });
       }
-      orgID = team.id;
+      orgID = found.team.id;
     }
-    return createMachine(options, agents, auth, provider, body, orgID, teams, reply);
+    return createMachine(options, agents, auth, provider, body, orgID, auth.teams, reply);
   });
 
   app.get("/v1/machines", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
-    const teams = await listUserTeams(options, toHeaders(request.headers));
     await syncProviderMachines(options, auth);
     const machines: TeamMachine[] = [];
     for (const machine of await options.store.listMachinesForUser(auth.userID)) {
-      const healed = await healMachineTeam(options, auth, teams, machine);
-      machines.push(decorateTeam(publicMachine(normalizeMachine(options, healed)), teams));
+      const healed = await healMachineTeam(options, auth, machine);
+      machines.push(decorateTeam(publicMachine(normalizeMachine(options, healed)), auth.teams));
     }
     return { machines };
   });
@@ -264,12 +265,11 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
-    const teams = await listUserTeams(options, toHeaders(request.headers));
     const refreshed = await provider.getMachine(existing);
     const machine = normalizeMachine(options, { ...existing, ...refreshed.machine, name, user_id: auth.userID });
     await options.store.putMachine(machine);
-    const healed = await healMachineTeam(options, auth, teams, machine);
-    return { machine: decorateTeam(publicMachine(healed), teams), status: refreshed.status || "leased" };
+    const healed = await healMachineTeam(options, auth, machine);
+    return { machine: decorateTeam(publicMachine(healed), auth.teams), status: refreshed.status || "leased" };
   });
 
   app.get<{ Params: { name: string } }>("/v1/machines/:name/connect", async (request, reply) => {
@@ -286,13 +286,12 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
-    const teams = await listUserTeams(options, toHeaders(request.headers));
     const refreshed = await provider.getMachine(existing);
     const machine = normalizeMachine(options, { ...existing, ...refreshed.machine, name, user_id: auth.userID });
     await options.store.putMachine(machine);
-    const healed = await healMachineTeam(options, auth, teams, machine);
+    const healed = await healMachineTeam(options, auth, machine);
     return {
-      machine: decorateTeam(publicMachine(healed), teams),
+      machine: decorateTeam(publicMachine(healed), auth.teams),
       status: refreshed.status || "leased",
       connect: {
         transport: "direct_ssh_certificate",
@@ -642,14 +641,16 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!reference) return reply.code(400).send({ id: "bad_request", message: "target team is required" });
     const machine = await options.store.getMachine(auth.userID, name);
     if (!machine) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
-    const teams = await listUserTeams(options, toHeaders(request.headers));
-    const team = findTeam(teams, reference);
-    if (!team) {
+    const found = findTeam(auth.teams, reference);
+    if (found.error) {
+      return reply.code(400).send({ id: "bad_request", message: found.error });
+    }
+    if (!found.team) {
       return reply.code(400).send({ id: "bad_request", message: `you are not a member of team ${reference}` });
     }
-    const moved = normalizeMachine(options, { ...machine, org_id: team.id, updated_at: new Date().toISOString() });
+    const moved = normalizeMachine(options, { ...machine, org_id: found.team.id, updated_at: new Date().toISOString() });
     await options.store.putMachine(moved);
-    return { machine: decorateTeam(publicMachine(moved), teams) };
+    return { machine: decorateTeam(publicMachine(moved), auth.teams) };
   });
 
   if (options.appDir) {
@@ -1143,11 +1144,23 @@ async function requireAuth(options: BackendOptions, request: { headers: Record<s
     reply.code(401).send({ id: "unauthorized", message: "missing or invalid bearer token" });
     return undefined;
   }
-  const activeOrgID = (session.session as { activeOrganizationId?: string | null }).activeOrganizationId || "";
+  // The session's active team is only trusted while the user is still a
+  // member: Better Auth does not clear activeOrganizationId on the removed
+  // member's other sessions, and a stale team must never receive boxes.
+  const claimed = (session.session as { activeOrganizationId?: string | null }).activeOrganizationId || "";
+  let teams = await listUserTeams(options, headers);
+  let orgID = claimed && teams.some((team) => team.id === claimed) ? claimed : "";
+  if (!orgID) {
+    orgID = await ensureActiveTeam(options, headers, session.user, teams);
+    if (orgID && !teams.some((team) => team.id === orgID)) {
+      teams = await listUserTeams(options, headers);
+    }
+  }
   return {
     userID: session.user.id,
     email: session.user.email,
-    orgID: activeOrgID || await ensureActiveTeam(options, headers, session.user),
+    orgID,
+    teams,
   };
 }
 
@@ -1169,9 +1182,10 @@ async function ensureActiveTeam(
   options: BackendOptions,
   headers: Headers,
   user: { id: string; email: string; name?: string | null },
+  existingTeams?: TeamInfo[],
 ): Promise<string> {
   const api = orgAPI(options);
-  let orgID = (await api.listOrganizations({ headers }))?.[0]?.id || "";
+  let orgID = existingTeams?.[0]?.id || "";
   if (!orgID) {
     try {
       const created = await api.createOrganization({
@@ -1211,13 +1225,22 @@ async function listUserTeams(options: BackendOptions, headers: Headers): Promise
   return (orgs || []).map((org) => ({ id: org.id, name: org.name, slug: org.slug }));
 }
 
-function findTeam(teams: TeamInfo[], reference: string): TeamInfo | undefined {
+// Team references resolve by id, then slug, then display name. Only slugs and
+// ids are unique; a display name shared by several of the caller's teams must
+// be rejected rather than silently bound to an arbitrary one.
+function findTeam(teams: TeamInfo[], reference: string): { team?: TeamInfo; error?: string } {
   const want = reference.trim().toLowerCase();
-  if (!want) return undefined;
-  return teams.find((team) =>
-    team.id.toLowerCase() === want
-    || team.slug?.toLowerCase() === want
-    || team.name.toLowerCase() === want);
+  if (!want) return {};
+  const byID = teams.find((team) => team.id.toLowerCase() === want);
+  if (byID) return { team: byID };
+  const bySlug = teams.find((team) => team.slug?.toLowerCase() === want);
+  if (bySlug) return { team: bySlug };
+  const byName = teams.filter((team) => team.name.toLowerCase() === want);
+  if (byName.length === 1) return { team: byName[0] };
+  if (byName.length > 1) {
+    return { error: `team name ${reference} is ambiguous (${byName.map((team) => team.slug || team.id).join(", ")}); use the slug or id` };
+  }
+  return {};
 }
 
 function decorateTeam(machine: RemoteMachine, teams: TeamInfo[]): TeamMachine {
@@ -1231,9 +1254,10 @@ function decorateTeam(machine: RemoteMachine, teams: TeamInfo[]): TeamMachine {
 }
 
 // Boxes whose team the owner can no longer see (the team was deleted, or the
-// owner left it) follow the owner back to their active team.
-async function healMachineTeam(options: BackendOptions, auth: AuthContext, teams: TeamInfo[], machine: RemoteMachine): Promise<RemoteMachine> {
-  if (machine.org_id && teams.some((team) => team.id === machine.org_id)) return machine;
+// owner left it) follow the owner back to their active team. auth.orgID is
+// membership-validated in requireAuth, so healing never targets a stale team.
+async function healMachineTeam(options: BackendOptions, auth: AuthContext, machine: RemoteMachine): Promise<RemoteMachine> {
+  if (machine.org_id && auth.teams.some((team) => team.id === machine.org_id)) return machine;
   if (!auth.orgID) return machine;
   const healed = { ...machine, org_id: auth.orgID };
   await options.store.putMachine(healed);
