@@ -155,6 +155,8 @@ check "BoxHaven web preview skill" test -f "$HOME/.codex/skills/boxhaven-web-pre
 check "synced project git directory" test -d /opt/boxhaven/project/.git
 check "codex command" command -v codex
 check "claude command" command -v claude
+check "codex executes" env BOXHAVEN_NO_FULL_AUTO=1 codex --version
+check "claude executes" env BOXHAVEN_NO_FULL_AUTO=1 claude --version
 check "gh command" command -v gh
 check "tmux command" command -v tmux
 check "docker command" command -v docker

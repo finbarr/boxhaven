@@ -175,9 +175,24 @@ install_claude() {
   if ! command -v claude >/dev/null 2>&1; then
     curl -fsSL https://claude.ai/install.sh | bash
   fi
-  if [ -x /root/.local/bin/claude ]; then
-    ln -sf /root/.local/bin/claude /usr/local/bin/claude
+  # The installer drops a versioned binary under /root, which other users
+  # cannot traverse. Copy the resolved binary somewhere world-readable;
+  # symlinking into /root breaks claude for the boxhaven user.
+  claude_real="$(readlink -f /root/.local/bin/claude 2>/dev/null || true)"
+  if [ -n "$claude_real" ] && [ -x "$claude_real" ]; then
+    install -D -m 0755 "$claude_real" /usr/local/lib/boxhaven/claude
+    ln -sf /usr/local/lib/boxhaven/claude /usr/local/bin/claude
   fi
+}
+
+verify_agents_for_boxhaven_user() {
+  step "verifying agents run as the boxhaven user"
+  for agent in claude codex; do
+    if ! sudo -u boxhaven -i env BOXHAVEN_NO_FULL_AUTO=1 "$agent" --version >/dev/null 2>&1; then
+      echo "$agent is not runnable by the boxhaven user" >&2
+      exit 1
+    fi
+  done
 }
 
 install_rtk() {
@@ -875,6 +890,7 @@ install_git_credential_helper
 install_remote_session
 install_boxhaven_skills
 install_boxhaven_agent
+verify_agents_for_boxhaven_user
 write_profile
 
 step "marking remote runtime ready"

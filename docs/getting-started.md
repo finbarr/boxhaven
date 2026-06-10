@@ -121,21 +121,21 @@ Interactive commands such as `codex`, `claude`, `gemini`, `opencode`,
 Shells with arguments (`bash -lc '...'`) and other commands run directly over
 SSH.
 
-`bh run` mirrors the local project to the box first, including deletions.
-When an agent or editor session on the box has changes you have not synced
-back yet, pass `--no-sync`:
+`bh run` never touches the project files on the box: the project syncs when
+the box is created and when you run `bh sync up` (which mirrors deletions).
+Work done by agents on the box stays put until you pull it back with
+`bh sync down`. Pass `--sync` to a run to mirror local files first.
+
+Starting `claude` or `codex` forwards your newest local sessions for this
+project, so you can resume the conversation you were having on your laptop:
 
 ```bash
-bh run work --no-sync bash -lc 'go test ./...'
+bh run work claude --continue
 ```
 
-The shortest loop is `bh dev`, which picks the box name from the project
-(or `remote_name` in `.boxhaven.toml`), creates it on first use, syncs, and
-runs your command or configured default:
-
-```bash
-bh dev claude
-```
+Disconnect whenever you like — the agent keeps running in the box's tmux
+session. `bh connect work` reattaches, and `bh list` shows which boxes are
+online.
 
 ## Sync Files
 

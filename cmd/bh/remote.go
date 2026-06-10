@@ -100,9 +100,8 @@ func runRemote(args []string, projectDir string) error {
 
 func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "USAGE:")
-	fmt.Fprintln(os.Stderr, "  bh dev [options] [cmd...]")
 	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--tier <tier>] [--region <region>] [--image <image>] [--team <team>] [--no-sync]")
-	fmt.Fprintln(os.Stderr, "  bh run <name> [--no-sync] <cmd...>")
+	fmt.Fprintln(os.Stderr, "  bh run <name> [--sync] <cmd...>")
 	fmt.Fprintln(os.Stderr, "  bh connect <name>")
 	fmt.Fprintln(os.Stderr, "  bh sync up <name>")
 	fmt.Fprintln(os.Stderr, "  bh sync down <name> --force")
@@ -113,7 +112,8 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  bh destroy <name>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "OPTIONS:")
-	fmt.Fprintln(os.Stderr, "  --no-sync            Skip the project sync (create: initial sync; run/dev: keep remote edits)")
+	fmt.Fprintln(os.Stderr, "  --no-sync            Skip the create command's initial project sync")
+	fmt.Fprintln(os.Stderr, "  --sync               Mirror the local project before bh run (off by default; overwrites box-side edits)")
 	fmt.Fprintln(os.Stderr, "  --provider <name>    Cloud provider for create (defaults to config or backend default)")
 	fmt.Fprintln(os.Stderr, "  --tier <tier>        Machine size tier for create: small, medium, or large")
 	fmt.Fprintln(os.Stderr, "  --region <region>    Provider region for create")
@@ -124,8 +124,8 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "EXAMPLES:")
 	fmt.Fprintln(os.Stderr, "  bh login")
-	fmt.Fprintln(os.Stderr, "  bh dev claude        # box named after this project, created on first use")
-	fmt.Fprintln(os.Stderr, "  bh create foo")
+	fmt.Fprintln(os.Stderr, "  bh create foo                # creates the box and syncs this project once")
+	fmt.Fprintln(os.Stderr, "  bh run foo claude --continue # resume your local claude session on the box")
 	fmt.Fprintln(os.Stderr, "  bh run foo codex")
 	fmt.Fprintln(os.Stderr, "  bh connect foo")
 	fmt.Fprintln(os.Stderr, "  bh sync up foo")
@@ -159,9 +159,12 @@ func runRemoteRun(args []string, projectDir string) error {
 	if err != nil {
 		return err
 	}
-	syncProject := true
-	for len(commandArgs) > 0 && commandArgs[0] == "--no-sync" {
-		syncProject = false
+	// The project syncs when the box is created and via bh sync; bh run does
+	// not mirror the local folder, so work done by agents on the box is never
+	// overwritten. --sync opts back in.
+	syncProject := false
+	for len(commandArgs) > 0 && (commandArgs[0] == "--sync" || commandArgs[0] == "--no-sync") {
+		syncProject = commandArgs[0] == "--sync"
 		commandArgs = commandArgs[1:]
 	}
 	if len(commandArgs) == 0 {
@@ -172,6 +175,7 @@ func runRemoteRun(args []string, projectDir string) error {
 		return err
 	}
 	defer cleanup()
+	forwardSessionsForCommand(machine, commandArgs, projectDir)
 	return runRemoteMachineCommand(cfg, machine, commandArgs, projectDir)
 }
 
@@ -611,6 +615,16 @@ func createRemoteMachine(cfg Config, projectDir string, opts remoteProvisionOpti
 		defer cleanup()
 		if err := syncRemoteProject(&machine, cfg, projectDir); err != nil {
 			return machine, err
+		}
+		for _, agent := range []string{"claude", "codex"} {
+			count, size, err := forwardAgentSessions(machine, agent, projectDir)
+			if err != nil {
+				warn("Could not forward local %s sessions: %v", agent, err)
+				continue
+			}
+			if count > 0 {
+				info("Forwarded %d recent local %s session(s) (%s); resume on the box with `bh run %s %s --continue`", count, agent, formatByteSize(size), machine.Name, agent)
+			}
 		}
 	}
 	printRemoteReady(machine)
@@ -1231,6 +1245,15 @@ func localRemoteAuthFiles(sshUser string) []remoteAuthFile {
 		{filepath.Join(home, ".codex", "config.toml"), filepath.Join(remoteHome, ".codex", "config.toml")},
 		{filepath.Join(home, ".claude.json"), filepath.Join(remoteHome, ".claude.json")},
 		{filepath.Join(home, ".claude", "settings.json"), filepath.Join(remoteHome, ".claude", "settings.json")},
+		// Linux hosts keep the Claude OAuth credentials here (macOS stores
+		// them in the Keychain, where no file can be forwarded).
+		{filepath.Join(home, ".claude", ".credentials.json"), filepath.Join(remoteHome, ".claude", ".credentials.json")},
+		{filepath.Join(home, ".claude", "CLAUDE.md"), filepath.Join(remoteHome, ".claude", "CLAUDE.md")},
+		{filepath.Join(home, ".gemini", "oauth_creds.json"), filepath.Join(remoteHome, ".gemini", "oauth_creds.json")},
+		{filepath.Join(home, ".gemini", "settings.json"), filepath.Join(remoteHome, ".gemini", "settings.json")},
+		{filepath.Join(home, ".config", "github-copilot", "hosts.json"), filepath.Join(remoteHome, ".config", "github-copilot", "hosts.json")},
+		{filepath.Join(home, ".config", "github-copilot", "apps.json"), filepath.Join(remoteHome, ".config", "github-copilot", "apps.json")},
+		{filepath.Join(home, ".local", "share", "opencode", "auth.json"), filepath.Join(remoteHome, ".local", "share", "opencode", "auth.json")},
 	}
 	var files []remoteAuthFile
 	for _, candidate := range candidates {

@@ -2,13 +2,17 @@
 
 ## Unreleased
 
-- Added `bh dev`: one command that derives the box name from the project
-  (or `remote_name` in `.boxhaven.toml`), creates the box on first use, syncs
-  the project, and runs the given or configured command in the managed
-  session.
-- Added `bh run --no-sync` to skip the local-to-remote project mirror so
-  remote edits (for example from an agent session on the box) are not
-  overwritten, and documented the sync model.
+- `bh run` no longer mirrors the local project to the box: the project syncs
+  at create and via `bh sync up`, so agent work on the box is never
+  overwritten by a routine command (`bh run --sync` opts back in).
+- Starting `claude` or `codex` with `bh run` forwards your newest local
+  sessions for the project, so `claude --continue` on the box resumes the
+  conversation your laptop was having. Auth forwarding now also covers Linux
+  Claude credentials, Gemini, GitHub Copilot, opencode, and the global
+  `~/.claude/CLAUDE.md`.
+- Fixed the golden image so `claude` is runnable by the box user (the
+  installer left it behind an unreadable `/root` symlink); the image build
+  and the remote smoke now verify that agents execute as the box user.
 - Shell commands with arguments (`bash -lc '...'`) now run over direct SSH
   instead of being treated as interactive sessions, and starting an already
   running session from a non-terminal prints a hint instead of failing.
