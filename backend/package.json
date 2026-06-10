@@ -23,6 +23,7 @@
   "devDependencies": {
     "@tanstack/react-query": "^5.100.14",
     "@tanstack/react-router": "^1.170.7",
+    "@tanstack/router-plugin": "^1.168.18",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.15",

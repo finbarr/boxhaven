@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Activity, Check, LogOut, Users } from "lucide-react";
-import { useEffect, useState } from "react";
-import { apiFetch, sectionKey, tokenKey, WhoamiResponse } from "./api";
+import { Check, LogOut, Users } from "lucide-react";
+import { useState } from "react";
+import { apiFetch, tokenKey, WhoamiResponse } from "./api";
 import { AccessPanel } from "./access";
-import logoURL from "./assets/boxhaven-logo.png";
+import { TopBar } from "./shell";
 
 type InvitationDetail = {
   id: string;
@@ -18,9 +18,6 @@ type InvitationDetail = {
 
 export function InvitePanel({ invitationId }: { invitationId: string }) {
   const [token, setToken] = useState(() => localStorage.getItem(tokenKey) || "");
-  useEffect(() => {
-    document.title = "Team invite — BoxHaven";
-  }, []);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const session = useQuery({
@@ -41,9 +38,9 @@ export function InvitePanel({ invitationId }: { invitationId: string }) {
       body: { invitationId },
     }),
     onSuccess: () => {
-      sessionStorage.setItem(sectionKey, "team");
       void queryClient.invalidateQueries();
-      void navigate({ to: "/" });
+      // Accepting made this the active team; land on the team view.
+      void navigate({ to: "/team" });
     },
   });
   const authenticated = Boolean(token && session.data?.authenticated);
@@ -61,25 +58,15 @@ export function InvitePanel({ invitationId }: { invitationId: string }) {
   }
 
   return (
-    <main className="console">
-      <div className="backdrop" />
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark"><img src={logoURL} alt="" /></div>
-          <div>
-            <strong>BoxHaven</strong>
-            <span>team invitation</span>
-          </div>
-        </div>
-        <div className="topbar-actions">
-          <span className="pulse"><Activity size={14} /> API</span>
-          {authenticated ? (
-            <button className="icon-button" type="button" title="Sign out" aria-label="Sign out" onClick={handleLogout}>
-              <LogOut size={15} />
-            </button>
-          ) : null}
-        </div>
-      </header>
+    <>
+      <TopBar
+        subtitle="team invitation"
+        actions={authenticated ? (
+          <button className="icon-button" type="button" title="Sign out" aria-label="Sign out" onClick={handleLogout}>
+            <LogOut size={15} />
+          </button>
+        ) : undefined}
+      />
 
       {!invitationId ? (
         <section className="narrow-layout">
@@ -136,6 +123,6 @@ export function InvitePanel({ invitationId }: { invitationId: string }) {
           </div>
         </section>
       )}
-    </main>
+    </>
   );
 }
