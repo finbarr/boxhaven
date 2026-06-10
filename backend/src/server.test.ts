@@ -802,11 +802,46 @@ test("backend snapshots a machine into a managed image", async () => {
   assert.deepEqual(provider.snapshotted, [{ machine: "golden", name: "boxhaven-remote-my-custom-build" }]);
 });
 
-test("backend exposes team machines to members and destroy to admins", async () => {
+test("backend creates a personal team automatically and scopes boxes to teams", async () => {
+  const { app, token } = await createTestBackend("solo@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  assert.equal(whoami.statusCode, 200, whoami.body);
+  assert.equal(whoami.json().team?.name, "solo's team");
+  assert.match(whoami.json().team?.slug, /^solo-[a-f0-9]{6}$/);
+  assert.equal(whoami.json().teams.length, 1);
+
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "foo" } });
+  assert.equal(created.statusCode, 201, created.body);
+  assert.equal(created.json().machine.team_id, whoami.json().team.id);
+  assert.equal(created.json().machine.team_slug, whoami.json().team.slug);
+
+  const listed = await app.inject({ method: "GET", url: "/v1/machines", headers });
+  assert.equal(listed.json().machines[0].team_slug, whoami.json().team.slug);
+});
+
+test("backend enforces the per-user machine limit", async () => {
+  const { app, token } = await createTestBackend("limited@example.com", "password123", { maxMachinesPerUser: 1 });
+  const headers = { authorization: `Bearer ${token}` };
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "one" } })).statusCode, 201);
+  const second = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "two" } });
+  assert.equal(second.statusCode, 403, second.body);
+  assert.match(second.body, /limit of 1 boxes/);
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/machines/one", headers })).statusCode, 204);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "two" } })).statusCode, 201);
+});
+
+test("backend scopes team machine listing and destroy to the box's team", async () => {
   const { app, provider, token } = await createTestBackend("owner@example.com");
   const memberToken = await signUp(app, "member@example.com");
   const ownerHeaders = { authorization: `Bearer ${token}` };
   const memberHeaders = { authorization: `Bearer ${memberToken}` };
+
+  // The member touches the API before joining, so they get a personal team,
+  // and their pre-existing box stays in it.
+  assert.equal((await app.inject({ method: "GET", url: "/v1/auth/whoami", headers: memberHeaders })).statusCode, 200);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: memberHeaders, payload: { name: "private-box" } })).statusCode, 201);
 
   const orgCreated = await app.inject({
     method: "POST",
@@ -825,25 +860,27 @@ test("backend exposes team machines to members and destroy to admins", async () 
     payload: { email: "member@example.com", role: "member", organizationId: orgID },
   });
   assert.equal(invited.statusCode, 200, invited.body);
-  const invitationID = invited.json().id;
-  assert.equal(typeof invitationID, "string");
 
   const accepted = await app.inject({
     method: "POST",
     url: "/v1/auth/organization/accept-invitation",
     headers: memberHeaders,
-    payload: { invitationId: invitationID },
+    payload: { invitationId: invited.json().id },
   });
   assert.equal(accepted.statusCode, 200, accepted.body);
 
-  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "owner-box" } })).statusCode, 201);
-  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: memberHeaders, payload: { name: "member-box" } })).statusCode, 201);
+  // Boxes land in the requested team. Accepting an invitation switches the
+  // member's active team, so their next create defaults to Acme, while the
+  // box created beforehand stays in (and is only visible to) their personal
+  // team.
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "owner-box", team: "acme" } })).statusCode, 201);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: memberHeaders, payload: { name: "team-box" } })).statusCode, 201);
 
   const memberView = await app.inject({ method: "GET", url: `/v1/orgs/${orgID}/machines`, headers: memberHeaders });
   assert.equal(memberView.statusCode, 200, memberView.body);
   assert.equal(memberView.json().role, "member");
   const names = memberView.json().machines.map((machine: { name: string }) => machine.name).sort();
-  assert.deepEqual(names, ["member-box", "owner-box"]);
+  assert.deepEqual(names, ["owner-box", "team-box"]);
   const ownerBox = memberView.json().machines.find((machine: { name: string }) => machine.name === "owner-box");
   assert.equal(ownerBox.owner_email, "owner@example.com");
   assert.equal(ownerBox.agent_token_hash, undefined);
@@ -855,14 +892,21 @@ test("backend exposes team machines to members and destroy to admins", async () 
   });
   assert.equal(memberDestroy.statusCode, 403, memberDestroy.body);
 
-  const memberBox = memberView.json().machines.find((machine: { name: string }) => machine.name === "member-box");
+  const teamBox = memberView.json().machines.find((machine: { name: string }) => machine.name === "team-box");
+  const privateDestroy = await app.inject({
+    method: "DELETE",
+    url: `/v1/orgs/${orgID}/machines/${teamBox.user_id}/private-box`,
+    headers: ownerHeaders,
+  });
+  assert.equal(privateDestroy.statusCode, 404, privateDestroy.body);
+
   const ownerDestroy = await app.inject({
     method: "DELETE",
-    url: `/v1/orgs/${orgID}/machines/${memberBox.user_id}/member-box`,
+    url: `/v1/orgs/${orgID}/machines/${teamBox.user_id}/team-box`,
     headers: ownerHeaders,
   });
   assert.equal(ownerDestroy.statusCode, 204, ownerDestroy.body);
-  assert.deepEqual(provider.released, ["member-box"]);
+  assert.deepEqual(provider.released, ["team-box"]);
 
   const outsiderToken = await signUp(app, "outsider@example.com");
   const outsiderView = await app.inject({
@@ -873,6 +917,32 @@ test("backend exposes team machines to members and destroy to admins", async () 
   assert.equal(outsiderView.statusCode, 403, outsiderView.body);
 });
 
+test("backend moves boxes between the owner's teams", async () => {
+  const { app, token } = await createTestBackend("mover@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+
+  const orgCreated = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name: "Side Project", slug: "side-project" },
+  });
+  assert.equal(orgCreated.statusCode, 200, orgCreated.body);
+
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "wanderer" } })).statusCode, 201);
+
+  const denied = await app.inject({ method: "POST", url: "/v1/machines/wanderer/move", headers, payload: { team: "not-a-team" } });
+  assert.equal(denied.statusCode, 400, denied.body);
+
+  const moved = await app.inject({ method: "POST", url: "/v1/machines/wanderer/move", headers, payload: { team: "side-project" } });
+  assert.equal(moved.statusCode, 200, moved.body);
+  assert.equal(moved.json().machine.team_slug, "side-project");
+
+  const orgID = orgCreated.json().id || orgCreated.json().organization?.id;
+  const teamView = await app.inject({ method: "GET", url: `/v1/orgs/${orgID}/machines`, headers });
+  assert.deepEqual(teamView.json().machines.map((machine: { name: string }) => machine.name), ["wanderer"]);
+});
+
 async function createTestBackend(
   email = "user@example.com",
   password = "password123",
@@ -881,6 +951,7 @@ async function createTestBackend(
     machineReadyTimeoutMs?: number;
     adminEmails?: string[];
     extraProviders?: MachineProvider[];
+    maxMachinesPerUser?: number;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -902,6 +973,7 @@ async function createTestBackend(
     store,
     sshCA,
     adminEmails: options.adminEmails,
+    maxMachinesPerUser: options.maxMachinesPerUser,
     apiPublicURL: "https://api.hosted.test",
     appPublicURL: "https://app.hosted.test",
     previewBaseDomain: "hosted.test",

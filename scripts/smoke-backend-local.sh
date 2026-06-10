@@ -89,8 +89,9 @@ pass "signed up two users"
 
 WHOAMI=$(curl -fsS "$BASE/v1/auth/whoami" -H "authorization: Bearer $ADMIN_TOKEN")
 echo "$WHOAMI" | json "d['admin']" | grep -qx True || fail "admin flag missing for admin user: $WHOAMI"
+echo "$WHOAMI" | json "bool(d['team'] and d['team']['slug'])" | grep -qx True || fail "expected auto-created personal team: $WHOAMI"
 curl -fsS "$BASE/v1/auth/whoami" -H "authorization: Bearer $MEMBER_TOKEN" | json "d['admin']" | grep -qx False || fail "member should not be admin"
-pass "whoami reports admin gating"
+pass "whoami reports admin gating and a personal team"
 
 ORG_ID=$(curl -fsS -X POST "$BASE/v1/auth/organization/create" -H "authorization: Bearer $ADMIN_TOKEN" \
   -H 'content-type: application/json' -d '{"name":"Smoke Team","slug":"smoke-team"}' | json "d.get('id') or d['organization']['id']")
