@@ -56,6 +56,16 @@ Use a larger tier when needed:
 bh create work --tier medium
 ```
 
+Pick a specific provider, region, or image when the backend has more than one
+provider configured:
+
+```bash
+bh create work --provider hetzner --region fsn1
+```
+
+Without `--provider`, the backend default applies. Set a sticky default with
+the `provider` key under `[remote]` in `.boxhaven.toml` or the global config.
+
 Skip the initial sync only when you intentionally want an empty project path:
 
 ```bash

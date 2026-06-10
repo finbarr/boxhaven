@@ -128,6 +128,53 @@ npm run deploy:production
 
 Keep the previous snapshot id until the remote lifecycle smoke passes.
 
+`npm run deploy:runtime` still writes `BOXHAVEN_REMOTE_IMAGE` to the env file as
+the env-configured default. A managed image activated with `bh image activate`
+overrides that env default per provider at runtime through backend state, so
+check `bh image ls` for an active image before assuming new boxes use the
+env-configured snapshot. Run `bh image deactivate` to fall back to the env
+default.
+
+## Managed Images
+
+Backend admins, listed in `BOXHAVEN_ADMIN_EMAILS`, can manage golden images
+without rerunning the image builder. Snapshot a prepared box, then activate the
+resulting image:
+
+```bash
+bh image create work
+bh image ls
+bh image activate <image-id>
+```
+
+`bh image create` snapshots one of your own boxes; the backend prefixes the
+image name with `boxhaven-remote-`. The snapshot starts in `creating` status
+and can only be activated once it is `available`. Activation makes the image
+the default for new boxes on that provider until `bh image deactivate` is run,
+and an active image cannot be deleted (`bh image rm` returns a conflict). The
+console Images view offers the same operations.
+
+After activating a new image, run the remote lifecycle smoke before relying on
+it, and keep the previous image around for rollback until the smoke passes.
+
+## Teams
+
+Create a team in the console or from the CLI:
+
+```bash
+bh team create acme
+```
+
+Invite teammates with `bh team invite <email>` or from the console Teams view.
+BoxHaven does not send invitation emails: the invite is a shareable link of the
+form `<app-url>/invite?id=<invitation-id>`. Send it to the teammate, who signs
+in with the invited email address and accepts.
+
+Roles are `owner`, `admin`, and `member`. All members see the team's boxes and
+their owners. Owners and admins can destroy any team member's box; members can
+only destroy their own. Pending invitations can be cancelled by the inviter or
+a team admin before they are accepted.
+
 ## Production Deploy
 
 For the hosted DigitalOcean deployment, use the checked-in npm entrypoint from
