@@ -33,9 +33,54 @@ button {
 
 .console {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   overflow-x: hidden;
   padding: 22px;
+}
+
+.console-body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+}
+
+.site-footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  max-width: 1280px;
+  width: 100%;
+  margin: 26px auto 0;
+  padding: 14px 2px 0;
+  border-top: 1px solid rgba(96, 75, 53, 0.14);
+  color: #6a776f;
+  font-size: 12px;
+}
+
+.site-footer nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.site-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #4f625a;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: #2f6f5c;
+  text-decoration: underline;
 }
 
 .backdrop {
