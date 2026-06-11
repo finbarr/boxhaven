@@ -13,6 +13,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as ConsoleRouteRouteImport } from './routes/_console/route'
 import { Route as ConsoleIndexRouteImport } from './routes/_console/index'
+import { Route as AuthGithubRouteImport } from './routes/auth.github'
 import { Route as ConsoleImagesRouteImport } from './routes/_console/images'
 import { Route as ConsoleDeviceRouteImport } from './routes/_console/device'
 import { Route as ConsoleTeamIndexRouteImport } from './routes/_console/team.index'
@@ -39,6 +40,11 @@ const ConsoleIndexRoute = ConsoleIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ConsoleRouteRoute,
+} as any)
+const AuthGithubRoute = AuthGithubRouteImport.update({
+  id: '/auth/github',
+  path: '/auth/github',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ConsoleImagesRoute = ConsoleImagesRouteImport.update({
   id: '/images',
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/device': typeof ConsoleDeviceRoute
   '/images': typeof ConsoleImagesRoute
+  '/auth/github': typeof AuthGithubRoute
   '/billing/$team': typeof ConsoleBillingTeamRoute
   '/boxes/$name': typeof ConsoleBoxesNameRoute
   '/team/$team': typeof ConsoleTeamTeamRoute
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/device': typeof ConsoleDeviceRoute
   '/images': typeof ConsoleImagesRoute
+  '/auth/github': typeof AuthGithubRoute
   '/': typeof ConsoleIndexRoute
   '/billing/$team': typeof ConsoleBillingTeamRoute
   '/boxes/$name': typeof ConsoleBoxesNameRoute
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/_console/device': typeof ConsoleDeviceRoute
   '/_console/images': typeof ConsoleImagesRoute
+  '/auth/github': typeof AuthGithubRoute
   '/_console/': typeof ConsoleIndexRoute
   '/_console/billing/$team': typeof ConsoleBillingTeamRoute
   '/_console/boxes/$name': typeof ConsoleBoxesNameRoute
@@ -122,6 +131,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/device'
     | '/images'
+    | '/auth/github'
     | '/billing/$team'
     | '/boxes/$name'
     | '/team/$team'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/device'
     | '/images'
+    | '/auth/github'
     | '/'
     | '/billing/$team'
     | '/boxes/$name'
@@ -146,6 +157,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/_console/device'
     | '/_console/images'
+    | '/auth/github'
     | '/_console/'
     | '/_console/billing/$team'
     | '/_console/boxes/$name'
@@ -158,6 +170,7 @@ export interface RootRouteChildren {
   ConsoleRouteRoute: typeof ConsoleRouteRouteWithChildren
   InviteRoute: typeof InviteRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  AuthGithubRoute: typeof AuthGithubRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -189,6 +202,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof ConsoleIndexRouteImport
       parentRoute: typeof ConsoleRouteRoute
+    }
+    '/auth/github': {
+      id: '/auth/github'
+      path: '/auth/github'
+      fullPath: '/auth/github'
+      preLoaderRoute: typeof AuthGithubRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_console/images': {
       id: '/_console/images'
@@ -272,6 +292,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConsoleRouteRoute: ConsoleRouteRouteWithChildren,
   InviteRoute: InviteRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  AuthGithubRoute: AuthGithubRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

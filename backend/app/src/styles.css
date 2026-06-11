@@ -417,6 +417,39 @@ select:focus {
   background: rgba(255, 252, 243, 0.78);
 }
 
+.github-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 42px;
+  border: 1px solid rgba(36, 53, 47, 0.85);
+  border-radius: 7px;
+  background: #24352f;
+  color: #fffaf0;
+  font-weight: 700;
+}
+
+.github-button:hover {
+  background: #1a2823;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #6a776f;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid rgba(96, 75, 53, 0.16);
+}
+
 .link-button {
   display: inline;
   min-height: 0;
@@ -1129,7 +1162,40 @@ a.primary-button {
   line-height: 1.45;
 }
 
-.warning-banner .link-button {
+.warning-banner .github-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 42px;
+  border: 1px solid rgba(36, 53, 47, 0.85);
+  border-radius: 7px;
+  background: #24352f;
+  color: #fffaf0;
+  font-weight: 700;
+}
+
+.github-button:hover {
+  background: #1a2823;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #6a776f;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid rgba(96, 75, 53, 0.16);
+}
+
+.link-button {
   justify-self: start;
   color: #6e4e12;
 }
