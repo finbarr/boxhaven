@@ -1889,13 +1889,16 @@ function appFilePath(path: string): string {
   return extname(clean) ? clean : "index.html";
 }
 
-async function sendAppFile(reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown }; type: (contentType: string) => unknown; send: (payload: Buffer | string) => unknown }, appDir: string, filePath: string): Promise<unknown> {
+async function sendAppFile(reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown }; type: (contentType: string) => unknown; header: (name: string, value: string) => unknown; send: (payload: Buffer | string) => unknown }, appDir: string, filePath: string): Promise<unknown> {
   const absolutePath = join(appDir, filePath);
   try {
     const fileStat = await stat(absolutePath);
     if (!fileStat.isFile()) throw new Error("not a file");
     const data = await readFile(absolutePath);
     reply.type(contentType(filePath));
+    // Hashed assets are immutable; the HTML shell must always revalidate so
+    // browsers never pair a stale shell with assets a deploy has replaced.
+    reply.header("cache-control", filePath.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache");
     return reply.send(data);
   } catch {
     if (filePath !== "index.html") return sendAppFile(reply, appDir, "index.html");

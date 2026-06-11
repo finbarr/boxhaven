@@ -875,6 +875,7 @@ a.primary-button {
 .welcome-panel.landing {
   grid-template-columns: minmax(220px, 0.66fr) minmax(320px, 1fr);
   align-items: center;
+  overflow: hidden;
   padding: 18px;
   border: 1px solid rgba(96, 75, 53, 0.16);
   border-radius: 8px;
@@ -892,6 +893,15 @@ a.primary-button {
   display: grid;
   gap: 14px;
   align-content: start;
+}
+
+/* Nested grids each reintroduce min-width:auto; without zeroing the whole
+   chain, the install one-liner's intrinsic width pushes the terminal and
+   command blocks underneath the sign-up card. */
+.landing-side > *,
+.landing-install,
+.landing-install > * {
+  min-width: 0;
 }
 
 .landing-copy h1 {
