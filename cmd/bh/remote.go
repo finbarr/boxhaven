@@ -163,8 +163,8 @@ func runRemoteRun(args []string, projectDir string) error {
 	// not mirror the local folder, so work done by agents on the box is never
 	// overwritten. --sync opts back in.
 	syncProject := false
-	for len(commandArgs) > 0 && (commandArgs[0] == "--sync" || commandArgs[0] == "--no-sync") {
-		syncProject = commandArgs[0] == "--sync"
+	for len(commandArgs) > 0 && commandArgs[0] == "--sync" {
+		syncProject = true
 		commandArgs = commandArgs[1:]
 	}
 	if len(commandArgs) == 0 {

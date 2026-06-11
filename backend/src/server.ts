@@ -19,7 +19,6 @@ export type BackendOptions = {
   store: StateStore;
   sshCA: SSHCertificateAuthority;
   adminEmails?: string[];
-  githubSignIn?: boolean;
   maxMachinesPerUser?: number;
   billing?: BillingService;
   appDir?: string;
@@ -152,10 +151,6 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   });
 
   app.get("/healthz", async () => "ok\n");
-
-  app.get("/v1/config", async () => ({
-    github_signin: Boolean(options.githubSignIn),
-  }));
 
   app.get("/v1/providers", async () => ({
     providers: options.providers.list().map((provider) => providerInfo(provider, options.providers.defaultName)),

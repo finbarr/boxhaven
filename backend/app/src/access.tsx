@@ -1,7 +1,7 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { ArrowUpRight, Copy, KeyRound, Play, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { apiFetch, formatUserCode, LoginResponse, PublicConfig } from "./api";
+import { apiFetch, formatUserCode, LoginResponse } from "./api";
 import { GitHubMark } from "./shell";
 import logoURL from "./assets/boxhaven-logo.png";
 
@@ -14,11 +14,6 @@ export function AccessPanel({ onToken, deviceUserCode, notice }: {
 }) {
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [forgot, setForgot] = useState(false);
-  const config = useQuery({
-    queryKey: ["public-config"],
-    queryFn: () => apiFetch<PublicConfig>("/v1/config"),
-    staleTime: 5 * 60 * 1000,
-  });
   const github = useMutation({
     mutationFn: () => apiFetch<{ url?: string }>("/v1/auth/sign-in/social", "", {
       method: "POST",
@@ -95,16 +90,12 @@ right where you left off`}</pre>
             <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>Sign up</button>
             <button type="button" className={mode === "signin" ? "active" : ""} onClick={() => setMode("signin")}>Sign in</button>
           </div>
-          {config.data?.github_signin ? (
-            <>
-              <button className="github-button" type="button" disabled={github.isPending} onClick={() => github.mutate()}>
-                <GitHubMark size={16} />
-                {github.isPending ? "Redirecting" : "Continue with GitHub"}
-              </button>
-              {github.error ? <p className="error">{(github.error as Error).message}</p> : null}
-              <div className="divider"><span>or with email</span></div>
-            </>
-          ) : null}
+          <button className="github-button" type="button" disabled={github.isPending} onClick={() => github.mutate()}>
+            <GitHubMark size={16} />
+            {github.isPending ? "Redirecting" : "Continue with GitHub"}
+          </button>
+          {github.error ? <p className="error">{(github.error as Error).message}</p> : null}
+          <div className="divider"><span>or with email</span></div>
           <label>
             Email
             <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" required />

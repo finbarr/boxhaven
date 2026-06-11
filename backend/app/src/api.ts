@@ -93,10 +93,6 @@ const configuredAPIURL = (import.meta.env.VITE_BOXHAVEN_API_URL || "").replace(/
 export const apiBaseURL = configuredAPIURL || (window.location.hostname === "app.boxhaven.dev" ? "https://api.boxhaven.dev" : "");
 export const tokenKey = "boxhaven.backend.token";
 
-export type PublicConfig = {
-  github_signin?: boolean;
-};
-
 export async function apiFetch<T = unknown>(path: string, token = "", init: { method?: string; body?: unknown; credentials?: RequestCredentials } = {}): Promise<T> {
   const response = await fetch(`${apiBaseURL}${path}`, {
     method: init.method || "GET",
