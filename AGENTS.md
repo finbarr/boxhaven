@@ -100,6 +100,12 @@ multiple-machine behavior needs coverage.
 
 ## Hard Learnings
 
+- Never add feature flags, env-gated conditional UI, compatibility shims,
+  deprecated aliases, legacy redirects, or any other backup code paths unless
+  Finbarr explicitly asks for them. The product is built as a whole: features
+  ship fully on, dead paths get deleted, and breaking changes are fine because
+  we control every surface. Required credentials are configuration, not
+  feature flags.
 - Remote backend auth should use Better Auth for users, passwords, and sessions.
   Do not hand-roll auth flows.
 - CLI control-plane HTTP calls should stay on HTTP/1.x unless the production

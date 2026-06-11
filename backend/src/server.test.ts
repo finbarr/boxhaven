@@ -1022,16 +1022,8 @@ test("backend moves boxes between the owner's teams", async () => {
   assert.deepEqual(teamView.json().machines.map((machine: { name: string }) => machine.name), ["wanderer"]);
 });
 
-test("backend advertises and starts GitHub sign-in when configured", async () => {
-  const plain = await createTestBackend("nogh@example.com");
-  const offConfig = await plain.app.inject({ method: "GET", url: "/v1/config" });
-  assert.equal(offConfig.statusCode, 200);
-  assert.equal(offConfig.json().github_signin, false);
-
+test("backend starts GitHub sign-in", async () => {
   const { app } = await createTestBackend("gh@example.com", "password123", { github: true });
-  const onConfig = await app.inject({ method: "GET", url: "/v1/config" });
-  assert.equal(onConfig.json().github_signin, true);
-
   const social = await app.inject({
     method: "POST",
     url: "/v1/auth/sign-in/social",
@@ -1074,7 +1066,6 @@ async function createTestBackend(
     store,
     sshCA,
     adminEmails: options.adminEmails,
-    githubSignIn: options.github,
     maxMachinesPerUser: options.maxMachinesPerUser,
     apiPublicURL: "https://api.hosted.test",
     appPublicURL: "https://app.hosted.test",

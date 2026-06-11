@@ -50,7 +50,6 @@ const app = createBackend({
   store,
   sshCA,
   adminEmails: splitList(process.env.BOXHAVEN_ADMIN_EMAILS),
-  githubSignIn: Boolean(github),
   maxMachinesPerUser: Number(process.env.BOXHAVEN_MAX_MACHINES_PER_USER || 0) || undefined,
   billing,
   appDir: process.env.BOXHAVEN_BACKEND_APP_DIR || defaultAppDir,
