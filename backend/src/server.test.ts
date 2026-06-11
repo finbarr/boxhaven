@@ -1022,6 +1022,26 @@ test("backend moves boxes between the owner's teams", async () => {
   assert.deepEqual(teamView.json().machines.map((machine: { name: string }) => machine.name), ["wanderer"]);
 });
 
+test("backend advertises and starts GitHub sign-in when configured", async () => {
+  const plain = await createTestBackend("nogh@example.com");
+  const offConfig = await plain.app.inject({ method: "GET", url: "/v1/config" });
+  assert.equal(offConfig.statusCode, 200);
+  assert.equal(offConfig.json().github_signin, false);
+
+  const { app } = await createTestBackend("gh@example.com", "password123", { github: true });
+  const onConfig = await app.inject({ method: "GET", url: "/v1/config" });
+  assert.equal(onConfig.json().github_signin, true);
+
+  const social = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-in/social",
+    payload: { provider: "github", callbackURL: "http://127.0.0.1/auth/github" },
+  });
+  assert.equal(social.statusCode, 200, social.body);
+  assert.match(social.json().url, /github\.com\/login\/oauth\/authorize/);
+  assert.match(social.json().url, /client_id=test-client-id/);
+});
+
 async function createTestBackend(
   email = "user@example.com",
   password = "password123",
@@ -1031,6 +1051,7 @@ async function createTestBackend(
     adminEmails?: string[];
     extraProviders?: MachineProvider[];
     maxMachinesPerUser?: number;
+    github?: boolean;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -1043,6 +1064,7 @@ async function createTestBackend(
     databasePath: join(dir, "auth.sqlite"),
     secret: "test-secret-with-at-least-thirty-two-bytes",
     deviceVerificationURL: "http://127.0.0.1/device",
+    ...(options.github ? { github: { clientId: "test-client-id", clientSecret: "test-client-secret" } } : {}),
   };
   await migrateBackendAuth(authOptions);
   const auth = createBackendAuth(authOptions);
@@ -1052,6 +1074,7 @@ async function createTestBackend(
     store,
     sshCA,
     adminEmails: options.adminEmails,
+    githubSignIn: options.github,
     maxMachinesPerUser: options.maxMachinesPerUser,
     apiPublicURL: "https://api.hosted.test",
     appPublicURL: "https://app.hosted.test",

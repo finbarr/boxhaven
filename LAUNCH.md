@@ -40,13 +40,17 @@ done or scripted.
   4. Set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` in
      `deploy/digitalocean/.env.production` and redeploy. Billing stays
      entirely off (and self-host unaffected) until the key is set.
-- [ ] **(you) Resend** (or any provider; the client is a 40-line raw HTTP
-  call): verify the `boxhaven.dev` sending domain, then set `RESEND_API_KEY`
-  and `BOXHAVEN_EMAIL_FROM="BoxHaven <hello@boxhaven.dev>"`. Enables password
-  reset and invitation emails; invite links keep working without it.
-- [ ] **(you) DNS**: add `docs` CNAME → `finbarr.github.io` so the docs site
-  serves at `https://docs.boxhaven.dev` (GitHub Pages is already configured
-  with the CNAME file and workflow).
+- [x] **Resend**: `mail.boxhaven.dev` verified; production sends from
+  `BoxHaven <hello@mail.boxhaven.dev>` (password reset and invitation emails
+  deliver to all users).
+- [x] **DNS**: `docs.boxhaven.dev` live with enforced HTTPS.
+- [ ] **(you) GitHub sign-in**: create a GitHub OAuth App (Settings →
+  Developer settings → OAuth Apps) with homepage `https://app.boxhaven.dev`
+  and callback URL `https://api.boxhaven.dev/v1/auth/callback/github`, then
+  set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in
+  `deploy/digitalocean/.env.production` and redeploy. The "Continue with
+  GitHub" button appears automatically once they are set; accounts with a
+  matching verified email link to the existing account.
 
 ## Needs you: legal and money decisions
 

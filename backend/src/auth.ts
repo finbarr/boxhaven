@@ -14,6 +14,7 @@ export type BackendAuthOptions = {
   deviceVerificationURL?: string;
   appURL?: string;
   email?: EmailService;
+  github?: { clientId: string; clientSecret: string };
 };
 
 export function createBackendAuth(options: BackendAuthOptions) {
@@ -36,6 +37,15 @@ function authConfig(options: BackendAuthOptions) {
     baseURL: options.baseURL,
     secret: options.secret,
     trustedOrigins: [...trustedOrigins],
+    ...(options.github ? { socialProviders: { github: options.github } } : {}),
+    account: {
+      accountLinking: {
+        enabled: true,
+        // GitHub reports verified emails, so a GitHub sign-in with the same
+        // address attaches to the existing account instead of duplicating it.
+        trustedProviders: ["github"],
+      },
+    },
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false,

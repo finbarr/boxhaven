@@ -27,6 +27,10 @@ bh connect work
 Mid-conversation with Claude locally? `bh run work claude --continue` resumes
 that exact session on the box.
 
+Sign up with email and password or, when the operator configures a GitHub
+OAuth app (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`), with "Continue with
+GitHub" — `bh login` then works the same either way.
+
 Run as many agents in parallel as you want, each on its own box:
 
 ```bash

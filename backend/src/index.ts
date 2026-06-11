@@ -28,6 +28,9 @@ const defaultPublicURL = publicOrigin(authBaseURL) || `http://${host}:${port}`;
 const apiPublicURL = trimURL(process.env.BOXHAVEN_API_URL) || defaultPublicURL;
 const appPublicURL = trimURL(process.env.BOXHAVEN_APP_URL) || defaultPublicURL;
 const email = emailServiceFromEnv();
+const github = process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+  ? { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET }
+  : undefined;
 const billing = billingServiceFromEnv(store);
 const authOptions = {
   baseURL: authBaseURL,
@@ -37,6 +40,7 @@ const authOptions = {
   deviceVerificationURL: `${appPublicURL}/device`,
   appURL: appPublicURL,
   email,
+  github,
 };
 await migrateBackendAuth(authOptions);
 const auth = createBackendAuth(authOptions);
@@ -46,6 +50,7 @@ const app = createBackend({
   store,
   sshCA,
   adminEmails: splitList(process.env.BOXHAVEN_ADMIN_EMAILS),
+  githubSignIn: Boolean(github),
   maxMachinesPerUser: Number(process.env.BOXHAVEN_MAX_MACHINES_PER_USER || 0) || undefined,
   billing,
   appDir: process.env.BOXHAVEN_BACKEND_APP_DIR || defaultAppDir,
