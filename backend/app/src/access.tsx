@@ -102,7 +102,7 @@ function LandingIntro() {
     <div className="landing-page">
       <section className="landing-hero">
         <div className="landing-kicker">Open-source devbox management</div>
-        <h1>Dev boxes that keep working after you disconnect.</h1>
+        <h1>Dev boxes that <span className="accent">keep working</span> after you disconnect.</h1>
         <p>
           Spin up persistent Linux boxes, sync your projects, and run coding agents in tmux sessions
           you can reconnect to from anywhere. Hosted or self-hosted from the same open-source code.
@@ -124,7 +124,7 @@ function LandingIntro() {
       </section>
 
       <section className="landing-paths" aria-label="Hosted and self-hosted options">
-        <div className="landing-path">
+        <div className="landing-path landing-path--hosted">
           <span>Hosted</span>
           <h2>Create your first box in seconds.</h2>
           <p>We run the control plane and the cloud account. Sign up and start working with no backend to operate.</p>
