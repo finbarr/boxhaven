@@ -149,8 +149,8 @@ const FEATURES = [
   },
   {
     icon: <Server size={20} />,
-    title: "Real VMs, standard clouds",
-    body: "Provision on DigitalOcean or Hetzner and pick the region per box — real VPS instances, no proprietary runtime or lock-in.",
+    title: "Full root on real VMs",
+    body: "Real VPS instances on DigitalOcean or Hetzner with full root — install anything, run Docker, no proprietary runtime or lock-in.",
   },
 ];
 
@@ -162,9 +162,9 @@ function LandingIntro() {
           <div className="landing-kicker">Open-source devbox management</div>
           <h1>Dev boxes that <span className="accent">keep working</span> after you disconnect.</h1>
           <p>
-            Spin up full Linux VMs — real machines you keep, not throwaway sandboxes — and run coding
-            agents 24/7 in tmux sessions you can reconnect to from anywhere. Hosted or self-hosted from
-            the same open-source code.
+            Spin up full Linux VMs with root access — real machines you keep, not throwaway sandboxes —
+            and run coding agents 24/7 in tmux sessions you can reconnect to from anywhere. Hosted or
+            self-hosted from the same open-source code.
           </p>
           <div className="landing-actions">
             <a className="primary-button" href="#signup">
