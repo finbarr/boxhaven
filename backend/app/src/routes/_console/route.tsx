@@ -64,7 +64,15 @@ function ConsoleLayout() {
   if (!authenticated) {
     return (
       <>
-        <TopBar subtitle="remote dev boxes" />
+        <TopBar
+          subtitle="remote dev boxes"
+          actions={onHome ? (
+            <div className="auth-cta">
+              <Link className="secondary-button" to="/signup" search={{ mode: "signin" }}>Sign in</Link>
+              <Link className="primary-button" to="/signup">Sign up</Link>
+            </div>
+          ) : undefined}
+        />
         {onHome ? <LandingPage /> : <AccessPanel onToken={handleToken} deviceUserCode={deviceUserCode} />}
       </>
     );

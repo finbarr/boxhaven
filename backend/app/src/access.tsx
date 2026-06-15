@@ -27,12 +27,13 @@ export function LandingPage() {
   );
 }
 
-export function AuthFormPanel({ onToken, deviceUserCode, notice }: {
+export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: {
   onToken: (token: string) => void;
   deviceUserCode?: string;
   notice?: string;
+  initialMode?: "signin" | "signup";
 }) {
-  const [mode, setMode] = useState<"signin" | "signup">("signup");
+  const [mode, setMode] = useState<"signin" | "signup">(initialMode ?? "signup");
   const [forgot, setForgot] = useState(false);
   const github = useMutation({
     mutationFn: () => apiFetch<{ url?: string }>("/v1/auth/sign-in/social", "", {

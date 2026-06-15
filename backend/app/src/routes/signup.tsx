@@ -6,11 +6,15 @@ import { TopBar } from "../shell";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({ meta: [{ title: "Sign up | BoxHaven" }] }),
+  validateSearch: (search: Record<string, unknown>): { mode?: "signin" } => (
+    search.mode === "signin" ? { mode: "signin" } : {}
+  ),
   component: SignupRoute,
 });
 
 function SignupRoute() {
   const navigate = useNavigate();
+  const { mode } = Route.useSearch();
 
   function handleToken(token: string) {
     localStorage.setItem(tokenKey, token);
@@ -21,7 +25,7 @@ function SignupRoute() {
     <>
       <TopBar subtitle="hosted beta" />
       <section className="narrow-layout signup-page">
-        <AuthFormPanel onToken={handleToken} />
+        <AuthFormPanel onToken={handleToken} initialMode={mode} />
         <div className="signup-self-host">
           <span>Want to self-host?</span>
           <a href="https://docs.boxhaven.dev/self-hosting" target="_blank" rel="noreferrer">
