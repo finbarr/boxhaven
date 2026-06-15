@@ -1,9 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
-import { ArrowUpRight, Copy, KeyRound, Play, Send } from "lucide-react";
+import { ArrowDown, ArrowUpRight, CheckCircle2, Copy, KeyRound, Play, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { apiFetch, formatUserCode, LoginResponse } from "./api";
-import { GitHubMark } from "./shell";
-import logoURL from "./assets/boxhaven-logo.png";
+import { GitHubMark, repoURL } from "./shell";
 
 export const installCommand = "curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh";
 
@@ -48,42 +47,15 @@ export function AccessPanel({ onToken, deviceUserCode, notice }: {
 
   return (
     <section className="access-layout">
-      <div className="welcome-panel landing">
-        <div className="logo-stage"><img src={logoURL} alt="BoxHaven logo" /></div>
-        <div className="landing-side">
-          <div className="landing-copy">
-            <h1>Remote dev boxes for AI coding agents</h1>
-            <p>Create a box, resume your agent session on it, close your laptop.</p>
-          </div>
-          <div className="terminal-card">
-            <div className="terminal-title">
-              <span />
-              <span />
-              <span />
-            </div>
-            <pre>{`$ bh create work
-box "work" ready
-$ bh run work claude
-claude is working — close the laptop anytime
-$ bh connect work
-right where you left off`}</pre>
-          </div>
-          <div className="landing-install">
-            <CommandBlock label="Install" value={installCommand} />
-            <a className="landing-docs" href="https://docs.boxhaven.dev" target="_blank" rel="noreferrer">
-              Read the docs
-              <ArrowUpRight size={14} />
-            </a>
-          </div>
-        </div>
-      </div>
+      <LandingIntro />
       {forgot ? (
         <ForgotPasswordForm onBack={() => setForgot(false)} />
       ) : (
-        <form className="auth-panel" onSubmit={submit}>
+        <form id="signup" className="auth-panel signup-panel" onSubmit={submit}>
           <div className="panel-heading">
-            <span>{mode === "signup" ? "new account" : "welcome back"}</span>
-            <h1>{mode === "signup" ? "Bring a box home" : "Open the haven"}</h1>
+            <span>{mode === "signup" ? "hosted beta" : "welcome back"}</span>
+            <h1>{mode === "signup" ? "Sign up for hosted BoxHaven" : "Open the console"}</h1>
+            {mode === "signup" ? <p>Use the managed control plane now. You can still self-host from the same open-source codebase.</p> : null}
           </div>
           {notice ? <p className="hint">{notice}</p> : null}
           <div className="segmented">
@@ -122,6 +94,83 @@ right where you left off`}</pre>
         </form>
       )}
     </section>
+  );
+}
+
+function LandingIntro() {
+  return (
+    <div className="landing-page">
+      <section className="landing-hero">
+        <div className="landing-kicker">Open-source devbox management</div>
+        <h1>BoxHaven is an open-source devbox management platform.</h1>
+        <p>
+          Create persistent Linux boxes, sync projects, run coding agents in managed tmux sessions,
+          and reconnect from anywhere. Use the hosted service today or run the same control plane yourself.
+        </p>
+        <div className="landing-actions">
+          <a className="primary-button" href="#signup">
+            <ArrowDown size={16} />
+            Sign up for hosted
+          </a>
+          <a className="secondary-button" href={repoURL} target="_blank" rel="noreferrer">
+            <GitHubMark size={16} />
+            View source
+          </a>
+          <a className="secondary-button" href="https://docs.boxhaven.dev/self-hosting" target="_blank" rel="noreferrer">
+            Self-hosting docs
+            <ArrowUpRight size={15} />
+          </a>
+        </div>
+      </section>
+
+      <section className="landing-paths" aria-label="Hosted and self-hosted options">
+        <div className="landing-path">
+          <span>Hosted</span>
+          <h2>Sign up and create boxes immediately.</h2>
+          <p>BoxHaven runs the control plane and cloud provider account so you can try the workflow without operating the backend.</p>
+        </div>
+        <div className="landing-path">
+          <span>Self-hosted</span>
+          <h2>Run it with your own infrastructure.</h2>
+          <p>The backend, CLI, VM runtime, deployment scripts, and docs are open source. Bring your own DigitalOcean or Hetzner credentials.</p>
+        </div>
+      </section>
+
+      <section className="landing-proof">
+        <div className="landing-proof-copy">
+          <span>Workflow</span>
+          <h2>A box stays alive after your laptop disconnects.</h2>
+          <ul>
+            <li><CheckCircle2 size={16} /> Sync a project into a named dev box.</li>
+            <li><CheckCircle2 size={16} /> Start Claude, Codex, or a shell in a managed tmux session.</li>
+            <li><CheckCircle2 size={16} /> Reconnect later with SSH, tmux history, and GitHub auth ready.</li>
+          </ul>
+        </div>
+        <div className="terminal-card">
+          <div className="terminal-title">
+            <span />
+            <span />
+            <span />
+          </div>
+          <pre>{`$ bh login
+$ bh create work
+box "work" ready
+$ bh run work claude
+claude is running in tmux
+# disconnect; the agent keeps running
+$ bh connect work
+attached to "work"`}</pre>
+        </div>
+      </section>
+
+      <section className="landing-install">
+        <CommandBlock label="Install" value={installCommand} />
+        <a className="landing-docs" href="https://docs.boxhaven.dev" target="_blank" rel="noreferrer">
+          Read the docs
+          <ArrowUpRight size={14} />
+        </a>
+      </section>
+    </div>
   );
 }
 
