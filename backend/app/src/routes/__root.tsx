@@ -5,7 +5,7 @@ import { GitHubMark, repoURL, TopBar } from "../shell";
 // App shell only: backdrop + topbar slot. Auth lives in the _console layout.
 export const Route = createRootRoute({
   head: () => ({
-    meta: [{ title: "BoxHaven — Remote dev boxes for AI coding agents" }],
+    meta: [{ title: "BoxHaven - Open-source devbox management" }],
   }),
   component: RootShell,
   notFoundComponent: NotFound,
