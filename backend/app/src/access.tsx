@@ -94,6 +94,29 @@ export function AccessPanel({ onToken, deviceUserCode, notice }: {
           {mutation.error ? <p className="error">{(mutation.error as Error).message}</p> : null}
         </form>
       )}
+      <SelfHostBand />
+    </section>
+  );
+}
+
+function SelfHostBand() {
+  return (
+    <section className="landing-install" aria-label="Self-host BoxHaven">
+      <div className="landing-install-lead">
+        <span>Prefer to self-host?</span>
+        <p>Run the whole stack on your own infrastructure. Start with one command.</p>
+      </div>
+      <CommandBlock label="Install" value={installCommand} />
+      <div className="landing-install-links">
+        <a className="landing-docs" href="https://docs.boxhaven.dev/self-hosting" target="_blank" rel="noreferrer">
+          Self-hosting docs
+          <ArrowUpRight size={14} />
+        </a>
+        <a className="landing-docs" href="https://docs.boxhaven.dev" target="_blank" rel="noreferrer">
+          Read the docs
+          <ArrowUpRight size={14} />
+        </a>
+      </div>
     </section>
   );
 }
@@ -118,27 +141,10 @@ function LandingIntro() {
               <GitHubMark size={16} />
               View source
             </a>
-            <a className="secondary-button" href="https://docs.boxhaven.dev/self-hosting" target="_blank" rel="noreferrer">
-              Self-hosting docs
-              <ArrowUpRight size={15} />
-            </a>
           </div>
         </div>
         <div className="landing-hero-logo" aria-hidden="true">
           <img src={logoURL} alt="" />
-        </div>
-      </section>
-
-      <section className="landing-paths" aria-label="Hosted and self-hosted options">
-        <div className="landing-path landing-path--hosted">
-          <span>Hosted</span>
-          <h2>Create your first box in seconds.</h2>
-          <p>We run the control plane and the cloud account. Sign up and start working with no backend to operate.</p>
-        </div>
-        <div className="landing-path">
-          <span>Self-hosted</span>
-          <h2>Bring your own infrastructure.</h2>
-          <p>Backend, CLI, VM runtime, and deploy scripts are all open source. Plug in your DigitalOcean or Hetzner credentials.</p>
         </div>
       </section>
 
@@ -169,12 +175,17 @@ attached to "work"`}</pre>
         </div>
       </section>
 
-      <section className="landing-install">
-        <CommandBlock label="Install" value={installCommand} />
-        <a className="landing-docs" href="https://docs.boxhaven.dev" target="_blank" rel="noreferrer">
-          Read the docs
-          <ArrowUpRight size={14} />
-        </a>
+      <section className="landing-paths" aria-label="Hosted and self-hosted options">
+        <div className="landing-path landing-path--hosted">
+          <span>Hosted</span>
+          <h2>Create your first box in seconds.</h2>
+          <p>We run the control plane and the cloud account. Sign up and start working with no backend to operate.</p>
+        </div>
+        <div className="landing-path">
+          <span>Self-hosted</span>
+          <h2>Bring your own infrastructure.</h2>
+          <p>Backend, CLI, VM runtime, and deploy scripts are all open source. Plug in your DigitalOcean or Hetzner credentials.</p>
+        </div>
       </section>
     </div>
   );

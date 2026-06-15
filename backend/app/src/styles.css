@@ -1205,21 +1205,48 @@ a.secondary-button {
 }
 
 .landing-install {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 2px 0;
+  display: grid;
+  gap: 14px;
+  width: min(100%, 720px);
+  margin: 4px auto 0;
+  padding: 22px;
+  border: 1px solid rgba(96, 75, 53, 0.16);
+  border-radius: 8px;
+  background: rgba(244, 240, 229, 0.66);
+}
+
+.landing-install-lead {
+  display: grid;
+  gap: 5px;
+}
+
+.landing-install-lead span {
+  color: #6a776f;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.landing-install-lead p {
+  margin: 0;
+  color: #4f625a;
+  line-height: 1.5;
 }
 
 .landing-install .command-block {
-  flex: 1 1 520px;
   margin-bottom: 0;
 }
 
 .landing-install .command-block code {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.landing-install-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
 }
 
 .landing-docs {
