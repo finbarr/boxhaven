@@ -417,9 +417,11 @@ select:focus {
 }
 
 .primary-button {
+  padding: 0 14px;
   background: #2f6f5c;
   color: #fffaf0;
   font-weight: 700;
+  text-decoration: none;
 }
 
 .primary-button:hover {
@@ -902,6 +904,11 @@ a.secondary-button {
   padding-top: min(6vh, 64px);
 }
 
+.signup-page {
+  max-width: 540px;
+  padding-top: min(8vh, 72px);
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -1102,6 +1109,7 @@ a.secondary-button {
 .landing-path {
   position: relative;
   display: grid;
+  align-content: start;
   gap: 8px;
   padding: 20px;
   border: 1px solid rgba(96, 75, 53, 0.16);
@@ -1154,6 +1162,18 @@ a.secondary-button {
   margin: 0;
   color: #4f625a;
   line-height: 1.5;
+}
+
+.landing-path-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.landing-path-actions .primary-button,
+.landing-path-actions .secondary-button {
+  min-height: 42px;
 }
 
 .landing-proof {
@@ -1334,8 +1354,8 @@ a.secondary-button {
 }
 
 .signup-panel {
-  width: min(100%, 520px);
-  margin: 10px auto 0;
+  width: 100%;
+  margin: 0;
   scroll-margin-top: 24px;
 }
 

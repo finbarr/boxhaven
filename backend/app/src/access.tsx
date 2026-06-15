@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { ArrowDown, ArrowUpRight, CheckCircle2, Copy, Globe, HardDrive, History, KeyRound, Play, Send, Server, Terminal, Users } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Copy, Globe, HardDrive, History, KeyRound, Play, Send, Server, Terminal, Users } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { apiFetch, formatUserCode, LoginResponse } from "./api";
 import logoURL from "./assets/boxhaven-logo.png";
@@ -8,6 +8,26 @@ import { GitHubMark, repoURL } from "./shell";
 export const installCommand = "curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh";
 
 export function AccessPanel({ onToken, deviceUserCode, notice }: {
+  onToken: (token: string) => void;
+  deviceUserCode?: string;
+  notice?: string;
+}) {
+  return (
+    <section className="narrow-layout signup-page">
+      <AuthFormPanel onToken={onToken} deviceUserCode={deviceUserCode} notice={notice} />
+    </section>
+  );
+}
+
+export function LandingPage() {
+  return (
+    <section className="access-layout">
+      <LandingIntro />
+    </section>
+  );
+}
+
+export function AuthFormPanel({ onToken, deviceUserCode, notice }: {
   onToken: (token: string) => void;
   deviceUserCode?: string;
   notice?: string;
@@ -47,8 +67,7 @@ export function AccessPanel({ onToken, deviceUserCode, notice }: {
   }
 
   return (
-    <section className="access-layout">
-      <LandingIntro />
+    <>
       {forgot ? (
         <ForgotPasswordForm onBack={() => setForgot(false)} />
       ) : (
@@ -94,30 +113,7 @@ export function AccessPanel({ onToken, deviceUserCode, notice }: {
           {mutation.error ? <p className="error">{(mutation.error as Error).message}</p> : null}
         </form>
       )}
-      <SelfHostBand />
-    </section>
-  );
-}
-
-function SelfHostBand() {
-  return (
-    <section className="landing-install" aria-label="Self-host BoxHaven">
-      <div className="landing-install-lead">
-        <span>Prefer to self-host?</span>
-        <p>Run the whole stack on your own infrastructure. Start with one command.</p>
-      </div>
-      <CommandBlock label="Install" value={installCommand} />
-      <div className="landing-install-links">
-        <a className="landing-docs" href="https://docs.boxhaven.dev/self-hosting" target="_blank" rel="noreferrer">
-          Self-hosting docs
-          <ArrowUpRight size={14} />
-        </a>
-        <a className="landing-docs" href="https://docs.boxhaven.dev" target="_blank" rel="noreferrer">
-          Read the docs
-          <ArrowUpRight size={14} />
-        </a>
-      </div>
-    </section>
+    </>
   );
 }
 
@@ -167,8 +163,8 @@ function LandingIntro() {
             self-hosted from the same open-source code.
           </p>
           <div className="landing-actions">
-            <a className="primary-button" href="#signup">
-              <ArrowDown size={16} />
+            <a className="primary-button" href="/signup">
+              <Play size={16} />
               Sign up for hosted
             </a>
             <a className="secondary-button" href={repoURL} target="_blank" rel="noreferrer">
@@ -230,11 +226,23 @@ attached to "work"`}</pre>
           <span>Hosted</span>
           <h2>Create your first box in seconds.</h2>
           <p>We run the control plane and the cloud account. Sign up and start working with no backend to operate.</p>
+          <div className="landing-path-actions">
+            <a className="primary-button" href="/signup">
+              <Play size={16} />
+              Sign up for hosted
+            </a>
+          </div>
         </div>
         <div className="landing-path">
           <span>Self-hosted</span>
           <h2>Bring your own infrastructure.</h2>
           <p>Backend, CLI, VM runtime, and deploy scripts are all open source. Plug in your DigitalOcean or Hetzner credentials.</p>
+          <div className="landing-path-actions">
+            <a className="secondary-button" href="https://docs.boxhaven.dev/self-hosting" target="_blank" rel="noreferrer">
+              Read self-hosting docs
+              <ArrowUpRight size={15} />
+            </a>
+          </div>
         </div>
       </section>
     </div>

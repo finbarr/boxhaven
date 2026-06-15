@@ -47,7 +47,7 @@ function GitHubCallback() {
           </div>
           {session.error ? <p className="error">{(session.error as Error).message}</p> : null}
           {!session.isLoading && !token ? (
-            <a className="primary-button" href="/">Back to sign-in</a>
+            <a className="primary-button" href="/signup">Back to sign-in</a>
           ) : null}
         </div>
       </section>

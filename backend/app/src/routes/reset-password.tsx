@@ -17,7 +17,7 @@ function ResetPasswordRoute() {
   return (
     <>
       <TopBar subtitle="account recovery" />
-      <ResetPasswordPanel resetToken={token} linkError={error} onDone={() => void navigate({ to: "/" })} />
+      <ResetPasswordPanel resetToken={token} linkError={error} onDone={() => void navigate({ to: "/signup" })} />
     </>
   );
 }

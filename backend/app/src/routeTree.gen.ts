@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as ConsoleRouteRouteImport } from './routes/_console/route'
@@ -22,6 +23,11 @@ import { Route as ConsoleTeamTeamRouteImport } from './routes/_console/team.$tea
 import { Route as ConsoleBoxesNameRouteImport } from './routes/_console/boxes.$name'
 import { Route as ConsoleBillingTeamRouteImport } from './routes/_console/billing.$team'
 
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/': typeof ConsoleIndexRoute
   '/invite': typeof InviteRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/signup': typeof SignupRoute
   '/device': typeof ConsoleDeviceRoute
   '/images': typeof ConsoleImagesRoute
   '/auth/github': typeof AuthGithubRoute
@@ -98,6 +105,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/invite': typeof InviteRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/signup': typeof SignupRoute
   '/device': typeof ConsoleDeviceRoute
   '/images': typeof ConsoleImagesRoute
   '/auth/github': typeof AuthGithubRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/_console': typeof ConsoleRouteRouteWithChildren
   '/invite': typeof InviteRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/signup': typeof SignupRoute
   '/_console/device': typeof ConsoleDeviceRoute
   '/_console/images': typeof ConsoleImagesRoute
   '/auth/github': typeof AuthGithubRoute
@@ -129,6 +138,7 @@ export interface FileRouteTypes {
     | '/'
     | '/invite'
     | '/reset-password'
+    | '/signup'
     | '/device'
     | '/images'
     | '/auth/github'
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
   to:
     | '/invite'
     | '/reset-password'
+    | '/signup'
     | '/device'
     | '/images'
     | '/auth/github'
@@ -155,6 +166,7 @@ export interface FileRouteTypes {
     | '/_console'
     | '/invite'
     | '/reset-password'
+    | '/signup'
     | '/_console/device'
     | '/_console/images'
     | '/auth/github'
@@ -170,11 +182,19 @@ export interface RootRouteChildren {
   ConsoleRouteRoute: typeof ConsoleRouteRouteWithChildren
   InviteRoute: typeof InviteRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SignupRoute: typeof SignupRoute
   AuthGithubRoute: typeof AuthGithubRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -292,6 +312,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConsoleRouteRoute: ConsoleRouteRouteWithChildren,
   InviteRoute: InviteRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  SignupRoute: SignupRoute,
   AuthGithubRoute: AuthGithubRoute,
 }
 export const routeTree = rootRouteImport
