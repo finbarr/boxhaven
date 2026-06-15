@@ -55,7 +55,7 @@ export function AccessPanel({ onToken, deviceUserCode, notice }: {
           <div className="panel-heading">
             <span>{mode === "signup" ? "hosted beta" : "welcome back"}</span>
             <h1>{mode === "signup" ? "Sign up for hosted BoxHaven" : "Open the console"}</h1>
-            {mode === "signup" ? <p>Use the managed control plane now. You can still self-host from the same open-source codebase.</p> : null}
+            {mode === "signup" ? <p>Start on the managed control plane now. Self-host the same open-source code whenever you want.</p> : null}
           </div>
           {notice ? <p className="hint">{notice}</p> : null}
           <div className="segmented">
@@ -102,10 +102,10 @@ function LandingIntro() {
     <div className="landing-page">
       <section className="landing-hero">
         <div className="landing-kicker">Open-source devbox management</div>
-        <h1>BoxHaven is an open-source devbox management platform.</h1>
+        <h1>Dev boxes that keep working after you disconnect.</h1>
         <p>
-          Create persistent Linux boxes, sync projects, run coding agents in managed tmux sessions,
-          and reconnect from anywhere. Use the hosted service today or run the same control plane yourself.
+          Spin up persistent Linux boxes, sync your projects, and run coding agents in tmux sessions
+          you can reconnect to from anywhere. Hosted or self-hosted from the same open-source code.
         </p>
         <div className="landing-actions">
           <a className="primary-button" href="#signup">
@@ -126,20 +126,20 @@ function LandingIntro() {
       <section className="landing-paths" aria-label="Hosted and self-hosted options">
         <div className="landing-path">
           <span>Hosted</span>
-          <h2>Sign up and create boxes immediately.</h2>
-          <p>BoxHaven runs the control plane and cloud provider account so you can try the workflow without operating the backend.</p>
+          <h2>Create your first box in seconds.</h2>
+          <p>We run the control plane and the cloud account. Sign up and start working with no backend to operate.</p>
         </div>
         <div className="landing-path">
           <span>Self-hosted</span>
-          <h2>Run it with your own infrastructure.</h2>
-          <p>The backend, CLI, VM runtime, deployment scripts, and docs are open source. Bring your own DigitalOcean or Hetzner credentials.</p>
+          <h2>Bring your own infrastructure.</h2>
+          <p>Backend, CLI, VM runtime, and deploy scripts are all open source. Plug in your DigitalOcean or Hetzner credentials.</p>
         </div>
       </section>
 
       <section className="landing-proof">
         <div className="landing-proof-copy">
           <span>Workflow</span>
-          <h2>A box stays alive after your laptop disconnects.</h2>
+          <h2>Your agents keep running while you're away.</h2>
           <ul>
             <li><CheckCircle2 size={16} /> Sync a project into a named dev box.</li>
             <li><CheckCircle2 size={16} /> Start Claude, Codex, or a shell in a managed tmux session.</li>
