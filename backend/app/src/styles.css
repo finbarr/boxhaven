@@ -133,7 +133,6 @@ select {
 
 .brand,
 .topbar-actions,
-.pulse,
 .provider-pill,
 .machine-row,
 .detail-header,
@@ -193,7 +192,6 @@ select {
 .command-block span,
 label,
 .meta dt,
-.pulse,
 .machine-row small,
 .panel-heading span {
   color: #6a776f;
@@ -216,16 +214,6 @@ label,
 .auth-cta .primary-button {
   min-height: 38px;
   padding: 0 14px;
-}
-
-.pulse {
-  gap: 7px;
-  min-height: 38px;
-  padding: 0 11px;
-  border: 1px solid rgba(55, 129, 108, 0.22);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.68);
-  color: #2f6f5c;
 }
 
 .access-layout,

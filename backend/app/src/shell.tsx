@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { Activity } from "lucide-react";
 import { ReactNode } from "react";
 import logoURL from "./assets/boxhaven-logo.png";
 
@@ -32,7 +31,6 @@ export function TopBar({ subtitle, nav, actions }: {
       </Link>
       {nav}
       <div className="topbar-actions">
-        <span className="pulse"><Activity size={14} /> API</span>
         <a className="icon-button" href={repoURL} target="_blank" rel="noreferrer" title="BoxHaven on GitHub" aria-label="BoxHaven on GitHub">
           <GitHubMark size={16} />
         </a>
