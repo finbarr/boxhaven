@@ -909,6 +909,32 @@ a.secondary-button {
   padding-top: min(8vh, 72px);
 }
 
+.signup-self-host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 7px 10px;
+  margin-top: 14px;
+  color: #4f625a;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.signup-self-host span {
+  font-weight: 600;
+}
+
+.signup-self-host a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #2f6f5c;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
