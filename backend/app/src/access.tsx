@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { ArrowDown, ArrowUpRight, CheckCircle2, Copy, KeyRound, Play, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { apiFetch, formatUserCode, LoginResponse } from "./api";
+import logoURL from "./assets/boxhaven-logo.png";
 import { GitHubMark, repoURL } from "./shell";
 
 export const installCommand = "curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh";
@@ -101,25 +102,30 @@ function LandingIntro() {
   return (
     <div className="landing-page">
       <section className="landing-hero">
-        <div className="landing-kicker">Open-source devbox management</div>
-        <h1>Dev boxes that <span className="accent">keep working</span> after you disconnect.</h1>
-        <p>
-          Spin up persistent Linux boxes, sync your projects, and run coding agents in tmux sessions
-          you can reconnect to from anywhere. Hosted or self-hosted from the same open-source code.
-        </p>
-        <div className="landing-actions">
-          <a className="primary-button" href="#signup">
-            <ArrowDown size={16} />
-            Sign up for hosted
-          </a>
-          <a className="secondary-button" href={repoURL} target="_blank" rel="noreferrer">
-            <GitHubMark size={16} />
-            View source
-          </a>
-          <a className="secondary-button" href="https://docs.boxhaven.dev/self-hosting" target="_blank" rel="noreferrer">
-            Self-hosting docs
-            <ArrowUpRight size={15} />
-          </a>
+        <div className="landing-hero-copy">
+          <div className="landing-kicker">Open-source devbox management</div>
+          <h1>Dev boxes that <span className="accent">keep working</span> after you disconnect.</h1>
+          <p>
+            Spin up persistent Linux boxes, sync your projects, and run coding agents in tmux sessions
+            you can reconnect to from anywhere. Hosted or self-hosted from the same open-source code.
+          </p>
+          <div className="landing-actions">
+            <a className="primary-button" href="#signup">
+              <ArrowDown size={16} />
+              Sign up for hosted
+            </a>
+            <a className="secondary-button" href={repoURL} target="_blank" rel="noreferrer">
+              <GitHubMark size={16} />
+              View source
+            </a>
+            <a className="secondary-button" href="https://docs.boxhaven.dev/self-hosting" target="_blank" rel="noreferrer">
+              Self-hosting docs
+              <ArrowUpRight size={15} />
+            </a>
+          </div>
+        </div>
+        <div className="landing-hero-logo" aria-hidden="true">
+          <img src={logoURL} alt="" />
         </div>
       </section>
 

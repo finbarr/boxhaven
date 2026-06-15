@@ -1000,8 +1000,31 @@ a.secondary-button {
 
 .landing-hero {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  align-items: center;
+  gap: clamp(24px, 6vw, 72px);
+  padding: 10px 2px 6px;
+}
+
+.landing-hero-copy {
+  display: grid;
   gap: 18px;
-  padding: 12px 2px 6px;
+  min-width: 0;
+}
+
+.landing-hero-logo {
+  display: grid;
+  place-items: center;
+  justify-self: end;
+  width: min(100%, 420px);
+  aspect-ratio: 1;
+}
+
+.landing-hero-logo img {
+  width: min(100%, 400px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 26px 34px rgba(71, 44, 24, 0.16));
 }
 
 .landing-kicker {
@@ -1419,6 +1442,7 @@ a.secondary-button {
 @media (max-width: 900px) {
   .access-layout,
   .welcome-panel,
+  .landing-hero,
   .landing-paths,
   .landing-proof {
     grid-template-columns: 1fr;
@@ -1434,6 +1458,11 @@ a.secondary-button {
 
   .logo-stage {
     min-height: 240px;
+  }
+
+  .landing-hero-logo {
+    justify-self: start;
+    width: min(62vw, 260px);
   }
 }
 
@@ -1464,6 +1493,10 @@ a.secondary-button {
 
   .landing-hero p {
     font-size: 17px;
+  }
+
+  .landing-hero-logo {
+    display: none;
   }
 
   pre,
