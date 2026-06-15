@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { Activity } from "lucide-react";
 import { ReactNode } from "react";
 import logoURL from "./assets/boxhaven-logo.png";
@@ -22,13 +23,13 @@ export function TopBar({ subtitle, nav, actions }: {
 }) {
   return (
     <header className="topbar">
-      <div className="brand">
+      <Link className="brand" to="/" aria-label="BoxHaven home">
         <div className="brand-mark"><img src={logoURL} alt="" /></div>
         <div>
           <strong>BoxHaven</strong>
           <span>{subtitle}</span>
         </div>
-      </div>
+      </Link>
       {nav}
       <div className="topbar-actions">
         <span className="pulse"><Activity size={14} /> API</span>
