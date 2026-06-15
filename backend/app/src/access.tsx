@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { ArrowDown, ArrowUpRight, CheckCircle2, Copy, KeyRound, Play, Send } from "lucide-react";
+import { ArrowDown, ArrowUpRight, CheckCircle2, Copy, Globe, History, KeyRound, Layers, Play, Send, Server, ShieldCheck, Users } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { apiFetch, formatUserCode, LoginResponse } from "./api";
 import logoURL from "./assets/boxhaven-logo.png";
@@ -121,6 +121,39 @@ function SelfHostBand() {
   );
 }
 
+const FEATURES = [
+  {
+    icon: <Globe size={20} />,
+    title: "Public preview URLs",
+    body: "Every box gets a persistent HTTPS URL. Share a running web app or preview with anyone — no tunnels or port forwarding.",
+  },
+  {
+    icon: <Users size={20} />,
+    title: "Teams and shared boxes",
+    body: "Create a team, invite teammates, and share boxes with owner, admin, and member roles.",
+  },
+  {
+    icon: <History size={20} />,
+    title: "Bring your agent's context",
+    body: "Forward a local Claude or Codex session to a box and resume the conversation right where you left off.",
+  },
+  {
+    icon: <ShieldCheck size={20} />,
+    title: "Short-lived SSH access",
+    body: "No reusable keys to leak. Connections use backend-signed SSH certificates that expire in minutes.",
+  },
+  {
+    icon: <Server size={20} />,
+    title: "Your cloud, your region",
+    body: "Provision on DigitalOcean or Hetzner from one control plane, and pick the provider and region per box.",
+  },
+  {
+    icon: <Layers size={20} />,
+    title: "Reusable images and setup",
+    body: "Snapshot a configured box into a golden image, or script first-boot setup in .boxhaven.toml.",
+  },
+];
+
 function LandingIntro() {
   return (
     <div className="landing-page">
@@ -172,6 +205,22 @@ claude is running in tmux
 # disconnect; the agent keeps running
 $ bh connect work
 attached to "work"`}</pre>
+        </div>
+      </section>
+
+      <section className="landing-features" aria-label="Features">
+        <div className="landing-section-head">
+          <span>Features</span>
+          <h2>More than a box on the internet.</h2>
+        </div>
+        <div className="feature-grid">
+          {FEATURES.map((feature) => (
+            <div className="feature-card" key={feature.title}>
+              <div className="feature-icon">{feature.icon}</div>
+              <h3>{feature.title}</h3>
+              <p>{feature.body}</p>
+            </div>
+          ))}
         </div>
       </section>
 

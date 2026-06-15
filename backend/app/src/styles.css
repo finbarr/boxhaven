@@ -38,6 +38,7 @@ button {
 .segmented button,
 .section-tabs a,
 .landing-path,
+.feature-card,
 .machine-row,
 input,
 select {
@@ -1204,6 +1205,78 @@ a.secondary-button {
   font-size: 16px;
 }
 
+.landing-features {
+  display: grid;
+  gap: 18px;
+}
+
+.landing-section-head {
+  display: grid;
+  gap: 6px;
+}
+
+.landing-section-head span {
+  color: #6a776f;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.landing-section-head h2 {
+  margin: 0;
+  color: #22342d;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.feature-card {
+  display: grid;
+  align-content: start;
+  gap: 11px;
+  padding: 20px;
+  border: 1px solid rgba(96, 75, 53, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 252, 243, 0.82);
+}
+
+.feature-card:hover {
+  border-color: rgba(47, 111, 92, 0.32);
+  box-shadow: 0 18px 44px rgba(90, 67, 41, 0.13);
+  transform: translateY(-2px);
+}
+
+.feature-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(47, 111, 92, 0.2);
+  border-radius: 10px;
+  color: #2f6f5c;
+  background: rgba(47, 111, 92, 0.1);
+}
+
+.feature-card h3 {
+  margin: 0;
+  color: #22342d;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.feature-card p {
+  margin: 0;
+  color: #4f625a;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
 .landing-install {
   display: grid;
   gap: 14px;
@@ -1491,6 +1564,10 @@ a.secondary-button {
     justify-self: start;
     width: min(62vw, 260px);
   }
+
+  .feature-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -1524,6 +1601,10 @@ a.secondary-button {
 
   .landing-hero-logo {
     display: none;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
   }
 
   pre,
