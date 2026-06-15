@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { ArrowDown, ArrowUpRight, CheckCircle2, Copy, Globe, History, KeyRound, Layers, Play, Send, Server, ShieldCheck, Users } from "lucide-react";
+import { ArrowDown, ArrowUpRight, CheckCircle2, Copy, Globe, HardDrive, History, KeyRound, Play, Send, Server, Terminal, Users } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { apiFetch, formatUserCode, LoginResponse } from "./api";
 import logoURL from "./assets/boxhaven-logo.png";
@@ -123,6 +123,11 @@ function SelfHostBand() {
 
 const FEATURES = [
   {
+    icon: <HardDrive size={20} />,
+    title: "Persistent disk and state",
+    body: "Your files, tools, Docker images, and tmux history live on the box — nothing is wiped between sessions or disconnects.",
+  },
+  {
     icon: <Globe size={20} />,
     title: "Public preview URLs",
     body: "Every box gets a persistent HTTPS URL. Share a running web app or preview with anyone — no tunnels or port forwarding.",
@@ -138,19 +143,14 @@ const FEATURES = [
     body: "Forward a local Claude or Codex session to a box and resume the conversation right where you left off.",
   },
   {
-    icon: <ShieldCheck size={20} />,
-    title: "Short-lived SSH access",
-    body: "No reusable keys to leak. Connections use backend-signed SSH certificates that expire in minutes.",
+    icon: <Terminal size={20} />,
+    title: "SSH-native access",
+    body: "Connect with plain ssh, rsync, and scp — backed by short-lived certificates instead of reusable keys.",
   },
   {
     icon: <Server size={20} />,
-    title: "Your cloud, your region",
-    body: "Provision on DigitalOcean or Hetzner from one control plane, and pick the provider and region per box.",
-  },
-  {
-    icon: <Layers size={20} />,
-    title: "Reusable images and setup",
-    body: "Snapshot a configured box into a golden image, or script first-boot setup in .boxhaven.toml.",
+    title: "Real VMs, standard clouds",
+    body: "Provision on DigitalOcean or Hetzner and pick the region per box — real VPS instances, no proprietary runtime or lock-in.",
   },
 ];
 
@@ -162,8 +162,9 @@ function LandingIntro() {
           <div className="landing-kicker">Open-source devbox management</div>
           <h1>Dev boxes that <span className="accent">keep working</span> after you disconnect.</h1>
           <p>
-            Spin up persistent Linux boxes, sync your projects, and run coding agents in tmux sessions
-            you can reconnect to from anywhere. Hosted or self-hosted from the same open-source code.
+            Spin up full Linux VMs — real machines you keep, not throwaway sandboxes — and run coding
+            agents 24/7 in tmux sessions you can reconnect to from anywhere. Hosted or self-hosted from
+            the same open-source code.
           </p>
           <div className="landing-actions">
             <a className="primary-button" href="#signup">
@@ -211,7 +212,7 @@ attached to "work"`}</pre>
       <section className="landing-features" aria-label="Features">
         <div className="landing-section-head">
           <span>Features</span>
-          <h2>More than a box on the internet.</h2>
+          <h2>Everything a long-running dev box should do.</h2>
         </div>
         <div className="feature-grid">
           {FEATURES.map((feature) => (
