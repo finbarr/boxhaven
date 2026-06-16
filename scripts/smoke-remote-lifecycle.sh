@@ -160,6 +160,7 @@ check "claude executes" env BOXHAVEN_NO_FULL_AUTO=1 claude --version
 check "gh command" command -v gh
 check "tmux command" command -v tmux
 check "docker command" command -v docker
+check "Ghostty terminfo" infocmp xterm-ghostty >/dev/null
 tmux_mouse="$(tmux -f /etc/tmux.conf start-server \; show-options -gqv mouse)" || {
   printf "runtime check failed: tmux mouse option command\n" >&2
   exit 1
