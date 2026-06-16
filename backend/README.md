@@ -30,6 +30,17 @@ By default the server listens on `127.0.0.1:8787` and stores state at
 `~/.local/state/boxhaven/backend.json`. Better Auth users and sessions are stored
 in SQLite at `~/.local/state/boxhaven/auth.sqlite`.
 
+For browser console changes, run the reusable seeded smoke:
+
+```bash
+npm run smoke:console
+```
+
+It starts a temporary fake-provider backend and Vite app, seeds teams, drives
+Chrome with Playwright, saves screenshots under `backend/.artifacts/`, and fails
+on expected navigation, Members, Teams, or mobile-overflow regressions. Set
+`BOXHAVEN_PLAYWRIGHT_EXECUTABLE` if Chrome is not in a standard location.
+
 ## Run With Docker Compose
 
 From the repository root:

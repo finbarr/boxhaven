@@ -37,4 +37,5 @@ Thumbs.db
 backend/node_modules/
 backend/dist/
 backend/dist-app/
+backend/.artifacts/
 deploy/digitalocean/.env.production

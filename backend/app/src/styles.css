@@ -808,6 +808,12 @@ a.secondary-button {
   min-height: 34px;
 }
 
+.data-table input {
+  min-width: 160px;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
 .data-table .primary-button,
 .data-table .danger-button {
   min-height: 32px;
@@ -1049,30 +1055,6 @@ a.secondary-button {
   padding-top: 4px;
 }
 
-.team-settings {
-  gap: 16px;
-}
-
-.team-settings-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.55fr) auto;
-  gap: 12px;
-  align-items: end;
-}
-
-.team-settings-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding-top: 14px;
-  border-top: 1px solid rgba(96, 75, 53, 0.12);
-}
-
-.team-settings-actions .error {
-  flex-basis: 100%;
-}
-
 .table-panel {
   padding: 0;
   overflow-x: auto;
@@ -1105,6 +1087,25 @@ a.secondary-button {
 
 .table-panel .empty {
   padding: 28px 18px;
+}
+
+.teams-table {
+  min-width: 900px;
+}
+
+.teams-table th:first-child,
+.teams-table td:first-child {
+  width: 28%;
+}
+
+.teams-table th:nth-child(2),
+.teams-table td:nth-child(2) {
+  width: 22%;
+}
+
+.teams-table .table-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .rows-clickable tbody tr {
@@ -1863,10 +1864,6 @@ a.secondary-button {
 
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .team-settings-form {
-    grid-template-columns: 1fr;
   }
 
   .drawer-panel,

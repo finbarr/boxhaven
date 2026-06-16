@@ -1,12 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { CreditCard, Layers, LogOut, Server, Users } from "lucide-react";
+import { Building2, CreditCard, Layers, LogOut, Server, Users } from "lucide-react";
 import { ReactNode } from "react";
 import { TeamInfo } from "./api";
 import logoURL from "./assets/boxhaven-logo.png";
 
 export const repoURL = "https://github.com/finbarr/boxhaven";
 
-export type ConsoleSection = "boxes" | "team" | "images" | "billing";
+export type ConsoleSection = "boxes" | "team" | "teams" | "images" | "billing";
 
 // Authed console frame: a persistent left nav sidebar plus the workspace where
 // each section renders its full-width tables. activeSection drives the
@@ -54,15 +54,19 @@ export function ConsoleShell({ activeSection, isAdmin, email, teams = [], active
             Billing
           </Link>
         </nav>
-        {isAdmin ? (
-          <nav className="side-links" aria-label="Global">
-            <span className="side-section-label">Global</span>
+        <nav className="side-links" aria-label="Global">
+          <span className="side-section-label">Global</span>
+          <Link to="/teams" className={activeSection === "teams" ? "active" : undefined}>
+            <Building2 size={17} />
+            Teams
+          </Link>
+          {isAdmin ? (
             <Link to="/images" className={activeSection === "images" ? "active" : undefined}>
               <Layers size={17} />
               Images
             </Link>
-          </nav>
-        ) : null}
+          ) : null}
+        </nav>
         <div className="side-foot">
           <div className="side-account">
             <span>signed in</span>

@@ -32,8 +32,9 @@ function ConsoleLayout() {
   const onBox = Boolean(matchRoute({ to: "/boxes/$name" }));
   const onDevice = Boolean(matchRoute({ to: "/device" }));
   const onTeam = Boolean(matchRoute({ to: "/team" }) || matchRoute({ to: "/team/$team" }));
+  const onTeams = Boolean(matchRoute({ to: "/teams" }));
   const onImages = Boolean(matchRoute({ to: "/images" }));
-  const activeSection: ConsoleSection = onTeam ? "team" : onImages ? "images" : (onHome || onBox) ? "boxes" : "billing";
+  const activeSection: ConsoleSection = onTeam ? "team" : onTeams ? "teams" : onImages ? "images" : (onHome || onBox) ? "boxes" : "billing";
   // Surfaced in the sign-in hint when someone deep-links to /device.
   const deviceUserCode = typeof search.user_code === "string" ? search.user_code : "";
   const switchTeam = useMutation({

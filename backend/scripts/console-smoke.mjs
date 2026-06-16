@@ -1,0 +1,294 @@
+import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, mkdirSync } from "node:fs";
+import { createServer as createNetServer } from "node:net";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright-core";
+import { createServer as createViteServer } from "vite";
+import { createBackendAuth, migrateBackendAuth } from "../src/auth.ts";
+import { ProviderRegistry } from "../src/providers.ts";
+import { createBackend } from "../src/server.ts";
+import { SSHCertificateAuthority } from "../src/ssh_ca.ts";
+import { StateStore } from "../src/state.ts";
+
+const backendDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const repoDir = dirname(backendDir);
+const artifactRoot = process.env.BOXHAVEN_CONSOLE_SMOKE_OUT || join(backendDir, ".artifacts", "console-smoke");
+const runID = new Date().toISOString().replace(/[:.]/g, "-");
+const outDir = join(artifactRoot, runID);
+const apiPort = await findOpenPort(Number(process.env.BOXHAVEN_CONSOLE_SMOKE_API_PORT || 18879));
+const appPort = await findOpenPort(Number(process.env.BOXHAVEN_CONSOLE_SMOKE_APP_PORT || 5373));
+const apiURL = `http://127.0.0.1:${apiPort}`;
+const appURL = `http://127.0.0.1:${appPort}`;
+const chromeExecutable = findChromeExecutable();
+
+mkdirSync(outDir, { recursive: true });
+
+let backend;
+let vite;
+let browser;
+
+try {
+  const { app, token } = await startSeededBackend();
+  backend = app;
+  vite = await startViteApp();
+  browser = await chromium.launch({
+    executablePath: chromeExecutable,
+    headless: !process.argv.includes("--headed"),
+  });
+
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+  await context.addInitScript((value) => {
+    localStorage.setItem("boxhaven.backend.token", value);
+  }, token);
+  const page = await context.newPage();
+
+  const membersFacts = await checkMembersPage(page);
+  const teamsFacts = await checkTeamsPage(page);
+  const mobileFacts = await checkMobileTeams(page);
+
+  console.log(JSON.stringify({
+    ok: true,
+    apiURL,
+    appURL,
+    outDir,
+    screenshots: {
+      members: join(outDir, "members.png"),
+      teams: join(outDir, "teams.png"),
+      mobileTeams: join(outDir, "mobile-teams.png"),
+    },
+    membersFacts,
+    teamsFacts,
+    mobileFacts,
+  }, null, 2));
+} finally {
+  await browser?.close().catch(() => undefined);
+  await vite?.close().catch(() => undefined);
+  await backend?.close().catch(() => undefined);
+}
+
+async function startSeededBackend() {
+  const dir = mkdtempSync(join(tmpdir(), "boxhaven-console-smoke-"));
+  const fakeProvider = {
+    name: "fake",
+    label: "Fake Cloud",
+    async createMachine(request) {
+      return {
+        machine: {
+          name: request.name,
+          provider: "fake",
+          provider_label: "Fake Cloud",
+          public_ipv4: "127.0.0.1",
+        },
+        status: "ready",
+      };
+    },
+    async getMachine(machine) {
+      return { machine, status: "ready" };
+    },
+    async listMachines() {
+      return [];
+    },
+    async releaseMachine() {},
+    async listImages() {
+      return [];
+    },
+  };
+  const providers = new ProviderRegistry([fakeProvider], fakeProvider.name);
+  const store = new StateStore(join(dir, "state.json"), providers.defaultName);
+  const sshCA = new SSHCertificateAuthority(join(dir, "ssh_ca_ed25519"));
+  const authOptions = {
+    baseURL: `${apiURL}/v1/auth`,
+    databasePath: join(dir, "auth.sqlite"),
+    secret: "console-smoke-secret-with-at-least-thirty-two-bytes",
+    trustedOrigins: [appURL],
+    deviceVerificationURL: `${appURL}/device`,
+    appURL,
+  };
+  await migrateBackendAuth(authOptions);
+  const auth = createBackendAuth(authOptions);
+  const app = createBackend({
+    auth,
+    providers,
+    store,
+    sshCA,
+    adminEmails: ["admin@example.com"],
+    apiPublicURL: apiURL,
+    appPublicURL: appURL,
+    corsOrigins: [appURL],
+    previewBaseDomain: "local.test",
+    previewTargetPort: 80,
+    machineReadyTimeoutMs: 0,
+  });
+  const token = await signUp(app, "admin@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  const acme = await createOrganization(app, headers, "Acme Labs", "acme-labs");
+  await createOrganization(app, headers, "Design Systems", "design-systems");
+  const active = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/set-active",
+    headers,
+    payload: { organizationId: acme.id },
+  });
+  assert.equal(active.statusCode, 200, active.body);
+  await app.listen({ host: "127.0.0.1", port: apiPort });
+  return { app, token };
+}
+
+async function signUp(app, email, password = "password123") {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-up/email",
+    payload: { email, password, name: email.split("@")[0] },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(typeof response.json().token, "string");
+  return response.json().token;
+}
+
+async function createOrganization(app, headers, name, slug) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name, slug },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  return response.json();
+}
+
+async function startViteApp() {
+  process.env.VITE_BOXHAVEN_API_URL = apiURL;
+  const server = await createViteServer({
+    configFile: join(backendDir, "vite.config.ts"),
+    clearScreen: false,
+    logLevel: "silent",
+    server: {
+      host: "127.0.0.1",
+      port: appPort,
+      strictPort: true,
+    },
+  });
+  await server.listen();
+  return server;
+}
+
+async function checkMembersPage(page) {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${appURL}/team`, { waitUntil: "domcontentloaded" });
+  await waitForConsole(page);
+  await page.screenshot({ path: join(outDir, "members.png"), fullPage: true });
+  const facts = await page.evaluate(() => ({
+    title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
+    eyebrow: document.querySelector(".workspace-title span")?.textContent?.trim(),
+    teamSettingsPresent: Boolean(document.querySelector(".team-settings, .teams-table")),
+    newTeamButtonPresent: [...document.querySelectorAll("button")].some((button) => button.textContent?.includes("New team")),
+    billingHintPresent: Boolean(document.querySelector(".billing-hint")),
+    tableHeadings: [...document.querySelectorAll(".data-table th")].map((node) => node.textContent?.trim() || ""),
+    teamNav: [...document.querySelectorAll("nav[aria-label='Team'] a")].map((node) => node.textContent?.trim()),
+    globalNav: [...document.querySelectorAll("nav[aria-label='Global'] a")].map((node) => node.textContent?.trim()),
+  }));
+  assert.equal(facts.title, "Members");
+  assert.equal(facts.eyebrow, "team / Acme Labs");
+  assert.equal(facts.teamSettingsPresent, false);
+  assert.equal(facts.newTeamButtonPresent, false);
+  assert.equal(facts.billingHintPresent, false);
+  assert.deepEqual(facts.teamNav, ["Boxes", "Members", "Billing"]);
+  assert.deepEqual(facts.globalNav, ["Teams", "Images"]);
+  for (const heading of ["Email", "Name", "Role"]) {
+    assert.ok(facts.tableHeadings.includes(heading), `members table missing ${heading}`);
+  }
+  return facts;
+}
+
+async function checkTeamsPage(page) {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${appURL}/teams`, { waitUntil: "domcontentloaded" });
+  await waitForConsole(page);
+  await page.waitForSelector(".teams-table input", { timeout: 10_000 });
+  await page.screenshot({ path: join(outDir, "teams.png"), fullPage: true });
+  const facts = await page.evaluate(() => ({
+    title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
+    eyebrow: document.querySelector(".workspace-title span")?.textContent?.trim(),
+    activeGlobal: document.querySelector("nav[aria-label='Global'] a.active")?.textContent?.trim(),
+    activeTeamNav: document.querySelector("nav[aria-label='Team'] a.active")?.textContent?.trim() || null,
+    rows: [...document.querySelectorAll(".teams-table tbody tr")]
+      .filter((row) => row.querySelector("input"))
+      .map((row) => [...row.querySelectorAll("input")].map((input) => input.value)),
+    hasNewTeamButton: [...document.querySelectorAll("button")].some((button) => button.textContent?.includes("New team")),
+    actionButtons: [...document.querySelectorAll(".teams-table button")].map((button) => button.textContent?.trim()),
+  }));
+  assert.equal(facts.title, "Teams");
+  assert.equal(facts.eyebrow, "global / settings");
+  assert.equal(facts.activeGlobal, "Teams");
+  assert.equal(facts.activeTeamNav, null);
+  assert.equal(facts.hasNewTeamButton, true);
+  assert.ok(facts.rows.some(([name, slug]) => name === "Acme Labs" && slug === "acme-labs"), "missing Acme Labs row");
+  assert.ok(facts.rows.some(([name, slug]) => name === "Design Systems" && slug === "design-systems"), "missing Design Systems row");
+  assert.ok(facts.actionButtons.some((text) => text?.includes("Save")), "missing Save action");
+  assert.ok(facts.actionButtons.some((text) => text?.includes("Delete")), "missing Delete action");
+  return facts;
+}
+
+async function checkMobileTeams(page) {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto(`${appURL}/teams`, { waitUntil: "domcontentloaded" });
+  await waitForConsole(page);
+  await page.waitForSelector(".teams-table input", { timeout: 10_000 });
+  await page.screenshot({ path: join(outDir, "mobile-teams.png"), fullPage: true });
+  const facts = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    bodyScrollWidth: document.documentElement.scrollWidth,
+    tablePanelScrollWidth: document.querySelector(".teams-table-panel")?.scrollWidth,
+    tablePanelClientWidth: document.querySelector(".teams-table-panel")?.clientWidth,
+  }));
+  assert.ok(facts.bodyScrollWidth <= facts.viewport, `body overflows horizontally: ${facts.bodyScrollWidth} > ${facts.viewport}`);
+  assert.ok((facts.tablePanelScrollWidth || 0) > (facts.tablePanelClientWidth || 0), "teams table should scroll inside its panel on mobile");
+  return facts;
+}
+
+async function waitForConsole(page) {
+  await page.waitForSelector(".console-shell", { timeout: 10_000 });
+  await page.waitForSelector(".workspace-title h1", { timeout: 10_000 });
+}
+
+async function findOpenPort(start) {
+  for (let port = start; port < start + 100; port += 1) {
+    if (await canListen(port)) return port;
+  }
+  throw new Error(`no open port found from ${start} to ${start + 99}`);
+}
+
+function canListen(port) {
+  return new Promise((resolve) => {
+    const server = createNetServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+function findChromeExecutable() {
+  const candidates = [
+    process.env.BOXHAVEN_PLAYWRIGHT_EXECUTABLE,
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+  ].filter(Boolean);
+  const executable = candidates.find((candidate) => existsSync(candidate));
+  if (!executable) {
+    throw new Error([
+      "No Chrome or Chromium executable was found for console smoke screenshots.",
+      "Install Chrome/Chromium or set BOXHAVEN_PLAYWRIGHT_EXECUTABLE.",
+      `Checked from repo ${repoDir}.`,
+    ].join(" "));
+  }
+  return executable;
+}

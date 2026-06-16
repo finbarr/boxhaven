@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json && npm run app:build",
     "app:build": "vite build",
+    "smoke:console": "tsx scripts/console-smoke.mjs",
     "test": "node --import tsx --test src/*.test.ts"
   },
   "dependencies": {
@@ -31,6 +32,7 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.2",
     "lucide-react": "^1.16.0",
+    "playwright-core": "^1.57.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "tsx": "^4.20.6",

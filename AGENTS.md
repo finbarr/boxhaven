@@ -55,6 +55,7 @@ make backend-build  # Build the TypeScript backend and web app
 make smoke-remote   # Run the fast one-box production/prod-equivalent remote smoke
 make smoke-remote-full  # Run the remote smoke with backend restart/reconnect
 make smoke-remote-two-box  # Run two-box production/prod-equivalent coverage
+npm --prefix backend run smoke:console  # Run seeded console screenshots and DOM checks
 npm run deploy:app  # Fast app/API deploy and health checks
 npm run deploy:runtime  # Slow remote VM image rebuild, activation, and backend restart
 npm run deploy:production  # Compatibility alias for deploy:app
@@ -79,6 +80,12 @@ For backend changes, also run:
 ```bash
 npm --prefix backend run build
 npm --prefix backend test
+```
+
+For console UI changes, also run:
+
+```bash
+npm --prefix backend run smoke:console
 ```
 
 For remote VM, SSH, sync, snapshot, or agent changes, unit tests are not enough.
