@@ -58,6 +58,7 @@ const app = createBackend({
   corsOrigins: splitList(process.env.BOXHAVEN_BACKEND_CORS_ORIGINS || process.env.BETTER_AUTH_TRUSTED_ORIGINS),
   previewBaseDomain: process.env.BOXHAVEN_PREVIEW_BASE_DOMAIN,
   previewTargetPort: Number(process.env.BOXHAVEN_PREVIEW_TARGET_PORT || 80),
+  previewTLSWarmup: warmPreviewTLS,
 });
 
 await app.listen({ host, port });
@@ -95,6 +96,33 @@ function publicOrigin(value: string): string {
   } catch {
     return "";
   }
+}
+
+async function warmPreviewTLS(previewURL: string): Promise<void> {
+  const deadline = Date.now() + 60_000;
+  let lastError: Error | undefined;
+  while (Date.now() < deadline) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      await fetch(previewURL, {
+        method: "HEAD",
+        headers: { "user-agent": "BoxHaven preview TLS warmup" },
+        signal: controller.signal,
+      });
+      return;
+    } catch (error) {
+      lastError = error as Error;
+      await delay(2_000);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new Error(`preview TLS warmup timed out for ${previewURL}: ${lastError?.message || "unknown error"}`);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function trimURL(value: string | undefined): string {

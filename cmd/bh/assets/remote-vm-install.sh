@@ -474,8 +474,9 @@ Runtime details:
 
 - Browser traffic reaches `https://$BOXHAVEN_PREVIEW_HOSTNAME`.
 - TLS terminates at the BoxHaven control plane.
-- The control plane proxies to this machine over plain HTTP on
-  `$BOXHAVEN_PREVIEW_TARGET_PORT`, normally `80`.
+- The control plane proxies to this machine over plain HTTP/WebSocket on
+  `$BOXHAVEN_PREVIEW_TARGET_PORT`, normally `80`. Do not run HTTPS inside the
+  box for this preview path.
 - Bind web servers to `$BOXHAVEN_WEB_BIND`, normally `0.0.0.0`, not `localhost`.
 - Serve the public app on `$BOXHAVEN_WEB_PORT`, normally `80`.
 - `/run/boxhaven/context.json` contains the same preview information under
@@ -485,6 +486,8 @@ If a framework's dev server normally uses a high port, either configure it to
 listen on `$BOXHAVEN_WEB_BIND:$BOXHAVEN_WEB_PORT` or run a small reverse proxy
 on `$BOXHAVEN_WEB_PORT` to the framework port. Binding to port 80 may need
 `sudo`; the default `boxhaven` user has sudo access.
+Framework dev-server WebSockets, including Vite HMR, should use the same public
+preview URL; avoid separate tunnel or HTTPS setup unless the user asks for it.
 
 Examples:
 

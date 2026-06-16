@@ -193,7 +193,8 @@ Routes:
 - `POST /v1/billing/webhook`
 - `GET /v1/providers`
 - `GET /v1/preview/tls-check`
-- `ANY /v1/preview/proxy/:hostname/*`
+- `GET /v1/preview/proxy/:hostname/*` for HTTP and WebSocket preview traffic
+- `POST|PUT|PATCH|DELETE|OPTIONS /v1/preview/proxy/:hostname/*`
 - `POST /v1/agent/heartbeat`
 - `GET /v1/agent/connect`
 - `POST /v1/machines`

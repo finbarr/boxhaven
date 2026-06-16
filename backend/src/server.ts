@@ -27,6 +27,7 @@ export type BackendOptions = {
   corsOrigins?: string[];
   previewBaseDomain?: string;
   previewTargetPort?: number;
+  previewTLSWarmup?: (previewURL: string) => Promise<void>;
   machineReadyTimeoutMs?: number;
 };
 
@@ -148,6 +149,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     app.get("/v1/agent/connect", { websocket: true }, async (socket, request) => {
       await handleAgentConnection(options, agents, socket, request);
     });
+    registerPreviewProxyRoutes(app, options);
   });
 
   app.get("/healthz", async () => "ok\n");
@@ -162,10 +164,6 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return reply.code(404).send({ id: "not_found", message: "preview hostname is not registered" });
     }
     return "ok\n";
-  });
-
-  app.all<{ Params: { hostname: string; "*": string } }>("/v1/preview/proxy/:hostname/*", async (request, reply) => {
-    return proxyPreviewRequest(options, request, reply);
   });
 
   app.get("/v1/auth/whoami", async (request, reply) => {
@@ -839,7 +837,9 @@ async function createMachine(
     }
     throw err;
   }
-  return reply.code(201).send({ machine: decorateTeam(publicMachine({ ...ready, org_id: ready.org_id || orgID || undefined }), teams), status: provisioned.status || "created" });
+  const readyPublic = publicMachine({ ...ready, org_id: ready.org_id || orgID || undefined });
+  await warmMachinePreviewTLS(options, readyPublic);
+  return reply.code(201).send({ machine: decorateTeam(readyPublic, teams), status: provisioned.status || "created" });
 }
 
 async function syncProviderMachines(options: BackendOptions, auth: AuthContext): Promise<void> {
@@ -959,6 +959,15 @@ function publicMachine(machine: RemoteMachine): RemoteMachine {
     if (key.startsWith("ssh_") && key.endsWith("_key")) delete safe[key];
   }
   return safe as RemoteMachine;
+}
+
+async function warmMachinePreviewTLS(options: BackendOptions, machine: RemoteMachine): Promise<void> {
+  if (!options.previewTLSWarmup || !machine.preview_url) return;
+  try {
+    await options.previewTLSWarmup(machine.preview_url);
+  } catch (error) {
+    console.warn(`preview TLS warmup failed for ${machine.name}: ${(error as Error).message}`);
+  }
 }
 
 function providerForMachine(
@@ -1773,6 +1782,22 @@ async function findMachineByPreviewHostname(options: BackendOptions, hostname: s
   return undefined;
 }
 
+function registerPreviewProxyRoutes(app: FastifyInstance, options: BackendOptions): void {
+  app.route<{ Params: { hostname: string; "*": string } }>({
+    method: "GET",
+    url: "/v1/preview/proxy/:hostname/*",
+    handler: async (request, reply) => proxyPreviewRequest(options, request, reply),
+    wsHandler: async (socket, request) => proxyPreviewWebSocketRequest(options, socket, request),
+  });
+  for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+    app.route<{ Params: { hostname: string; "*": string } }>({
+      method,
+      url: "/v1/preview/proxy/:hostname/*",
+      handler: async (request, reply) => proxyPreviewRequest(options, request, reply),
+    });
+  }
+}
+
 async function proxyPreviewRequest(
   options: BackendOptions,
   request: { method: string; url: string; headers: Record<string, string | string[] | undefined>; params: { hostname: string }; body?: unknown },
@@ -1814,6 +1839,89 @@ async function proxyPreviewRequest(
   reply.header("x-boxhaven-preview-machine", machine.name);
   if (request.method === "HEAD") return reply.send("");
   return reply.send(Buffer.from(await upstream.arrayBuffer()));
+}
+
+async function proxyPreviewWebSocketRequest(
+  options: BackendOptions,
+  client: WebSocket,
+  request: { url: string; headers: Record<string, string | string[] | undefined>; params: { hostname: string } },
+): Promise<void> {
+  const preview = previewOptions(options);
+  const hostname = normalizeHostname(request.params.hostname);
+  const machine = await findMachineByPreviewHostname(options, hostname);
+  if (!preview || !machine) {
+    closePreviewWebSocket(client, 1008, "preview hostname is not registered");
+    return;
+  }
+  if (!machine.public_ipv4) {
+    closePreviewWebSocket(client, 1011, "preview machine has no public IPv4");
+    return;
+  }
+
+  const targetURL = new URL(previewTargetSuffix(request.url, hostname), `ws://${machine.public_ipv4}:${preview.targetPort}`);
+  const headers = previewProxyWebSocketHeaders(request.headers, hostname);
+  const protocols = previewWebSocketProtocols(request.headers["sec-websocket-protocol"]);
+  const upstream = protocols.length > 0
+    ? new WebSocket(targetURL, protocols, { headers })
+    : new WebSocket(targetURL, { headers });
+  const pending: Array<{ data: WebSocket.RawData; isBinary: boolean }> = [];
+
+  upstream.on("open", () => {
+    while (pending.length > 0 && upstream.readyState === WebSocket.OPEN) {
+      const message = pending.shift();
+      if (message) upstream.send(message.data, { binary: message.isBinary });
+    }
+  });
+  upstream.on("message", (data, isBinary) => {
+    if (client.readyState === WebSocket.OPEN) client.send(data, { binary: isBinary });
+  });
+  client.on("message", (data, isBinary) => {
+    if (upstream.readyState === WebSocket.OPEN) {
+      upstream.send(data, { binary: isBinary });
+      return;
+    }
+    if (upstream.readyState === WebSocket.CONNECTING) pending.push({ data, isBinary });
+  });
+  upstream.on("close", (code, reason) => closePreviewWebSocket(client, code || 1000, reason.toString()));
+  client.on("close", (code, reason) => closePreviewWebSocket(upstream, code || 1000, reason.toString()));
+  upstream.on("error", () => closePreviewWebSocket(client, 1011, "preview upstream websocket error"));
+  client.on("error", () => closePreviewWebSocket(upstream, 1011, "preview client websocket error"));
+  upstream.on("unexpected-response", (_request, response) => {
+    response.resume();
+    closePreviewWebSocket(client, 1011, `preview upstream websocket rejected ${response.statusCode || ""}`.trim());
+  });
+}
+
+function previewProxyWebSocketHeaders(input: Record<string, string | string[] | undefined>, hostname: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [name, rawValue] of Object.entries(input)) {
+    const lower = name.toLowerCase();
+    if (hopByHopHeaders.has(lower) || lower === "host" || lower.startsWith("sec-websocket-")) continue;
+    const values = Array.isArray(rawValue) ? rawValue : rawValue === undefined ? [] : [rawValue];
+    if (values.length > 0) headers[name] = values.join(", ");
+  }
+  headers["x-forwarded-host"] = hostname;
+  headers["x-forwarded-proto"] = "https";
+  return headers;
+}
+
+function previewWebSocketProtocols(value: string | string[] | undefined): string[] {
+  const raw = Array.isArray(value) ? value.join(",") : value || "";
+  return raw.split(",").map((protocol) => protocol.trim()).filter(Boolean);
+}
+
+function closePreviewWebSocket(socket: WebSocket, code: number, reason: string): void {
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.close(validPreviewWebSocketCloseCode(code) ? code : 1000, reason.slice(0, 120));
+    return;
+  }
+  if (socket.readyState === WebSocket.CONNECTING) {
+    socket.terminate();
+  }
+}
+
+function validPreviewWebSocketCloseCode(code: number): boolean {
+  return code === 1000 || (code >= 3000 && code <= 4999) || (code >= 1001 && code <= 1014 && ![1004, 1005, 1006].includes(code));
 }
 
 function previewTargetSuffix(requestURL: string, hostname: string): string {

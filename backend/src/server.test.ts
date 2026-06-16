@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { WebSocketServer } from "ws";
 import { createBackendAuth, migrateBackendAuth } from "./auth.js";
 import { ProviderRegistry } from "./providers.js";
 import { StateStore } from "./state.js";
@@ -563,6 +564,61 @@ test("backend registers preview hostnames and proxies them to the machine", asyn
   }
 });
 
+test("backend proxies preview websocket upgrades to the machine", async () => {
+  let previewHost = "";
+  const upstreamServer = createServer();
+  const upstream = new WebSocketServer({ server: upstreamServer });
+  upstream.on("connection", (socket, request) => {
+    assert.equal(request.headers["x-forwarded-host"], previewHost);
+    assert.equal(request.headers["x-forwarded-proto"], "https");
+    assert.equal(request.url, "/hmr?token=1");
+    socket.send("ready");
+    socket.on("message", (message) => socket.send(`echo:${message.toString()}`));
+  });
+  await new Promise<void>((resolve) => upstreamServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = upstreamServer.address();
+    assert.equal(typeof address, "object");
+    const { app, provider, token } = await createTestBackend("preview-ws@example.com", "password123", { previewTargetPort: (address as AddressInfo).port });
+    provider.publicIPv4 = "127.0.0.1";
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/machines",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "preview-ws" },
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    previewHost = created.json().machine.preview_hostname;
+
+    const client = await app.injectWS(`/v1/preview/proxy/${previewHost}/hmr?token=1`);
+    assert.equal((await nextWSMessageWithTimeout(client)).toString(), "ready");
+    client.send("ping");
+    assert.equal((await nextWSMessageWithTimeout(client)).toString(), "echo:ping");
+    client.terminate();
+  } finally {
+    for (const socket of upstream.clients) socket.terminate();
+    upstream.close();
+    await new Promise<void>((resolve, reject) => upstreamServer.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("backend warms preview TLS before returning created machines", async () => {
+  const warmed: string[] = [];
+  const { app, token } = await createTestBackend("preview-warmup@example.com", "password123", {
+    previewTLSWarmup: async (url) => {
+      warmed.push(url);
+    },
+  });
+  const created = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers: { authorization: `Bearer ${token}` },
+    payload: { name: "preview-warmup" },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  assert.deepEqual(warmed, [created.json().machine.preview_url]);
+});
+
 test("backend login and logout are handled by Better Auth", async () => {
   const { app, token } = await createTestBackend("login@example.com", "correct horse battery staple");
 
@@ -1044,6 +1100,7 @@ async function createTestBackend(
     extraProviders?: MachineProvider[];
     maxMachinesPerUser?: number;
     github?: boolean;
+    previewTLSWarmup?: (previewURL: string) => Promise<void>;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -1071,6 +1128,7 @@ async function createTestBackend(
     appPublicURL: "https://app.hosted.test",
     previewBaseDomain: "hosted.test",
     previewTargetPort: options.previewTargetPort,
+    previewTLSWarmup: options.previewTLSWarmup,
     machineReadyTimeoutMs: options.machineReadyTimeoutMs ?? 0,
   });
   const token = await signUp(app, email, password);
@@ -1106,4 +1164,13 @@ function nextWSMessage(socket: { once: (event: "message" | "error", handler: (da
     socket.once("message", (data) => resolve(Buffer.isBuffer(data) ? data : Buffer.from(data as unknown as ArrayBuffer)));
     socket.once("error", (error) => reject(error));
   });
+}
+
+async function nextWSMessageWithTimeout(socket: { once: (event: "message" | "error", handler: (data: Buffer | Error) => void) => void }, ms = 2_000): Promise<Buffer> {
+  return Promise.race([
+    nextWSMessage(socket),
+    delay(ms).then(() => {
+      throw new Error("timed out waiting for websocket message");
+    }),
+  ]);
 }

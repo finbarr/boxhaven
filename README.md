@@ -265,9 +265,11 @@ global Git config. BoxHaven does not copy the full local Git config.
 ## Web Preview
 
 Each hosted box receives a public preview URL when the backend is configured
-with a preview base domain. Public HTTPS traffic terminates at the BoxHaven
-control plane, then the backend proxies plain HTTP to the machine's
-`BOXHAVEN_PREVIEW_TARGET_PORT`, default `80`.
+with a preview base domain. The backend warms the preview URL during machine
+create so Caddy has already completed on-demand certificate issuance before the
+URL is shown. Public HTTPS and WebSocket traffic terminate at the BoxHaven
+control plane, then the backend proxies plain HTTP/WebSocket traffic to the
+machine's `BOXHAVEN_PREVIEW_TARGET_PORT`, default `80`.
 
 Inside the box, commands receive:
 
@@ -280,8 +282,9 @@ Inside the box, commands receive:
   preview details under `.preview`.
 
 Apps should bind HTTP to `0.0.0.0:$BOXHAVEN_WEB_PORT` or run a reverse proxy on
-that port to the app's internal dev-server port. The default `boxhaven` user has
-sudo access if binding to port 80 is required.
+that port to the app's internal dev-server port. Framework dev-server
+WebSockets, including Vite HMR, use the same preview URL. The default
+`boxhaven` user has sudo access if binding to port 80 is required.
 
 ## Backend
 
