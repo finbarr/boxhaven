@@ -166,6 +166,24 @@ func TestRemoteMachineTeamLabel(t *testing.T) {
 	}
 }
 
+func TestRemoteVMInstallSupportsGhosttyTerminfo(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("assets", "remote-vm-install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, want := range []string{
+		"install_terminal_compat",
+		"xterm-ghostty",
+		"tic -x -o /usr/share/terminfo",
+		"infocmp xterm-ghostty",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("remote-vm-install.sh is missing %q", want)
+		}
+	}
+}
+
 func TestTeamActiveLabel(t *testing.T) {
 	cases := []struct {
 		team *teamOrganization
@@ -464,8 +482,6 @@ func TestRemoteMachineStatusLabel(t *testing.T) {
 		}
 	}
 }
-
-
 
 func TestRemoteBackendErrorMessage(t *testing.T) {
 	err := &remoteBackendError{Method: "GET", Endpoint: "/v1/machines/x", Status: 404, Detail: `{"id":"not_found","message":"machine does not exist"}`}

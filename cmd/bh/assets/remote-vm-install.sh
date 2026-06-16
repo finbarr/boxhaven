@@ -85,6 +85,18 @@ apt_install() {
   ln -sf /usr/bin/fdfind /usr/local/bin/fd 2>/dev/null || true
 }
 
+install_terminal_compat() {
+  step "installing terminal compatibility"
+  cat > /tmp/boxhaven-extra-terminfo.src <<'EOF'
+xterm-ghostty|Ghostty terminal emulator,
+  use=xterm-256color,
+EOF
+  install -d -m 0755 /usr/share/terminfo
+  tic -x -o /usr/share/terminfo /tmp/boxhaven-extra-terminfo.src
+  rm -f /tmp/boxhaven-extra-terminfo.src
+  infocmp xterm-ghostty >/dev/null
+}
+
 install_node() {
   step "checking Node.js"
   local major
@@ -888,6 +900,7 @@ EOF
 
 disable_unattended_apt
 apt_install
+install_terminal_compat
 install_node
 install_gh
 install_docker
