@@ -892,6 +892,22 @@ a.secondary-button {
   gap: 4px;
 }
 
+.side-links + .side-links {
+  padding-top: 10px;
+  border-top: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.side-section-label,
+.side-team-select span {
+  color: #6a776f;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.side-section-label {
+  padding: 0 6px 4px;
+}
+
 .side-links a {
   display: flex;
   align-items: center;
@@ -919,19 +935,12 @@ a.secondary-button {
 .side-team {
   display: grid;
   gap: 8px;
-  padding: 12px 6px 0;
-  border-top: 1px solid rgba(96, 75, 53, 0.12);
+  padding: 0 6px 2px;
 }
 
 .side-team-select {
   display: grid;
   gap: 7px;
-}
-
-.side-team-select span {
-  color: #6a776f;
-  font-size: 12px;
-  text-transform: uppercase;
 }
 
 .side-team-select select {
@@ -1038,6 +1047,30 @@ a.secondary-button {
   gap: 8px;
   justify-items: start;
   padding-top: 4px;
+}
+
+.team-settings {
+  gap: 16px;
+}
+
+.team-settings-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.55fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.team-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.team-settings-actions .error {
+  flex-basis: 100%;
 }
 
 .table-panel {
@@ -1830,6 +1863,10 @@ a.secondary-button {
 
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .team-settings-form {
+    grid-template-columns: 1fr;
   }
 
   .drawer-panel,

@@ -30,26 +30,6 @@ export function ConsoleShell({ activeSection, isAdmin, email, teams = [], active
           <div className="brand-mark"><img src={logoURL} alt="" /></div>
           <strong>BoxHaven</strong>
         </Link>
-        <nav className="side-links">
-          <Link to="/" className={activeSection === "boxes" ? "active" : undefined}>
-            <Server size={17} />
-            Boxes
-          </Link>
-          <Link to="/team" className={activeSection === "team" ? "active" : undefined}>
-            <Users size={17} />
-            Team
-          </Link>
-          {isAdmin ? (
-            <Link to="/images" className={activeSection === "images" ? "active" : undefined}>
-              <Layers size={17} />
-              Images
-            </Link>
-          ) : null}
-          <Link to="/billing" className={activeSection === "billing" ? "active" : undefined}>
-            <CreditCard size={17} />
-            Billing
-          </Link>
-        </nav>
         {teams.length ? (
           <TeamSwitcher
             teams={teams}
@@ -58,6 +38,30 @@ export function ConsoleShell({ activeSection, isAdmin, email, teams = [], active
             error={teamSwitchError}
             onSwitch={onTeamSwitch}
           />
+        ) : null}
+        <nav className="side-links" aria-label="Team">
+          <span className="side-section-label">Team</span>
+          <Link to="/" className={activeSection === "boxes" ? "active" : undefined}>
+            <Server size={17} />
+            Boxes
+          </Link>
+          <Link to="/team" className={activeSection === "team" ? "active" : undefined}>
+            <Users size={17} />
+            Members
+          </Link>
+          <Link to="/billing" className={activeSection === "billing" ? "active" : undefined}>
+            <CreditCard size={17} />
+            Billing
+          </Link>
+        </nav>
+        {isAdmin ? (
+          <nav className="side-links" aria-label="Global">
+            <span className="side-section-label">Global</span>
+            <Link to="/images" className={activeSection === "images" ? "active" : undefined}>
+              <Layers size={17} />
+              Images
+            </Link>
+          </nav>
         ) : null}
         <div className="side-foot">
           <div className="side-account">

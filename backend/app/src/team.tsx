@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Copy, CreditCard, LogOut, Plus, Send, Server, Trash2, Users, XCircle } from "lucide-react";
-import { FormEvent, useState } from "react";
-import { apiFetch, AuthUser, BillingResponse, formatDate, inviteLink, Machine } from "./api";
+import { Copy, CreditCard, LogOut, Plus, Save, Send, Trash2, Users, XCircle } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { apiFetch, AuthUser, BillingResponse, formatDate, inviteLink, TeamInfo } from "./api";
 import { CommandBlock } from "./access";
 import { statusLabel } from "./billing";
 import { useConsole } from "./console-context";
@@ -30,22 +30,12 @@ type Invitation = {
   expiresAt?: string;
 };
 
-type OrgMachine = Machine & {
-  owner_email?: string;
-  owner_name?: string;
-};
-
-type OrgMachinesResponse = {
-  machines: OrgMachine[];
-  role?: string;
-};
-
 const memberRoles = ["member", "admin", "owner"] as const;
 
 // teamRef is the /team/$team path param (slug or id). Without it, the
 // session's active team from the shared console switcher is shown.
 export function TeamView({ teamRef }: { teamRef?: string }) {
-  const { token, user, activeTeam } = useConsole();
+  const { token, user, teams, activeTeam } = useConsole();
   const activeTeamId = activeTeam?.id;
   const orgs = useQuery({
     queryKey: ["orgs", token],
@@ -96,20 +86,20 @@ export function TeamView({ teamRef }: { teamRef?: string }) {
       token={token}
       user={user}
       org={viewedOrg}
-      activeTeamId={activeTeamId}
+      teamInfo={teams.find((team) => team.id === viewedOrg.id)}
     />
   );
 }
 
-function useCreateTeam(token: string, onCreated: () => void) {
+function useCreateTeam(token: string, onCreated: (organization: Organization) => void) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => apiFetch<Organization>("/v1/auth/organization/create", token, {
       method: "POST",
       body: { name, slug: teamSlug(name) },
     }),
-    onSuccess: () => {
-      onCreated();
+    onSuccess: (organization) => {
+      onCreated(organization);
       void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
       // Creating a team makes it the session's active team (Better Auth
       // behavior), so the whoami snapshot must refresh too.
@@ -149,14 +139,16 @@ function CreateTeamPanel({ token }: { token: string }) {
   );
 }
 
-function TeamDetail({ token, user, org, activeTeamId }: {
+function TeamDetail({ token, user, org, teamInfo }: {
   token: string;
   user?: AuthUser;
   org: Organization;
-  activeTeamId?: string;
+  teamInfo?: TeamInfo;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [teamName, setTeamName] = useState(org.name);
+  const [teamSlugValue, setTeamSlugValue] = useState(org.slug || teamSlug(org.name));
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<string>("member");
   const [lastInvitation, setLastInvitation] = useState<Invitation | null>(null);
@@ -176,11 +168,10 @@ function TeamDetail({ token, user, org, activeTeamId }: {
     queryKey: ["org-invitations", org.id, token],
     queryFn: () => apiFetch<Invitation[]>(`/v1/auth/organization/list-invitations?organizationId=${encodeURIComponent(org.id)}`, token),
   });
-  const orgMachines = useQuery({
-    queryKey: ["org-machines", org.id, token],
-    queryFn: () => apiFetch<OrgMachinesResponse>(`/v1/orgs/${encodeURIComponent(org.id)}/machines`, token),
-    refetchInterval: 30000,
-  });
+  useEffect(() => {
+    setTeamName(org.name);
+    setTeamSlugValue(org.slug || teamSlug(org.name));
+  }, [org.id, org.name, org.slug]);
   const invite = useMutation({
     mutationFn: () => apiFetch<Invitation>("/v1/auth/organization/invite-member", token, {
       method: "POST",
@@ -216,7 +207,28 @@ function TeamDetail({ token, user, org, activeTeamId }: {
     }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["org-members", org.id, token] });
-      void queryClient.invalidateQueries({ queryKey: ["org-machines", org.id, token] });
+    },
+  });
+  const updateTeam = useMutation({
+    mutationFn: () => apiFetch<Organization>("/v1/auth/organization/update", token, {
+      method: "POST",
+      body: { organizationId: org.id, data: { name: teamName.trim(), slug: teamSlug(teamSlugValue) } },
+    }),
+    onSuccess: (organization) => {
+      void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
+      void queryClient.invalidateQueries({ queryKey: ["session", token] });
+      void navigate({ to: "/team/$team", params: { team: organization.slug || organization.id } });
+    },
+  });
+  const deleteTeam = useMutation({
+    mutationFn: () => apiFetch("/v1/auth/organization/delete", token, {
+      method: "POST",
+      body: { organizationId: org.id },
+    }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
+      void queryClient.invalidateQueries({ queryKey: ["session", token] });
+      void navigate({ to: "/team" });
     },
   });
   const leave = useMutation({
@@ -230,35 +242,33 @@ function TeamDetail({ token, user, org, activeTeamId }: {
       void navigate({ to: "/team" });
     },
   });
-  const destroyMachine = useMutation({
-    mutationFn: (machine: OrgMachine) => apiFetch(
-      `/v1/orgs/${encodeURIComponent(org.id)}/machines/${encodeURIComponent(machine.user_id || "")}/${encodeURIComponent(machine.name)}`,
-      token,
-      { method: "DELETE" },
-    ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["org-machines", org.id, token] }),
-  });
-
   const memberList = members.data || [];
-  const callerRole = memberList.find((member) => member.userId === user?.id)?.role || orgMachines.data?.role || "member";
+  const callerRole = memberList.find((member) => member.userId === user?.id)?.role || "member";
   // Better Auth stores multiple roles as a comma-separated string.
   const callerRoles = callerRole.split(",").map((role) => role.trim());
   const canManage = callerRoles.includes("owner") || callerRoles.includes("admin");
+  const isOwner = callerRoles.includes("owner");
   const pendingInvitations = (invitations.data || []).filter((invitation) => invitation.status === "pending");
-  const machineList = orgMachines.data?.machines || [];
   const onlyMember = memberList.length === 1;
-  const orgIsActive = org.id === activeTeamId;
+  const isPersonalTeam = Boolean(teamInfo?.personal);
+  const canDeleteTeam = isOwner && !isPersonalTeam;
+  const teamFormDirty = teamName !== org.name || teamSlug(teamSlugValue) !== (org.slug || teamSlug(org.name));
 
   function submitInvite(event: FormEvent) {
     event.preventDefault();
     invite.mutate();
   }
 
+  function submitTeam(event: FormEvent) {
+    event.preventDefault();
+    updateTeam.mutate();
+  }
+
   return (
     <>
       <WorkspaceHead
         eyebrow={`team / ${callerRole}`}
-        title={org.name}
+        title="Members"
         actions={(
           <>
             <button className="secondary-button" type="button" onClick={() => setNewTeamOpen(true)}>
@@ -277,6 +287,59 @@ function TeamDetail({ token, user, org, activeTeamId }: {
 
       <div className="workspace-body">
         <TeamBillingHint token={token} org={org} />
+        <div className="panel team-settings">
+          <div className="panel-heading small">
+            <span>team</span>
+            <h2>{org.name}</h2>
+          </div>
+          <form className="team-settings-form" onSubmit={submitTeam}>
+            <label>
+              Team name
+              <input value={teamName} onChange={(event) => setTeamName(event.target.value)} required disabled={!canManage} />
+            </label>
+            <label>
+              Team slug
+              <input value={teamSlugValue} onChange={(event) => setTeamSlugValue(teamSlug(event.target.value))} required disabled={!canManage} />
+            </label>
+            {canManage ? (
+              <button className="primary-button" type="submit" disabled={updateTeam.isPending || !teamName.trim() || !teamSlug(teamSlugValue) || !teamFormDirty}>
+                <Save size={16} />
+                {updateTeam.isPending ? "Saving" : "Save team"}
+              </button>
+            ) : null}
+          </form>
+          {updateTeam.error ? <p className="error">{(updateTeam.error as Error).message}</p> : null}
+          <div className="team-settings-actions">
+            {!callerRoles.includes("owner") ? (
+              <button
+                className="danger-button"
+                type="button"
+                disabled={leave.isPending}
+                onClick={() => {
+                  if (window.confirm(`Leave ${org.name}?`)) leave.mutate();
+                }}
+              >
+                <LogOut size={16} />
+                {leave.isPending ? "Leaving" : "Leave team"}
+              </button>
+            ) : (
+              <button
+                className="danger-button"
+                type="button"
+                disabled={!canDeleteTeam || deleteTeam.isPending}
+                title={isPersonalTeam ? "Personal teams cannot be deleted" : !isOwner ? "Only owners can delete teams" : undefined}
+                onClick={() => {
+                  if (window.confirm(`Delete ${org.name}? Team boxes move back to their owners' active teams the next time they list boxes.`)) deleteTeam.mutate();
+                }}
+              >
+                <Trash2 size={16} />
+                {deleteTeam.isPending ? "Deleting" : "Delete team"}
+              </button>
+            )}
+            {leave.error ? <p className="error">{(leave.error as Error).message}</p> : null}
+            {deleteTeam.error ? <p className="error">{(deleteTeam.error as Error).message}</p> : null}
+          </div>
+        </div>
 
         <div className="panel table-panel">
           <div className="panel-heading small">
@@ -395,92 +458,6 @@ function TeamDetail({ token, user, org, activeTeamId }: {
           </div>
         ) : null}
 
-        <div className="panel table-panel">
-          <div className="panel-heading small">
-            <span>team boxes</span>
-            <h2>This team's boxes</h2>
-          </div>
-          <p className="hint">
-            {orgIsActive ? (
-              <>
-                New boxes land in <strong>{org.name}</strong>, or target it directly:{" "}
-                <code>bh create work --team {org.slug || org.name}</code>
-              </>
-            ) : (
-              <>
-                This is not the active team. Switch to <strong>{org.name}</strong> in the sidebar, or target it directly:{" "}
-                <code>bh create work --team {org.slug || org.name}</code>
-              </>
-            )}
-          </p>
-          {orgMachines.error ? <p className="error panel-error">{(orgMachines.error as Error).message}</p> : null}
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Owner</th>
-                <th>Provider</th>
-                <th>Size</th>
-                <th>Preview</th>
-                {canManage ? <th aria-label="Actions" /> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {machineList.map((machine) => (
-                <tr key={`${machine.user_id || "user"}/${machine.name}`}>
-                  <td>{machine.name}</td>
-                  <td>{machine.owner_email || "-"}</td>
-                  <td>{machine.provider_label || machine.provider || "-"}</td>
-                  <td>{machine.size || "-"}</td>
-                  <td>
-                    {machine.preview_url ? (
-                      <a href={machine.preview_url} target="_blank" rel="noreferrer">preview</a>
-                    ) : "-"}
-                  </td>
-                  {canManage ? (
-                    <td>
-                      <button
-                        className="danger-button"
-                        type="button"
-                        disabled={destroyMachine.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Destroy ${machine.name} (${machine.owner_email || "unknown owner"})?`)) destroyMachine.mutate(machine);
-                        }}
-                      >
-                        <Trash2 size={14} />
-                        Destroy
-                      </button>
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!machineList.length ? (
-            <div className="empty">
-              <Server size={20} />
-              <span>{orgMachines.isLoading ? "Loading boxes" : "No boxes in this team yet."}</span>
-            </div>
-          ) : null}
-          {destroyMachine.error ? <p className="error panel-error">{(destroyMachine.error as Error).message}</p> : null}
-        </div>
-
-        {!callerRoles.includes("owner") ? (
-          <div className="workspace-foot">
-            <button
-              className="danger-button"
-              type="button"
-              disabled={leave.isPending}
-              onClick={() => {
-                if (window.confirm(`Leave ${org.name}?`)) leave.mutate();
-              }}
-            >
-              <LogOut size={16} />
-              Leave team
-            </button>
-            {leave.error ? <p className="error">{(leave.error as Error).message}</p> : null}
-          </div>
-        ) : null}
       </div>
 
       <Drawer open={inviteOpen} onClose={() => setInviteOpen(false)} eyebrow="invite" title="Add a teammate">
@@ -512,17 +489,20 @@ function TeamDetail({ token, user, org, activeTeamId }: {
       </Drawer>
 
       <Drawer open={newTeamOpen} onClose={() => setNewTeamOpen(false)} eyebrow="teams" title="New team">
-        <NewTeamForm token={token} onCreated={() => setNewTeamOpen(false)} />
+        <NewTeamForm token={token} onCreated={(organization) => {
+          setNewTeamOpen(false);
+          void navigate({ to: "/team/$team", params: { team: organization.slug || organization.id } });
+        }} />
       </Drawer>
     </>
   );
 }
 
-function NewTeamForm({ token, onCreated }: { token: string; onCreated?: () => void }) {
+function NewTeamForm({ token, onCreated }: { token: string; onCreated?: (organization: Organization) => void }) {
   const [name, setName] = useState("");
-  const create = useCreateTeam(token, () => {
+  const create = useCreateTeam(token, (organization) => {
     setName("");
-    onCreated?.();
+    onCreated?.(organization);
   });
 
   function submit(event: FormEvent) {
