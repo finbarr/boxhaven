@@ -118,9 +118,9 @@ Skip the initial sync only when you intentionally want an empty project path:
 bh create work --no-sync
 ```
 
-Every account automatically gets a personal team, and your first box lands
+Every account automatically gets a default team, and your first box lands
 there: new boxes go to your session's active team, which `bh login` pins to
-your personal team until you join or switch to another one. See
+that default team until you switch to another one. See
 [Teams](/teams) for sharing boxes with teammates.
 
 ## Run Commands

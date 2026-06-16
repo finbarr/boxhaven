@@ -6,11 +6,9 @@ covers every box in it, whichever member created the box.
 
 ## The Model
 
-- **Personal teams include one free box.** The personal team every account
-  receives automatically can run one box with no subscription.
-- **Shared teams are subscription-first.** A team you create or join has no
-  free allowance: the first box in it already requires the team's
-  subscription. A team owner or admin subscribes once for the whole team.
+- **Every team uses the same allowance.** By default, each team can run one box
+  with no subscription. A team owner or admin subscribes once for the whole
+  team when it needs more.
 - **Usage is metered per box-hour.** Boxes beyond a team's free allowance
   are billed per started hour through a Stripe subscription with a metered
   price. Destroy a box and the metering stops with it.
@@ -33,8 +31,7 @@ keeps box creation free; provider costs are the only costs.
 | `STRIPE_PRICE_ID` | Metered price used for team checkout subscriptions. |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `POST /v1/billing/webhook` deliveries. |
 | `STRIPE_METER_EVENT_NAME` | Billing Meter event name, default `boxhaven_box_hours`. |
-| `BOXHAVEN_FREE_MACHINES` | Free boxes per personal team, default `1`. |
-| `BOXHAVEN_TEAM_FREE_MACHINES` | Free boxes per shared team, default `0`. |
+| `BOXHAVEN_FREE_MACHINES` | Free boxes per team, default `1`. |
 | `BOXHAVEN_BILLING_USAGE_REPORTER` | Set to `off` to stop this backend from reporting meter events. |
 
 The webhook endpoint is `https://<api-host>/v1/billing/webhook` and needs the

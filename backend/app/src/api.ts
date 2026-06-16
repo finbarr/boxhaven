@@ -7,7 +7,6 @@ export type TeamInfo = {
   id: string;
   name: string;
   slug?: string;
-  personal?: boolean;
 };
 
 export type WhoamiResponse = {

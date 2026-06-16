@@ -21,7 +21,6 @@ type BillingTeam = {
   id: string;
   slug: string;
   name: string;
-  personal: boolean;
 };
 
 class BillingFakeProvider implements MachineProvider {
@@ -118,20 +117,19 @@ class FakeStripe {
   }
 }
 
-test("backend billing reports team status, sells checkout, and gates the personal free box", async () => {
+test("backend billing reports team status, sells checkout, and gates the team free box", async () => {
   const stripe = new FakeStripe();
   const stripeURL = await stripe.start();
   try {
     const { app, store, token } = await createBillingTestBackend(stripeURL);
     const headers = { authorization: `Bearer ${token}` };
     const team = await activeTeam(app, headers);
-    assert.equal(team.personal, true);
 
     const before = await app.inject({ method: "GET", url: "/v1/billing", headers });
     assert.equal(before.statusCode, 200, before.body);
     assert.deepEqual(before.json(), {
       enabled: true,
-      team: { id: team.id, slug: team.slug, name: team.name, personal: true },
+      team: { id: team.id, slug: team.slug, name: team.name },
       status: "free",
       free_machines: 1,
       machines_used: 0,
@@ -176,8 +174,6 @@ test("backend billing reports team status, sells checkout, and gates the persona
     assert.equal(after.json().portal_available, true);
     assert.equal(after.json().machines_used, 1);
     assert.equal((await store.getBillingRecord(team.id))?.subscription_id, "sub_test1");
-    // ensureCustomer snapshots the personal flag for the usage reporter.
-    assert.equal((await store.getBillingRecord(team.id))?.personal, true);
 
     const repeatCheckout = await app.inject({ method: "POST", url: "/v1/billing/checkout", headers, payload: {} });
     assert.equal(repeatCheckout.statusCode, 400, repeatCheckout.body);
@@ -199,16 +195,16 @@ test("backend billing reports team status, sells checkout, and gates the persona
   }
 });
 
-test("backend gates shared teams from the first box and role-gates billing management", async () => {
+test("backend applies the same allowance to created teams and role-gates billing management", async () => {
   const stripe = new FakeStripe();
   const stripeURL = await stripe.start();
   try {
     const { app, store, token } = await createBillingTestBackend(stripeURL);
     const ownerHeaders = { authorization: `Bearer ${token}` };
-    const ownerPersonalTeam = await activeTeam(app, ownerHeaders);
+    const ownerDefaultTeam = await activeTeam(app, ownerHeaders);
     const memberToken = await signUp(app, "member@example.com");
     const memberHeaders = { authorization: `Bearer ${memberToken}` };
-    const memberPersonalTeam = await activeTeam(app, memberHeaders);
+    const memberDefaultTeam = await activeTeam(app, memberHeaders);
 
     const orgCreated = await app.inject({
       method: "POST",
@@ -219,27 +215,27 @@ test("backend gates shared teams from the first box and role-gates billing manag
     assert.equal(orgCreated.statusCode, 200, orgCreated.body);
     const orgID = (orgCreated.json().id || orgCreated.json().organization?.id) as string;
 
-    // Shared teams have no free allowance: the very first box needs a
-    // subscription.
-    const gated = await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "first", team: "acme" } });
+    assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "first", team: "acme" } })).statusCode, 201);
+
+    const gated = await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "second", team: "acme" } });
     assert.equal(gated.statusCode, 403, gated.body);
     assert.equal(gated.json().id, "payment_required");
-    assert.equal(gated.json().message, "Team acme is on the free tier (0 boxes). A team owner or admin can subscribe at https://app.hosted.test/billing to run more boxes.");
+    assert.equal(gated.json().message, "Team acme is on the free tier (1 box). A team owner or admin can subscribe at https://app.hosted.test/billing to run more boxes.");
 
     const ownerView = await app.inject({ method: "GET", url: "/v1/billing?team=acme", headers: ownerHeaders });
     assert.equal(ownerView.statusCode, 200, ownerView.body);
     assert.deepEqual(ownerView.json(), {
       enabled: true,
-      team: { id: orgID, slug: "acme", name: "Acme", personal: false },
+      team: { id: orgID, slug: "acme", name: "Acme" },
       status: "free",
-      free_machines: 0,
-      machines_used: 0,
+      free_machines: 1,
+      machines_used: 1,
       can_manage: true,
       portal_available: false,
     });
 
     // Non-members cannot read another team's billing state.
-    const outsider = await app.inject({ method: "GET", url: `/v1/billing?team=${memberPersonalTeam.slug}`, headers: ownerHeaders });
+    const outsider = await app.inject({ method: "GET", url: `/v1/billing?team=${memberDefaultTeam.slug}`, headers: ownerHeaders });
     assert.equal(outsider.statusCode, 403, outsider.body);
 
     const invited = await app.inject({
@@ -271,15 +267,13 @@ test("backend gates shared teams from the first box and role-gates billing manag
     assert.equal(stripe.checkoutSessions[0].get("client_reference_id"), orgID);
     assert.equal(stripe.checkoutSessions[0].get("subscription_data[metadata][boxhaven_org_id]"), orgID);
 
-    // The webhook activation flips the shared team to allowed.
+    // The webhook activation unlocks paid boxes for the whole team.
     const completed = await injectWebhook(app, testWebhookSecret, {
       type: "checkout.session.completed",
       data: { object: { id: "cs_test1", mode: "subscription", customer: "cus_test1", subscription: "sub_test1", client_reference_id: orgID } },
     });
     assert.equal(completed.statusCode, 200, completed.body);
-    assert.equal((await store.getBillingRecord(orgID))?.personal, false);
 
-    assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "first", team: "acme" } })).statusCode, 201);
     // The team subscription covers every member's boxes in the team.
     assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: memberHeaders, payload: { name: "second", team: "acme" } })).statusCode, 201);
 
@@ -290,11 +284,10 @@ test("backend gates shared teams from the first box and role-gates billing manag
     const portal = await app.inject({ method: "POST", url: "/v1/billing/portal", headers: ownerHeaders, payload: { team: "acme" } });
     assert.equal(portal.statusCode, 200, portal.body);
 
-    // The shared team's boxes and subscription do not touch the owner's
-    // personal team.
-    const personal = await app.inject({ method: "GET", url: `/v1/billing?team=${ownerPersonalTeam.slug}`, headers: ownerHeaders });
-    assert.equal(personal.json().status, "free");
-    assert.equal(personal.json().machines_used, 0);
+    // The team's boxes and subscription do not touch the owner's default team.
+    const defaultTeam = await app.inject({ method: "GET", url: `/v1/billing?team=${ownerDefaultTeam.slug}`, headers: ownerHeaders });
+    assert.equal(defaultTeam.json().status, "free");
+    assert.equal(defaultTeam.json().machines_used, 0);
   } finally {
     await stripe.stop();
   }
@@ -383,7 +376,7 @@ test("backend without Stripe configuration keeps billing disabled and creates un
   assert.equal(status.statusCode, 200, status.body);
   assert.deepEqual(status.json(), {
     enabled: false,
-    team: { id: team.id, slug: team.slug, name: team.name, personal: true },
+    team: { id: team.id, slug: team.slug, name: team.name },
   });
 
   assert.equal((await app.inject({ method: "POST", url: "/v1/billing/checkout", headers, payload: {} })).statusCode, 400);
@@ -402,7 +395,7 @@ test("billing usage reporter bills team boxes beyond the allowance at most once 
     const headers = { authorization: `Bearer ${token}` };
     const team = await activeTeam(app, headers);
 
-    await store.putBillingRecord(team.id, { customer_id: "cus_test1", subscription_id: "sub_test1", status: "active", personal: true });
+    await store.putBillingRecord(team.id, { customer_id: "cus_test1", subscription_id: "sub_test1", status: "active" });
     assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "one" } })).statusCode, 201);
     assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "two" } })).statusCode, 201);
     assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "three" } })).statusCode, 201);
@@ -426,15 +419,14 @@ test("billing usage reporter bills team boxes beyond the allowance at most once 
     await (billing as BillingService).reportUsage(new Date("2026-06-09T11:01:00.000Z"));
     assert.equal(stripe.meterEvents.length, 2);
 
-    // The allowance comes from the record's personal snapshot: flipping the
-    // same team to shared (0 free boxes) bills all three boxes.
-    await store.putBillingRecord(team.id, { customer_id: "cus_test1", subscription_id: "sub_test1", status: "active", personal: false });
+    // Every team keeps the same allowance regardless of old stored metadata.
+    await store.putBillingRecord(team.id, { customer_id: "cus_test1", subscription_id: "sub_test1", status: "active" });
     await (billing as BillingService).reportUsage(new Date("2026-06-09T12:01:00.000Z"));
     assert.equal(stripe.meterEvents.length, 3);
-    assert.equal(stripe.meterEvents[2].get("payload[value]"), "3");
+    assert.equal(stripe.meterEvents[2].get("payload[value]"), "2");
 
     // Canceled subscriptions and free-tier usage report nothing.
-    await store.putBillingRecord(team.id, { customer_id: "cus_test1", subscription_id: "sub_test1", status: "canceled", personal: true });
+    await store.putBillingRecord(team.id, { customer_id: "cus_test1", subscription_id: "sub_test1", status: "canceled" });
     await (billing as BillingService).reportUsage(new Date("2026-06-09T13:01:00.000Z"));
     assert.equal(stripe.meterEvents.length, 3);
   } finally {
@@ -488,7 +480,7 @@ async function signUp(app: ReturnType<typeof createBackend>, email: string, pass
   return response.json().token as string;
 }
 
-// Reading whoami also makes sure the personal team exists before the test
+// Reading whoami also makes sure the default team exists before the test
 // exercises billing.
 async function activeTeam(app: ReturnType<typeof createBackend>, headers: Record<string, string>): Promise<BillingTeam> {
   const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });

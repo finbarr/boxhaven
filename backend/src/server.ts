@@ -42,7 +42,6 @@ type TeamInfo = {
   id: string;
   name: string;
   slug?: string;
-  personal: boolean;
 };
 
 type TeamMachine = RemoteMachine & {
@@ -196,7 +195,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       enabled: true,
       team: billingTeamInfo(team),
       status: billingStatusForRecord(record),
-      free_machines: options.billing.freeAllowance(team.personal),
+      free_machines: options.billing.freeAllowance(),
       machines_used: (await options.store.listMachinesForOrg(team.id)).length,
       can_manage: orgRoleCanManage(role),
       portal_available: !!record?.customer_id,
@@ -219,7 +218,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (billingRecordAllowsPaidBoxes(existing)) {
       return reply.code(400).send({ id: "bad_request", message: "subscription is already active; manage it through the billing portal" });
     }
-    const record = await billing.ensureCustomer(team.id, auth.email, team.name || team.slug || team.id, team.personal);
+    const record = await billing.ensureCustomer(team.id, auth.email, team.name || team.slug || team.id);
     const billingURL = `${options.appPublicURL || ""}/billing/${encodeURIComponent(team.slug || team.id)}`;
     const url = await billing.createCheckoutSession(team.id, record.customer_id, `${billingURL}?checkout=success`, `${billingURL}?checkout=canceled`);
     return { url };
@@ -334,7 +333,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     // gates the target team's free allowance below it.
     if (options.billing && team) {
       const used = (await options.store.listMachinesForOrg(team.id)).length;
-      const free = options.billing.freeAllowance(team.personal);
+      const free = options.billing.freeAllowance();
       if (used >= free && !billingRecordAllowsPaidBoxes(await options.store.getBillingRecord(team.id))) {
         return reply.code(403).send({
           id: "payment_required",
@@ -1146,8 +1145,8 @@ function resolveBillingTeam(
   return found.team;
 }
 
-function billingTeamInfo(team: TeamInfo): { id: string; slug?: string; name: string; personal: boolean } {
-  return { id: team.id, slug: team.slug, name: team.name, personal: team.personal };
+function billingTeamInfo(team: TeamInfo): { id: string; slug?: string; name: string } {
+  return { id: team.id, slug: team.slug, name: team.name };
 }
 
 function validateName(name: string): string | undefined {
@@ -1365,9 +1364,9 @@ function orgAPI(options: BackendOptions) {
 }
 
 // Every account gets a team: boxes always belong to one. The first request of
-// a session without an active team creates the personal team if needed and
-// pins the session's active team, so both fresh signups and pre-team accounts
-// are migrated transparently.
+// a session without an active team creates the user's default team if needed
+// and pins the session's active team, so both fresh signups and pre-team
+// accounts are migrated transparently.
 async function ensureActiveTeam(
   options: BackendOptions,
   headers: Headers,
@@ -1380,9 +1379,7 @@ async function ensureActiveTeam(
     try {
       const created = await api.createOrganization({
         headers,
-        // The personal marker drives the team's free billing allowance;
-        // teams created without it are treated as shared.
-        body: { name: defaultTeamName(user), slug: defaultTeamSlug(user), metadata: { personal: true } },
+        body: { name: defaultTeamName(user), slug: defaultTeamSlug(user) },
       });
       orgID = created?.id || created?.organization?.id || "";
     } catch {
@@ -1403,7 +1400,7 @@ async function ensureActiveTeam(
 }
 
 function defaultTeamName(user: { email: string; name?: string | null }): string {
-  const base = user.name?.trim() || user.email.split("@")[0] || "personal";
+  const base = user.name?.trim() || user.email.split("@")[0] || "team";
   return `${base}'s team`;
 }
 
@@ -1414,21 +1411,7 @@ function defaultTeamSlug(user: { id: string; email: string }): string {
 
 async function listUserTeams(options: BackendOptions, headers: Headers): Promise<TeamInfo[]> {
   const orgs = await orgAPI(options).listOrganizations({ headers });
-  return (orgs || []).map((org) => ({ id: org.id, name: org.name, slug: org.slug, personal: organizationIsPersonal(org.metadata) }));
-}
-
-// Better Auth stores organization metadata as a JSON string and
-// listOrganizations returns it unparsed, while other surfaces hand back the
-// parsed object; accept both and treat anything unreadable as a shared team.
-function organizationIsPersonal(metadata: unknown): boolean {
-  if (typeof metadata === "string") {
-    try {
-      metadata = JSON.parse(metadata);
-    } catch {
-      return false;
-    }
-  }
-  return !!metadata && typeof metadata === "object" && (metadata as { personal?: unknown }).personal === true;
+  return (orgs || []).map((org) => ({ id: org.id, name: org.name, slug: org.slug }));
 }
 
 // Team references resolve by id, then slug, then display name. Only slugs and

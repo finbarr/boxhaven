@@ -824,12 +824,12 @@ test("backend scopes images to teams", async () => {
   const headers = { authorization: `Bearer ${token}` };
   const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
   assert.equal(whoami.statusCode, 200, whoami.body);
-  const personalTeamID = whoami.json().team.id;
+  const defaultTeamID = whoami.json().team.id;
 
-  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "personal-box" } })).statusCode, 201);
-  const personalSnapshot = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "personal-box", name: "Personal Build" } });
-  assert.equal(personalSnapshot.statusCode, 202, personalSnapshot.body);
-  provider.images = [{ id: personalSnapshot.json().image.id, name: personalSnapshot.json().image.name, status: "available", bootstrapped: true }];
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "default-box" } })).statusCode, 201);
+  const defaultSnapshot = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "default-box", name: "Default Build" } });
+  assert.equal(defaultSnapshot.statusCode, 202, defaultSnapshot.body);
+  provider.images = [{ id: defaultSnapshot.json().image.id, name: defaultSnapshot.json().image.name, status: "available", bootstrapped: true }];
 
   const orgCreated = await app.inject({
     method: "POST",
@@ -857,7 +857,7 @@ test("backend scopes images to teams", async () => {
     method: "POST",
     url: "/v1/machines",
     headers,
-    payload: { name: "wrong-team-image", team: "acme", image: personalSnapshot.json().image.id },
+    payload: { name: "wrong-team-image", team: "acme", image: defaultSnapshot.json().image.id },
   });
   assert.equal(wrongTeamImage.statusCode, 400, wrongTeamImage.body);
 
@@ -874,14 +874,14 @@ test("backend scopes images to teams", async () => {
     method: "POST",
     url: "/v1/auth/organization/set-active",
     headers,
-    payload: { organizationId: personalTeamID },
+    payload: { organizationId: defaultTeamID },
   });
   assert.equal(backToPersonal.statusCode, 200, backToPersonal.body);
-  const personalImages = await app.inject({ method: "GET", url: "/v1/images", headers });
-  assert.deepEqual(personalImages.json().images.map((image: MachineImage) => image.name), ["boxhaven-remote-personal-build"]);
+  const defaultImages = await app.inject({ method: "GET", url: "/v1/images", headers });
+  assert.deepEqual(defaultImages.json().images.map((image: MachineImage) => image.name), ["boxhaven-remote-default-build"]);
 });
 
-test("backend creates a personal team automatically and scopes boxes to teams", async () => {
+test("backend creates a default team automatically and scopes boxes to teams", async () => {
   const { app, token } = await createTestBackend("solo@example.com");
   const headers = { authorization: `Bearer ${token}` };
 
@@ -917,7 +917,7 @@ test("backend scopes team machine listing and destroy to the box's team", async 
   const ownerHeaders = { authorization: `Bearer ${token}` };
   const memberHeaders = { authorization: `Bearer ${memberToken}` };
 
-  // The member touches the API before joining, so they get a personal team,
+  // The member touches the API before joining, so they get a default team,
   // and their pre-existing box stays in it.
   assert.equal((await app.inject({ method: "GET", url: "/v1/auth/whoami", headers: memberHeaders })).statusCode, 200);
   assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: memberHeaders, payload: { name: "private-box" } })).statusCode, 201);
@@ -950,7 +950,7 @@ test("backend scopes team machine listing and destroy to the box's team", async 
 
   // Boxes land in the requested team. Accepting an invitation switches the
   // member's active team, so their next create defaults to Acme, while the
-  // box created beforehand stays in (and is only visible to) their personal
+  // box created beforehand stays in (and is only visible to) their default
   // team.
   assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "owner-box", team: "acme" } })).statusCode, 201);
   assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: memberHeaders, payload: { name: "team-box" } })).statusCode, 201);
@@ -1018,7 +1018,7 @@ test("backend never places a removed member's boxes in the old team", async () =
     payload: { email: "kicked@example.com", role: "member", organizationId: orgID },
   });
   assert.equal(invited.statusCode, 200, invited.body);
-  // The member joins without ever creating a personal team, so the joined
+  // The member joins without ever creating a default team, so the joined
   // team becomes their session's active team.
   const accepted = await app.inject({
     method: "POST",

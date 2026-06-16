@@ -175,9 +175,9 @@ Hetzner Cloud:
 
 ## Teams
 
-Every box belongs to a team. Each account automatically gets a personal team
-named `<name>'s team`, so personal boxes work with no setup. Create a shared
-team in the console or from the CLI:
+Every box belongs to a team. Each account automatically gets a default team
+named `<name>'s team`, so boxes work with no setup. Create another team in the
+console or from the CLI:
 
 ```bash
 bh team create acme
@@ -287,9 +287,9 @@ WebSockets, including Vite HMR, use the same preview URL. The default
 The open-source backend in [backend](backend) provides:
 
 - Better Auth browser/device login
-- team-centric box ownership with automatic personal teams
+- team-centric box ownership with automatic default teams
 - DigitalOcean and Hetzner Cloud provisioning
-- shared teams via Better Auth organizations with roles and invite links
+- multi-member teams via Better Auth organizations with roles and invite links
 - admin-managed golden images per provider
 - backend-signed short-lived SSH certificates
 - VM agent RPC for setup commands and tmux session lifecycle

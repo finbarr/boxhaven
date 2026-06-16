@@ -96,7 +96,7 @@ function TeamBillingPanel({ info, teamRef, checkout, portal }: {
           <p>
             {free > 0
               ? `${teamName} is back on the free tier (${freeBoxes}). Upgrade again to run more boxes.`
-              : `${teamName} no longer has a subscription, so it cannot run boxes. Subscribe again to keep using it.`}
+              : `${teamName} needs a subscription to run boxes. Subscribe again to keep using it.`}
           </p>
           {portalButton}
         </div>
@@ -104,7 +104,7 @@ function TeamBillingPanel({ info, teamRef, checkout, portal }: {
 
       <div className="panel">
         <div className="panel-heading small">
-          <span>plan / {info.team.personal ? "personal team" : "shared team"}</span>
+          <span>plan</span>
           <h2>
             {teamName}
             <span className={info.status === "past_due" ? "badge warn" : "badge"}>{statusLabel(info.status)}</span>
@@ -115,11 +115,9 @@ function TeamBillingPanel({ info, teamRef, checkout, portal }: {
             ? free > 0
               ? `The first ${free === 1 ? "box is" : `${free} boxes are`} free; boxes beyond that are usage-billed per box-hour.`
               : `Boxes in ${teamName} are usage-billed per box-hour.`
-            : info.team.personal
-              ? `Your personal team includes ${free === 1 ? "1 free box" : `${free} free boxes`}. Upgrade to run more — additional boxes are usage-billed per box-hour.`
-              : free > 0
-                ? `${teamName} includes ${free === 1 ? "1 free box" : `${free} free boxes`}. Upgrade to run more — additional boxes are usage-billed per box-hour.`
-                : "Shared teams need a subscription to run boxes — boxes in shared teams are usage-billed from the first box."}
+            : free > 0
+              ? `${teamName} includes ${free === 1 ? "1 free box" : `${free} free boxes`}. Upgrade to run more; additional boxes are usage-billed per box-hour.`
+              : `${teamName} needs a subscription to run boxes; boxes are usage-billed per box-hour.`}
         </p>
         <div className="usage-meter">
           <span>

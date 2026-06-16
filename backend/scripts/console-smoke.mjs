@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { createServer as createViteServer } from "vite";
 import { createBackendAuth, migrateBackendAuth } from "../src/auth.ts";
+import { BillingService } from "../src/billing.ts";
 import { ProviderRegistry } from "../src/providers.ts";
 import { createBackend } from "../src/server.ts";
 import { SSHCertificateAuthority } from "../src/ssh_ca.ts";
@@ -48,6 +49,7 @@ try {
   const teamsFacts = await checkTeamsPage(page);
   const imagesFacts = await checkImagesPage(page);
   const boxCreateFacts = await checkBoxCreateDrawer(page);
+  const billingFacts = await checkBillingPage(page);
   const mobileFacts = await checkMobileTeams(page);
 
   console.log(JSON.stringify({
@@ -61,12 +63,14 @@ try {
       teamEditor: join(outDir, "team-editor.png"),
       images: join(outDir, "images.png"),
       boxCreate: join(outDir, "box-create.png"),
+      billing: join(outDir, "billing.png"),
       mobileTeams: join(outDir, "mobile-teams.png"),
     },
     membersFacts,
     teamsFacts,
     imagesFacts,
     boxCreateFacts,
+    billingFacts,
     mobileFacts,
   }, null, 2));
 } finally {
@@ -113,6 +117,12 @@ async function startSeededBackend() {
   const providers = new ProviderRegistry([fakeProvider], fakeProvider.name);
   const store = new StateStore(join(dir, "state.json"), providers.defaultName);
   const sshCA = new SSHCertificateAuthority(join(dir, "ssh_ca_ed25519"));
+  const billing = new BillingService({
+    secretKey: "sk_console_smoke",
+    priceID: "price_console_smoke",
+    webhookSecret: "whsec_console_smoke",
+    apiURL: "http://127.0.0.1:9",
+  }, store);
   const authOptions = {
     baseURL: `${apiURL}/v1/auth`,
     databasePath: join(dir, "auth.sqlite"),
@@ -129,6 +139,7 @@ async function startSeededBackend() {
     store,
     sshCA,
     adminEmails: ["admin@example.com"],
+    billing,
     apiPublicURL: apiURL,
     appPublicURL: appURL,
     corsOrigins: [appURL],
@@ -322,6 +333,26 @@ async function checkBoxCreateDrawer(page) {
   assert.equal(facts.drawerTitle, "Create a box");
   assert.ok(facts.imageOptions.includes("BoxHaven default"), "missing default image option");
   assert.ok(facts.imageOptions.some((option) => option?.includes("boxhaven-remote-acme-tools")), "missing team image option");
+  return facts;
+}
+
+async function checkBillingPage(page) {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${appURL}/billing`, { waitUntil: "domcontentloaded" });
+  await waitForConsole(page);
+  await page.waitForSelector(".billing-body .panel", { timeout: 10_000 });
+  await page.screenshot({ path: join(outDir, "billing.png"), fullPage: true });
+  const facts = await page.evaluate(() => ({
+    title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
+    planLabel: document.querySelector(".billing-body .panel-heading span")?.textContent?.trim(),
+    bodyText: document.querySelector(".billing-body")?.textContent || "",
+    activeTeamNav: document.querySelector("nav[aria-label='Team'] a.active")?.textContent?.trim(),
+  }));
+  assert.equal(facts.title, "Billing");
+  assert.equal(facts.planLabel, "plan");
+  assert.equal(facts.activeTeamNav, "Billing");
+  assert.match(facts.bodyText, /Acme Labs includes 1 free box/);
+  assert.doesNotMatch(facts.bodyText, /personal team|shared team/i);
   return facts;
 }
 

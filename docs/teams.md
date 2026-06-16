@@ -2,14 +2,14 @@
 
 Teams are Better Auth organizations with `owner`, `admin`, and `member`
 roles. Every box belongs to a team. Each account automatically gets a
-personal team named `<name>'s team`, so personal boxes work with no setup.
+default team named `<name>'s team`, so boxes work with no setup.
 
-On the hosted service, [billing](/billing) also attaches to teams: personal
-teams include one free box, while shared teams need a team subscription.
+On the hosted service, [billing](/billing) also attaches to teams. Every team
+uses the same allowance and subscription model.
 
 ## Create A Team
 
-Create a shared team in the console or from the CLI:
+Create a team in the console or from the CLI:
 
 ```bash
 bh team create acme
@@ -38,8 +38,8 @@ admin before they are accepted.
 ## Where New Boxes Land
 
 New boxes land in the session's active team: `bh login` pins it to your
-personal team until you join or switch to another one. When you belong to
-more than one team, control where boxes go explicitly:
+default team until you switch to another one. When you belong to more than one
+team, control where boxes go explicitly:
 
 ```bash
 bh create work --team acme   # create a box directly in a team
@@ -87,12 +87,11 @@ team can still see and destroy them.
 ## Sharing A Box Setup
 
 Moving or sharing never copies a box. To hand a teammate a box like yours,
-snapshot it and create a new box from the resulting image — snapshotting is
-admin-gated today (`BOXHAVEN_ADMIN_EMAILS`):
+snapshot it into a team image and create a new box from the resulting image:
 
 ```bash
 bh image create work
 bh create work-clone --image <image-id>
 ```
 
-See [Golden Images](/images) for image management.
+See [Images](/images) for image management.

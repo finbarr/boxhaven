@@ -150,8 +150,7 @@ Environment:
 - `STRIPE_PRICE_ID`: metered Stripe price id used for checkout subscriptions.
 - `STRIPE_WEBHOOK_SECRET`: signing secret for `POST /v1/billing/webhook` deliveries.
 - `STRIPE_METER_EVENT_NAME`: Billing Meter event name for box-hour usage, default `boxhaven_box_hours`.
-- `BOXHAVEN_FREE_MACHINES`: boxes each personal team can run without a subscription, default `1`.
-- `BOXHAVEN_TEAM_FREE_MACHINES`: boxes each shared team can run without a subscription, default `0` (shared teams are subscription-first).
+- `BOXHAVEN_FREE_MACHINES`: boxes each team can run without a subscription, default `1`.
 - `BOXHAVEN_BILLING_USAGE_REPORTER`: set to `off` to stop this backend from reporting box-hour meter events (for example on a secondary instance).
 - `BOXHAVEN_STRIPE_API_URL`: Stripe API base URL override for tests.
 - `RESEND_API_KEY`: Resend API key; setting it enables password reset and team invitation emails.
@@ -223,22 +222,19 @@ Routes:
 - `DELETE /v1/machines/:name`
 
 `GET /v1/auth/whoami` returns the authenticated user plus the session's teams:
-`team` is the session's active team (`{id, name, slug, personal}`, or `null`
-before the personal team exists) and `teams` lists every team the user
-belongs to. `personal` marks the automatically created personal team; teams
-created any other way are shared.
+`team` is the session's active team (`{id, name, slug}`, or `null` before the
+default team exists) and `teams` lists every team the user belongs to.
 
 Billing attaches to teams, never users (enabled by setting
 `STRIPE_SECRET_KEY`; every route except the webhook requires a bearer
 session):
 
-- `GET /v1/billing?team=<id-or-slug>` — `{enabled, team: {id, slug, name, personal}, status, free_machines, machines_used, can_manage, portal_available}` where `status` is `free`, `active`, `past_due`, or `canceled`, `machines_used` counts the boxes in that team, and `can_manage` is whether the caller is a team owner or admin. The team defaults to the session's active team; the caller must be a member of it (`403` otherwise). When billing is disabled the response is `{enabled: false, team}` only.
+- `GET /v1/billing?team=<id-or-slug>` — `{enabled, team: {id, slug, name}, status, free_machines, machines_used, can_manage, portal_available}` where `status` is `free`, `active`, `past_due`, or `canceled`, `machines_used` counts the boxes in that team, and `can_manage` is whether the caller is a team owner or admin. The team defaults to the session's active team; the caller must be a member of it (`403` otherwise). When billing is disabled the response is `{enabled: false, team}` only.
 - `POST /v1/billing/checkout` — body `{team}`; returns `{url}` for a Stripe Checkout subscription session for that team. `403` unless the caller is a team owner or admin; `400` when billing is disabled or the team's subscription is already active.
 - `POST /v1/billing/portal` — body `{team}`; returns `{url}` for the Stripe customer portal. `403` unless the caller is a team owner or admin; `400` when the team has no Stripe customer yet.
 - `POST /v1/billing/webhook` — Stripe webhook endpoint; deliveries are verified against `STRIPE_WEBHOOK_SECRET` using the raw request body. Subscribe it to `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`. Events are mapped to the team through the subscription's `boxhaven_org_id` metadata and the checkout session's `client_reference_id`.
 
-Each personal team can run `BOXHAVEN_FREE_MACHINES` boxes (default 1) for
-free; shared teams get `BOXHAVEN_TEAM_FREE_MACHINES` (default 0). When
+Each team can run `BOXHAVEN_FREE_MACHINES` boxes (default 1) for free. When
 billing is enabled and the target team is at or over its allowance with no
 active subscription, `POST /v1/machines` returns `403` with
 `{ "id": "payment_required" }`. With an active team subscription, the
@@ -303,7 +299,7 @@ public URL.
 
 Machines are owned by the authenticated Better Auth user, belong to exactly one
 team, and are one-to-one with a remote VM. Every account automatically gets a
-personal team on its first authenticated request, and machine JSON carries
+default team on its first authenticated request, and machine JSON carries
 `org_id` plus `team_id`, `team_slug`, and `team_name` decorations on list
 items, single-machine and connect responses, the create response, and the move
 response. `POST /v1/machines` accepts an optional `team` (slug, id, or name of
