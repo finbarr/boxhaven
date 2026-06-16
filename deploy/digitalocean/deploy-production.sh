@@ -151,8 +151,8 @@ command -v curl >/dev/null 2>&1 || die "curl is required"
 if [ "$verify_only" -ne 1 ]; then
   echo "Building and starting production containers"
   docker compose --env-file "$env_file" -f "$compose_file" up -d --build --remove-orphans
-  echo "Reloading Caddy configuration"
-  docker compose --env-file "$env_file" -f "$compose_file" exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null
+  echo "Recreating Caddy to apply mounted configuration"
+  docker compose --env-file "$env_file" -f "$compose_file" up -d --force-recreate --no-deps caddy
 fi
 
 echo "Checking production containers"
