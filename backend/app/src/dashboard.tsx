@@ -302,7 +302,15 @@ function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClos
         eyebrow={connect?.status || "box"}
         title={machine.name}
         footer={(
-          <button className="danger-button" type="button" onClick={() => onDestroy(machine.name)} disabled={destroying} title="Destroy box">
+          <button
+            className="danger-button"
+            type="button"
+            onClick={() => {
+              if (window.confirm(`Destroy ${machine.name}?`)) onDestroy(machine.name);
+            }}
+            disabled={destroying}
+            title="Destroy box"
+          >
             <Trash2 size={16} />
             {destroying ? "Destroying" : "Destroy box"}
           </button>

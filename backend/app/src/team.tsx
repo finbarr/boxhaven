@@ -286,7 +286,9 @@ function TeamDetail({ token, user, org }: {
                           className="danger-button"
                           type="button"
                           disabled={cancelInvitation.isPending}
-                          onClick={() => cancelInvitation.mutate(invitation.id)}
+                          onClick={() => {
+                            if (window.confirm(`Cancel invitation for ${invitation.email}?`)) cancelInvitation.mutate(invitation.id);
+                          }}
                         >
                           <XCircle size={14} />
                           Cancel
