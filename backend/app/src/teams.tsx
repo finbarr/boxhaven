@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, Plus, Save, Trash2, Users } from "lucide-react";
-import { FormEvent, Fragment, useEffect, useState } from "react";
-import { apiFetch, AuthUser, TeamInfo } from "./api";
+import { ChevronRight, LogOut, Plus, Save, Trash2, Users } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { apiFetch, AuthUser } from "./api";
 import { useConsole } from "./console-context";
 import { Drawer } from "./drawer";
 import { WorkspaceHead } from "./shell";
@@ -19,19 +19,32 @@ type OrgMember = {
   user?: { email?: string; name?: string };
 };
 
+type TeamRowInfo = {
+  org: Organization;
+  members: OrgMember[];
+  role: string;
+  loading: boolean;
+};
+
 export function TeamsView() {
-  const { token, user, teams } = useConsole();
+  const { token, user } = useConsole();
   const [newTeamOpen, setNewTeamOpen] = useState(false);
+  const [selectedTeamID, setSelectedTeamID] = useState("");
   const orgs = useQuery({
     queryKey: ["orgs", token],
     queryFn: () => apiFetch<Organization[]>("/v1/auth/organization/list", token),
   });
   const orgList = orgs.data || [];
+  const selectedOrg = orgList.find((org) => org.id === selectedTeamID);
+
+  useEffect(() => {
+    if (selectedTeamID && !selectedOrg) setSelectedTeamID("");
+  }, [selectedOrg, selectedTeamID]);
 
   return (
     <>
       <WorkspaceHead
-        eyebrow="global / settings"
+        eyebrow="global"
         title="Teams"
         actions={(
           <button className="primary-button" type="button" onClick={() => setNewTeamOpen(true)}>
@@ -42,31 +55,27 @@ export function TeamsView() {
       />
 
       <div className="workspace-body">
-        <div className="panel table-panel teams-table-panel">
-          <div className="panel-heading small">
-            <span>teams</span>
-            <h2>Team settings</h2>
-          </div>
+        <div className="panel table-panel">
           {orgs.error ? <p className="error panel-error">{(orgs.error as Error).message}</p> : null}
-          <table className="data-table teams-table">
+          <table className="data-table rows-clickable teams-table">
             <thead>
               <tr>
                 <th>Name</th>
                 <th>Slug</th>
                 <th>Members</th>
                 <th>Your role</th>
-                <th>Type</th>
-                <th aria-label="Actions" />
+                <th aria-label="Open" />
               </tr>
             </thead>
             <tbody>
               {orgList.map((org) => (
-                <TeamSettingsRow
+                <TeamTableRow
                   key={org.id}
                   token={token}
                   user={user}
                   org={org}
-                  teamInfo={teams.find((team) => team.id === org.id)}
+                  selected={org.id === selectedTeamID}
+                  onOpen={() => setSelectedTeamID(org.id)}
                 />
               ))}
             </tbody>
@@ -80,6 +89,15 @@ export function TeamsView() {
         </div>
       </div>
 
+      <TeamSettingsDrawer
+        key={selectedOrg?.id || "closed"}
+        open={Boolean(selectedOrg)}
+        token={token}
+        user={user}
+        org={selectedOrg}
+        onClose={() => setSelectedTeamID("")}
+      />
+
       <Drawer open={newTeamOpen} onClose={() => setNewTeamOpen(false)} eyebrow="teams" title="New team">
         <NewTeamForm token={token} onCreated={() => setNewTeamOpen(false)} />
       </Drawer>
@@ -87,34 +105,52 @@ export function TeamsView() {
   );
 }
 
-function TeamSettingsRow({ token, user, org, teamInfo }: {
+function TeamTableRow({ token, user, org, selected, onOpen }: {
   token: string;
   user?: AuthUser;
   org: Organization;
-  teamInfo?: TeamInfo;
+  selected: boolean;
+  onOpen: () => void;
+}) {
+  const info = useTeamRowInfo(token, user, org);
+  return (
+    <tr className={selected ? "selected" : undefined} onClick={onOpen}>
+      <td><strong>{org.name}</strong></td>
+      <td>{org.slug || "-"}</td>
+      <td>{info.loading ? "Loading" : info.members.length}</td>
+      <td>{info.loading ? "Loading" : info.role}</td>
+      <td className="cell-chevron"><ChevronRight size={16} /></td>
+    </tr>
+  );
+}
+
+function TeamSettingsDrawer({ open, token, user, org, onClose }: {
+  open: boolean;
+  token: string;
+  user?: AuthUser;
+  org?: Organization;
+  onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [teamName, setTeamName] = useState(org.name);
-  const [teamSlugValue, setTeamSlugValue] = useState(org.slug || teamSlug(org.name));
-  const members = useQuery({
-    queryKey: ["org-members", org.id, token],
-    queryFn: async () => {
-      const raw = await apiFetch<{ members?: OrgMember[] } | OrgMember[]>(
-        `/v1/auth/organization/list-members?organizationId=${encodeURIComponent(org.id)}&limit=500`,
-        token,
-      );
-      return Array.isArray(raw) ? raw : raw.members || [];
-    },
-  });
+  const [teamName, setTeamName] = useState(org?.name || "");
+  const [teamSlugValue, setTeamSlugValue] = useState(org?.slug || (org ? teamSlug(org.name) : ""));
+  const info = useTeamRowInfo(token, user, org);
+  const callerRoles = info.role.split(",").map((role) => role.trim());
+  const canManage = callerRoles.includes("owner") || callerRoles.includes("admin");
+  const isOwner = callerRoles.includes("owner");
+  const currentSlug = org?.slug || (org ? teamSlug(org.name) : "");
+  const nextSlug = teamSlug(teamSlugValue);
+  const teamFormDirty = Boolean(org) && (teamName !== org.name || nextSlug !== currentSlug);
+
   useEffect(() => {
-    setTeamName(org.name);
-    setTeamSlugValue(org.slug || teamSlug(org.name));
-  }, [org.id, org.name, org.slug]);
+    setTeamName(org?.name || "");
+    setTeamSlugValue(org?.slug || (org ? teamSlug(org.name) : ""));
+  }, [org]);
 
   const updateTeam = useMutation({
     mutationFn: () => apiFetch<Organization>("/v1/auth/organization/update", token, {
       method: "POST",
-      body: { organizationId: org.id, data: { name: teamName.trim(), slug: teamSlug(teamSlugValue) } },
+      body: { organizationId: org?.id, data: { name: teamName.trim(), slug: nextSlug } },
     }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
@@ -124,111 +160,96 @@ function TeamSettingsRow({ token, user, org, teamInfo }: {
   const deleteTeam = useMutation({
     mutationFn: () => apiFetch("/v1/auth/organization/delete", token, {
       method: "POST",
-      body: { organizationId: org.id },
+      body: { organizationId: org?.id },
     }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
       void queryClient.invalidateQueries({ queryKey: ["session", token] });
+      onClose();
     },
   });
   const leaveTeam = useMutation({
     mutationFn: () => apiFetch("/v1/auth/organization/leave", token, {
       method: "POST",
-      body: { organizationId: org.id },
+      body: { organizationId: org?.id },
     }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
       void queryClient.invalidateQueries({ queryKey: ["session", token] });
+      onClose();
     },
   });
-
-  const memberList = members.data || [];
-  const callerRole = memberList.find((member) => member.userId === user?.id)?.role || "member";
-  // Better Auth stores multiple roles as a comma-separated string.
-  const callerRoles = callerRole.split(",").map((role) => role.trim());
-  const canManage = callerRoles.includes("owner") || callerRoles.includes("admin");
-  const isOwner = callerRoles.includes("owner");
-  const isPersonalTeam = Boolean(teamInfo?.personal);
-  const currentSlug = org.slug || teamSlug(org.name);
-  const nextSlug = teamSlug(teamSlugValue);
-  const teamFormDirty = teamName !== org.name || nextSlug !== currentSlug;
   const busy = updateTeam.isPending || deleteTeam.isPending || leaveTeam.isPending;
-  const rowError = updateTeam.error || deleteTeam.error || leaveTeam.error;
+  const error = updateTeam.error || deleteTeam.error || leaveTeam.error;
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    updateTeam.mutate();
+  }
 
   return (
-    <Fragment>
-      <tr>
-        <td>
-          <input
-            aria-label={`Team name for ${org.name}`}
-            value={teamName}
-            onChange={(event) => setTeamName(event.target.value)}
-            disabled={!canManage || busy}
-            required
-          />
-        </td>
-        <td>
-          <input
-            aria-label={`Team slug for ${org.name}`}
-            value={teamSlugValue}
-            onChange={(event) => setTeamSlugValue(teamSlug(event.target.value))}
-            disabled={!canManage || busy}
-            required
-          />
-        </td>
-        <td>{members.isLoading ? "Loading" : memberList.length}</td>
-        <td>{members.isLoading ? "Loading" : callerRole}</td>
-        <td>{isPersonalTeam ? "Personal" : "Shared"}</td>
-        <td>
-          <div className="table-actions">
+    <Drawer
+      wide
+      open={open}
+      onClose={onClose}
+      eyebrow="team"
+      title={org?.name || "Team"}
+      footer={org ? (
+        isOwner ? (
+          <button
+            className="danger-button"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (window.confirm(`Delete ${org.name}?`)) deleteTeam.mutate();
+            }}
+          >
+            <Trash2 size={16} />
+            {deleteTeam.isPending ? "Deleting" : "Delete team"}
+          </button>
+        ) : (
+          <button
+            className="danger-button"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (window.confirm(`Leave ${org.name}?`)) leaveTeam.mutate();
+            }}
+          >
+            <LogOut size={16} />
+            {leaveTeam.isPending ? "Leaving" : "Leave team"}
+          </button>
+        )
+      ) : null}
+    >
+      {org ? (
+        <>
+          <div className="metrics">
+            <Metric label="Members" value={info.loading ? "Loading" : String(info.members.length)} />
+            <Metric label="Your role" value={info.loading ? "Loading" : info.role} />
+          </div>
+          <form className="create-form" onSubmit={submit}>
+            <label>
+              Team name
+              <input value={teamName} onChange={(event) => setTeamName(event.target.value)} required disabled={!canManage || busy} />
+            </label>
+            <label>
+              Team slug
+              <input value={teamSlugValue} onChange={(event) => setTeamSlugValue(teamSlug(event.target.value))} required disabled={!canManage || busy} />
+            </label>
             {canManage ? (
-              <button
-                className="primary-button"
-                type="button"
-                disabled={busy || !teamName.trim() || !nextSlug || !teamFormDirty}
-                onClick={() => updateTeam.mutate()}
-              >
-                <Save size={14} />
-                {updateTeam.isPending ? "Saving" : "Save"}
+              <button className="primary-button" type="submit" disabled={busy || !teamName.trim() || !nextSlug || !teamFormDirty}>
+                <Save size={16} />
+                {updateTeam.isPending ? "Saving" : "Save team"}
               </button>
             ) : null}
-            {isOwner ? (
-              <button
-                className="danger-button"
-                type="button"
-                disabled={busy || isPersonalTeam}
-                title={isPersonalTeam ? "Personal teams cannot be deleted" : undefined}
-                onClick={() => {
-                  if (window.confirm(`Delete ${org.name}?`)) deleteTeam.mutate();
-                }}
-              >
-                <Trash2 size={14} />
-                {deleteTeam.isPending ? "Deleting" : "Delete"}
-              </button>
-            ) : (
-              <button
-                className="danger-button"
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  if (window.confirm(`Leave ${org.name}?`)) leaveTeam.mutate();
-                }}
-              >
-                <LogOut size={14} />
-                {leaveTeam.isPending ? "Leaving" : "Leave"}
-              </button>
-            )}
-          </div>
-        </td>
-      </tr>
-      {rowError ? (
-        <tr>
-          <td colSpan={6}>
-            <p className="error panel-error">{(rowError as Error).message}</p>
-          </td>
-        </tr>
-      ) : null}
-    </Fragment>
+            {error ? <p className="error">{(error as Error).message}</p> : null}
+          </form>
+        </>
+      ) : (
+        <div className="empty"><Users size={22} /><span>Select a team</span></div>
+      )}
+    </Drawer>
   );
 }
 
@@ -283,6 +304,28 @@ function NewTeamForm({ token, onCreated }: { token: string; onCreated?: (organiz
   );
 }
 
+function useTeamRowInfo(token: string, user: AuthUser | undefined, org: Organization | undefined): TeamRowInfo {
+  const members = useQuery({
+    queryKey: ["org-members", org?.id, token],
+    enabled: Boolean(org),
+    queryFn: async () => {
+      const raw = await apiFetch<{ members?: OrgMember[] } | OrgMember[]>(
+        `/v1/auth/organization/list-members?organizationId=${encodeURIComponent(org?.id || "")}&limit=500`,
+        token,
+      );
+      return Array.isArray(raw) ? raw : raw.members || [];
+    },
+  });
+  const memberList = members.data || [];
+  const role = memberList.find((member) => member.userId === user?.id)?.role || "member";
+  return {
+    org: org || { id: "", name: "" },
+    members: memberList,
+    role,
+    loading: members.isLoading,
+  };
+}
+
 function useCreateTeam(token: string, onCreated: (organization: Organization) => void) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -298,6 +341,15 @@ function useCreateTeam(token: string, onCreated: (organization: Organization) =>
       void queryClient.invalidateQueries({ queryKey: ["session", token] });
     },
   });
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="metric" title={value}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
 }
 
 function teamSlug(name: string): string {

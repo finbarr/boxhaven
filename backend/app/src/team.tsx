@@ -189,10 +189,6 @@ function TeamDetail({ token, user, org }: {
 
       <div className="workspace-body">
         <div className="panel table-panel">
-          <div className="panel-heading small">
-            <span>members</span>
-            <h2>Team members</h2>
-          </div>
           {members.error ? <p className="error panel-error">{(members.error as Error).message}</p> : null}
           <table className="data-table">
             <thead>
@@ -225,7 +221,7 @@ function TeamDetail({ token, user, org }: {
                         ))}
                       </select>
                     </td>
-                    <td>
+                    <td className="cell-actions">
                       <button
                         className="danger-button"
                         type="button"

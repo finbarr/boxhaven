@@ -834,6 +834,14 @@ a.secondary-button {
   align-items: center;
 }
 
+.data-table td.cell-actions {
+  text-align: right;
+}
+
+.cell-actions .table-actions {
+  justify-content: flex-end;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -1090,22 +1098,12 @@ a.secondary-button {
 }
 
 .teams-table {
-  min-width: 900px;
+  min-width: 720px;
 }
 
 .teams-table th:first-child,
 .teams-table td:first-child {
-  width: 28%;
-}
-
-.teams-table th:nth-child(2),
-.teams-table td:nth-child(2) {
-  width: 22%;
-}
-
-.teams-table .table-actions {
-  justify-content: flex-end;
-  flex-wrap: wrap;
+  width: 34%;
 }
 
 .rows-clickable tbody tr {

@@ -56,6 +56,7 @@ try {
     screenshots: {
       members: join(outDir, "members.png"),
       teams: join(outDir, "teams.png"),
+      teamEditor: join(outDir, "team-editor.png"),
       mobileTeams: join(outDir, "mobile-teams.png"),
     },
     membersFacts,
@@ -186,7 +187,9 @@ async function checkMembersPage(page) {
     teamSettingsPresent: Boolean(document.querySelector(".team-settings, .teams-table")),
     newTeamButtonPresent: [...document.querySelectorAll("button")].some((button) => button.textContent?.includes("New team")),
     billingHintPresent: Boolean(document.querySelector(".billing-hint")),
+    panelHeadings: [...document.querySelectorAll(".workspace-body .panel-heading h2")].map((node) => node.textContent?.trim()),
     tableHeadings: [...document.querySelectorAll(".data-table th")].map((node) => node.textContent?.trim() || ""),
+    removeCellAlign: getComputedStyle(document.querySelector(".data-table td:last-child")).textAlign,
     teamNav: [...document.querySelectorAll("nav[aria-label='Team'] a")].map((node) => node.textContent?.trim()),
     globalNav: [...document.querySelectorAll("nav[aria-label='Global'] a")].map((node) => node.textContent?.trim()),
   }));
@@ -195,6 +198,8 @@ async function checkMembersPage(page) {
   assert.equal(facts.teamSettingsPresent, false);
   assert.equal(facts.newTeamButtonPresent, false);
   assert.equal(facts.billingHintPresent, false);
+  assert.deepEqual(facts.panelHeadings, []);
+  assert.equal(facts.removeCellAlign, "right");
   assert.deepEqual(facts.teamNav, ["Boxes", "Members", "Billing"]);
   assert.deepEqual(facts.globalNav, ["Teams", "Images"]);
   for (const heading of ["Email", "Name", "Role"]) {
@@ -207,28 +212,42 @@ async function checkTeamsPage(page) {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${appURL}/teams`, { waitUntil: "domcontentloaded" });
   await waitForConsole(page);
-  await page.waitForSelector(".teams-table input", { timeout: 10_000 });
+  await page.waitForSelector(".teams-table tbody tr", { timeout: 10_000 });
   await page.screenshot({ path: join(outDir, "teams.png"), fullPage: true });
   const facts = await page.evaluate(() => ({
     title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
     eyebrow: document.querySelector(".workspace-title span")?.textContent?.trim(),
     activeGlobal: document.querySelector("nav[aria-label='Global'] a.active")?.textContent?.trim(),
     activeTeamNav: document.querySelector("nav[aria-label='Team'] a.active")?.textContent?.trim() || null,
+    headings: [...document.querySelectorAll(".teams-table th")].map((node) => node.textContent?.trim() || ""),
     rows: [...document.querySelectorAll(".teams-table tbody tr")]
-      .filter((row) => row.querySelector("input"))
-      .map((row) => [...row.querySelectorAll("input")].map((input) => input.value)),
+      .map((row) => [...row.querySelectorAll("td")].map((cell) => cell.textContent?.trim() || "")),
+    inputsInTable: document.querySelectorAll(".teams-table input").length,
     hasNewTeamButton: [...document.querySelectorAll("button")].some((button) => button.textContent?.includes("New team")),
-    actionButtons: [...document.querySelectorAll(".teams-table button")].map((button) => button.textContent?.trim()),
   }));
   assert.equal(facts.title, "Teams");
-  assert.equal(facts.eyebrow, "global / settings");
+  assert.equal(facts.eyebrow, "global");
   assert.equal(facts.activeGlobal, "Teams");
   assert.equal(facts.activeTeamNav, null);
   assert.equal(facts.hasNewTeamButton, true);
+  assert.deepEqual(facts.headings, ["Name", "Slug", "Members", "Your role", ""]);
+  assert.equal(facts.inputsInTable, 0);
   assert.ok(facts.rows.some(([name, slug]) => name === "Acme Labs" && slug === "acme-labs"), "missing Acme Labs row");
   assert.ok(facts.rows.some(([name, slug]) => name === "Design Systems" && slug === "design-systems"), "missing Design Systems row");
-  assert.ok(facts.actionButtons.some((text) => text?.includes("Save")), "missing Save action");
-  assert.ok(facts.actionButtons.some((text) => text?.includes("Delete")), "missing Delete action");
+  await page.getByRole("row", { name: /Acme Labs/ }).click();
+  await page.waitForSelector(".drawer-panel input", { timeout: 10_000 });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(outDir, "team-editor.png"), fullPage: true });
+  const drawerFacts = await page.evaluate(() => ({
+    title: document.querySelector(".drawer-panel h2")?.textContent?.trim(),
+    inputs: [...document.querySelectorAll(".drawer-panel input")].map((input) => input.value),
+    buttons: [...document.querySelectorAll(".drawer-panel button")].map((button) => button.textContent?.trim()),
+  }));
+  assert.equal(drawerFacts.title, "Acme Labs");
+  assert.deepEqual(drawerFacts.inputs, ["Acme Labs", "acme-labs"]);
+  assert.ok(drawerFacts.buttons.some((text) => text?.includes("Save team")), "missing drawer Save action");
+  assert.ok(drawerFacts.buttons.some((text) => text?.includes("Delete team")), "missing drawer Delete action");
+  facts.drawerFacts = drawerFacts;
   return facts;
 }
 
@@ -236,13 +255,13 @@ async function checkMobileTeams(page) {
   await page.setViewportSize({ width: 390, height: 900 });
   await page.goto(`${appURL}/teams`, { waitUntil: "domcontentloaded" });
   await waitForConsole(page);
-  await page.waitForSelector(".teams-table input", { timeout: 10_000 });
+  await page.waitForSelector(".teams-table tbody tr", { timeout: 10_000 });
   await page.screenshot({ path: join(outDir, "mobile-teams.png"), fullPage: true });
   const facts = await page.evaluate(() => ({
     viewport: window.innerWidth,
     bodyScrollWidth: document.documentElement.scrollWidth,
-    tablePanelScrollWidth: document.querySelector(".teams-table-panel")?.scrollWidth,
-    tablePanelClientWidth: document.querySelector(".teams-table-panel")?.clientWidth,
+    tablePanelScrollWidth: document.querySelector(".workspace-body .table-panel")?.scrollWidth,
+    tablePanelClientWidth: document.querySelector(".workspace-body .table-panel")?.clientWidth,
   }));
   assert.ok(facts.bodyScrollWidth <= facts.viewport, `body overflows horizontally: ${facts.bodyScrollWidth} > ${facts.viewport}`);
   assert.ok((facts.tablePanelScrollWidth || 0) > (facts.tablePanelClientWidth || 0), "teams table should scroll inside its panel on mobile");
