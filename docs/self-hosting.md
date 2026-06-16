@@ -181,11 +181,9 @@ reinstalling the full OS/toolchain from Ubuntu. Use
 dependency rebuilds.
 
 `npm run deploy:runtime` writes `BOXHAVEN_REMOTE_IMAGE` to the env file as
-the env-configured default. A managed image activated with
-`bh image activate` overrides that env default per provider at runtime
-through backend state, so check `bh image ls` for an active image before
-assuming new boxes use the env-configured snapshot. Run `bh image deactivate`
-to fall back to the env default.
+the env-configured default. Team images do not override that default globally;
+they are selected per box with `bh create --image <image-id>` or the console
+create form.
 
 Keep the previous snapshot id until the remote lifecycle smoke passes.
 

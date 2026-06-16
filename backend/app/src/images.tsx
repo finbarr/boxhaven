@@ -1,33 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, Check, Trash2 } from "lucide-react";
+import { Camera, Trash2 } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { apiFetch, formatDate, MachinesResponse } from "./api";
+import { apiFetch, formatDate, ImagesResponse, MachineImage, MachinesResponse } from "./api";
+import { useConsole } from "./console-context";
 import { Drawer } from "./drawer";
 import { WorkspaceHead } from "./shell";
 
-type MachineImage = {
-  id: string;
-  name: string;
-  provider?: string;
-  status?: string;
-  created_at?: string;
-  size_gb?: number;
-  bootstrapped?: boolean;
-  active?: boolean;
-};
-
-type ImagesResponse = {
-  images: MachineImage[];
-};
-
 export function ImagesView({ token }: { token: string }) {
+  const { activeTeam } = useConsole();
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [machineName, setMachineName] = useState("");
   const [imageName, setImageName] = useState("");
   const [notice, setNotice] = useState("");
+  const activeTeamID = activeTeam?.id || "";
   const images = useQuery({
-    queryKey: ["images", token],
+    queryKey: ["images", token, activeTeamID],
     queryFn: () => apiFetch<ImagesResponse>("/v1/images", token),
     refetchInterval: 30000,
   });
@@ -41,29 +29,23 @@ export function ImagesView({ token }: { token: string }) {
       body: { machine: machineName, ...(imageName ? { name: imageName } : {}) },
     }),
     onSuccess: (data) => {
+      setMachineName("");
       setImageName("");
       setAddOpen(false);
       setNotice(`Snapshot ${data.image?.name || "request"} accepted — it is being created and will appear in the list shortly.`);
-      void queryClient.invalidateQueries({ queryKey: ["images", token] });
+      void queryClient.invalidateQueries({ queryKey: ["images", token, activeTeamID] });
     },
-  });
-  const activate = useMutation({
-    mutationFn: (image: MachineImage) => apiFetch("/v1/images/activate", token, {
-      method: "POST",
-      body: { provider: image.provider, id: image.id },
-    }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["images", token] }),
   });
   const deleteImage = useMutation({
     mutationFn: (image: MachineImage) => apiFetch(
-      `/v1/images/${encodeURIComponent(image.id)}?provider=${encodeURIComponent(image.provider || "")}`,
+      `/v1/images/${encodeURIComponent(image.id || image.name)}?provider=${encodeURIComponent(image.provider || "")}`,
       token,
       { method: "DELETE" },
     ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["images", token] }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["images", token, activeTeamID] }),
   });
   const imageList = images.data?.images || [];
-  const machineList = machines.data?.machines || [];
+  const machineList = (machines.data?.machines || []).filter((machine) => !activeTeamID || (machine.team_id || machine.org_id) === activeTeamID);
 
   function submitSnapshot(event: FormEvent) {
     event.preventDefault();
@@ -74,7 +56,7 @@ export function ImagesView({ token }: { token: string }) {
   return (
     <>
       <WorkspaceHead
-        eyebrow="admin / global"
+        eyebrow={`team / ${activeTeam?.name || "Team"}`}
         title="Images"
         actions={(
           <button className="primary-button" type="button" onClick={() => setAddOpen(true)}>
@@ -85,7 +67,6 @@ export function ImagesView({ token }: { token: string }) {
       />
 
       <div className="workspace-body">
-        <p className="hint">Golden images are global per provider and are not scoped to a team.</p>
         {notice ? <p className="hint">{notice}</p> : null}
         <div className="panel table-panel">
           {images.error ? <p className="error panel-error">{(images.error as Error).message}</p> : null}
@@ -105,29 +86,18 @@ export function ImagesView({ token }: { token: string }) {
               {imageList.map((image) => (
                 <tr key={`${image.provider || "provider"}/${image.id || image.name}`}>
                   <td>{image.provider || "-"}</td>
-                  <td>
-                    {image.name}
-                    {image.active ? <span className="badge">active</span> : null}
-                  </td>
+                  <td>{image.name}</td>
                   <td><code>{image.id || "-"}</code></td>
                   <td>{image.status || "-"}</td>
                   <td>{image.size_gb ? `${image.size_gb} GB` : "-"}</td>
                   <td>{formatDate(image.created_at)}</td>
-                  <td>
+                  <td className="cell-actions">
                     <div className="table-actions">
-                      <button
-                        className="primary-button"
-                        type="button"
-                        disabled={image.status !== "available" || image.active || activate.isPending}
-                        onClick={() => activate.mutate(image)}
-                      >
-                        <Check size={14} />
-                        Activate
-                      </button>
                       <button
                         className="danger-button"
                         type="button"
-                        disabled={image.active || deleteImage.isPending}
+                        disabled={!image.id || deleteImage.isPending}
+                        title={!image.id ? "Wait until the provider finishes creating this image" : undefined}
                         onClick={() => {
                           if (window.confirm(`Delete image ${image.name}?`)) deleteImage.mutate(image);
                         }}
@@ -144,10 +114,9 @@ export function ImagesView({ token }: { token: string }) {
           {!imageList.length ? (
             <div className="empty">
               <Camera size={20} />
-              <span>{images.isLoading ? "Loading images" : "No golden images yet. Snapshot one of your boxes to create one."}</span>
+              <span>{images.isLoading ? "Loading images" : "No images for this team yet. Snapshot one of this team's boxes to create one."}</span>
             </div>
           ) : null}
-          {activate.error ? <p className="error panel-error">{(activate.error as Error).message}</p> : null}
           {deleteImage.error ? <p className="error panel-error">{(deleteImage.error as Error).message}</p> : null}
         </div>
       </div>
@@ -172,7 +141,7 @@ export function ImagesView({ token }: { token: string }) {
             {snapshot.isPending ? "Snapshotting" : "Create snapshot"}
           </button>
           {snapshot.error ? <p className="error">{(snapshot.error as Error).message}</p> : null}
-          <p className="hint">The active image is used for new boxes on that provider.</p>
+          <p className="hint">Images belong to the active team and can be selected when creating a new box.</p>
         </form>
       </Drawer>
     </>

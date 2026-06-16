@@ -1,54 +1,42 @@
-# Golden Images
+# Images
 
-Golden images carry the BoxHaven VM runtime so new boxes boot ready to use:
-the agent runtime, tmux, Docker, the GitHub credential helper, and the
-BoxHaven machine agent are already installed. Plain Ubuntu fallback images
-are not considered fully bootstrapped for normal CLI use.
+Images carry the BoxHaven VM runtime so new boxes boot ready to use: the
+agent runtime, tmux, Docker, the GitHub credential helper, and the BoxHaven
+machine agent are already installed. Plain Ubuntu fallback images are not
+considered fully bootstrapped for normal CLI use.
 
-Providers create boxes from a prebuilt BoxHaven snapshot when
-`BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` (or legacy `BOXHAVEN_REMOTE_IMAGE`) or
-`BOXHAVEN_REMOTE_IMAGE_HETZNER` is configured, or when a backend admin has
-activated a managed golden image for that provider with `bh image activate`.
+Providers create boxes from the backend's configured default snapshot:
+`BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` (or legacy `BOXHAVEN_REMOTE_IMAGE`) for
+DigitalOcean, and `BOXHAVEN_REMOTE_IMAGE_HETZNER` for Hetzner. Team images are
+optional overrides selected when creating a box.
 
-## Managed Images
+## Team Images
 
-Backend admins, listed by email in `BOXHAVEN_ADMIN_EMAILS`, can manage golden
-images from the CLI or the console Images view without rerunning the image
-builder. Non-admin users get a `403` from the image endpoints.
+Images belong to the active team. Snapshot one of the team's boxes from the
+console Images page or the CLI:
 
 ```bash
 bh image ls
-bh image create work            # snapshot the box "work" into a golden image
-bh image activate <image-id>
-bh image deactivate
+bh image create work            # snapshot the box "work" into a team image
+bh create work-clone --image <image-id>
 bh image rm <image-id>
 ```
 
-`bh image create` snapshots one of your own boxes; the backend prefixes the
-image name with `boxhaven-remote-`. The snapshot starts in `creating` status
-and can only be activated once it is `available`.
+`bh image create` snapshots one of your own boxes in the active team; the
+backend prefixes the image name with `boxhaven-remote-`. The snapshot starts in
+`creating` status and can be selected for new boxes after the provider reports
+it as `available`.
 
-Activation makes the image the default for new boxes on that provider,
-overriding the env-configured `BOXHAVEN_REMOTE_IMAGE*` default until the
-image is deactivated with `bh image deactivate`. An active image cannot be
-deleted (`bh image rm` returns a conflict).
+Without `--provider`, image commands use the backend's default provider. When
+creating a box without `--image`, BoxHaven uses the provider's configured
+default image.
 
-Without `--provider`, image commands use the backend's default provider.
+Keep the previous image around until a new box has been created from the new
+image and verified.
 
-After activating a new image, run the remote lifecycle smoke before relying
-on it, and keep the previous image around for rollback until the smoke
-passes.
-
-## Checking Which Image Is Active
-
-A managed image activated with `bh image activate` overrides the env default
-per provider at runtime through backend state, so check `bh image ls` for an
-active image before assuming new boxes use the env-configured snapshot. Run
-`bh image deactivate` to fall back to the env default.
-
-## Rebuilding The Image From Source
+## Rebuilding The Default Image
 
 Remote runtime dependencies belong in the golden VM image. Self-hosters and
-operators rebuild it with the image builder after changing
+operators rebuild the default image with the image builder after changing
 `cmd/bh/assets/remote-vm-install.sh`; see
 [Self-Hosting](/self-hosting#golden-image-rotation) for the builder workflow.

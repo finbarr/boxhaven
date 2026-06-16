@@ -209,8 +209,7 @@ active team the next time you list them; until that next listing, the old
 team can still see and destroy them.
 
 Moving or sharing never copies a box. To hand a teammate a box like yours,
-snapshot it and create a new box from the resulting image — snapshotting is
-admin-gated today (`BOXHAVEN_ADMIN_EMAILS`):
+snapshot it into a team image and create a new box from the resulting image:
 
 ```bash
 bh image create work
@@ -220,20 +219,17 @@ bh create work-clone --image <image-id>
 ## Images
 
 Golden images carry the BoxHaven VM runtime so new boxes boot ready to use.
-Backend admins, listed by email in `BOXHAVEN_ADMIN_EMAILS`, can manage them
-from the CLI or the console Images view:
+Images belong to the active team. A team member can snapshot one of the
+team's boxes, then select that image when creating another box in the same
+team. If no image is selected, BoxHaven uses the backend's configured default
+image for that provider.
 
 ```bash
 bh image ls
 bh image create work            # snapshot the box "work" into a golden image
-bh image activate <image-id>
-bh image deactivate
+bh create work-clone --image <image-id>
 bh image rm <image-id>
 ```
-
-Activating an image makes it the default image for new boxes on that provider,
-overriding the env-configured `BOXHAVEN_REMOTE_IMAGE*` default until the image
-is deactivated. Non-admin users get a `403` from the image endpoints.
 
 ## GitHub Repository Access
 
@@ -333,7 +329,7 @@ the production app and API health endpoints. They do not rebuild the remote VM
 snapshot.
 
 After changing the VM runtime or image-builder code, explicitly rebuild and
-activate the remote VM image:
+publish the remote VM image:
 
 ```bash
 npm run deploy:runtime
@@ -344,9 +340,7 @@ Droplet, updates `BOXHAVEN_REMOTE_IMAGE`, then restarts and verifies the backend
 so new boxes use the image. When an active `BOXHAVEN_REMOTE_IMAGE` exists, the
 builder starts from that snapshot by default instead of reinstalling the full
 OS/toolchain from Ubuntu. Use `npm run deploy:runtime -- --full-base-image` only
-for base OS or runtime dependency rebuilds. An image activated with
-`bh image activate` overrides the env-configured default for that provider at
-runtime until it is deactivated.
+for base OS or runtime dependency rebuilds.
 
 Both deploy commands forward your SSH agent so the Droplet can fetch the private
 GitHub repo without storing a GitHub token. Override the target with

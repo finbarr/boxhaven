@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRightLeft, ChevronRight, MonitorDot, Plus, Server, Trash2 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CommandBlock, installCommand } from "./access";
 import {
   apiFetch,
   formatDate,
+  ImagesResponse,
   Machine,
+  MachineImage,
   MachineResponse,
   MachinesResponse,
   ProvidersResponse,
@@ -33,6 +35,10 @@ const machineTiers: Array<{ value: MachineTier; label: string; detail: string }>
   { value: "large", label: "Large", detail: "8 vCPU / 16 GB" },
 ];
 
+function imageValue(image: MachineImage): string {
+  return image.id || image.name;
+}
+
 // Boxes section. The selected box lives in the URL (/boxes/$name) and drives
 // the detail drawer; "/" renders the table with no drawer open. The "New box"
 // button opens a create drawer.
@@ -43,6 +49,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   const [name, setName] = useState("");
   const [tier, setTier] = useState<MachineTier>("small");
   const [provider, setProvider] = useState("");
+  const [image, setImage] = useState("");
   const queryClient = useQueryClient();
   const providers = useQuery({
     queryKey: ["providers"],
@@ -55,15 +62,29 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   });
   const providerList = providers.data?.providers || [];
   const defaultProvider = providerList.find((option) => option.default)?.name || providerList[0]?.name || "";
+  const selectedProvider = provider || defaultProvider;
   const defaultTeam = activeTeam ? activeTeam.slug || activeTeam.id : teams[0]?.slug || teams[0]?.id || "";
   const activeTeamID = activeTeam?.id || "";
+  const images = useQuery({
+    queryKey: ["images", token, activeTeamID],
+    queryFn: () => apiFetch<ImagesResponse>("/v1/images", token),
+    refetchInterval: 30000,
+  });
+  const imageOptions = useMemo(() => (
+    (images.data?.images || []).filter((candidate) => (
+      candidate.id
+      && (!selectedProvider || candidate.provider === selectedProvider)
+      && (!candidate.status || candidate.status === "available")
+    ))
+  ), [images.data, selectedProvider]);
   const createMachine = useMutation({
     mutationFn: () => apiFetch<MachineResponse>("/v1/machines", token, {
       method: "POST",
-      body: { name, tier, ...(provider ? { provider } : {}), ...(defaultTeam ? { team: defaultTeam } : {}) },
+      body: { name, tier, ...(provider ? { provider } : {}), ...(image ? { image } : {}), ...(defaultTeam ? { team: defaultTeam } : {}) },
     }),
     onSuccess: (data) => {
       setName("");
+      setImage("");
       setAddOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["machines", token] });
       void navigate({ to: "/boxes/$name", params: { name: data.machine.name } });
@@ -101,6 +122,10 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
 
   const createError = createMachine.error ? (createMachine.error as Error).message : "";
   const paymentRequired = createError.includes("/billing") || createError.toLowerCase().includes("free tier");
+
+  useEffect(() => {
+    if (image && !imageOptions.some((option) => imageValue(option) === image)) setImage("");
+  }, [image, imageOptions]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -187,6 +212,19 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
               ))}
             </select>
           </label>
+          {imageOptions.length ? (
+            <label>
+              Image
+              <select value={image} onChange={(event) => setImage(event.target.value)}>
+                <option value="">BoxHaven default</option>
+                {imageOptions.map((option) => (
+                  <option value={imageValue(option)} key={`${option.provider || "provider"}/${imageValue(option)}`}>
+                    {option.name} ({option.provider || "provider"})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           {teams.length ? (
             <div className="active-team-note">
               <span>Active team</span>

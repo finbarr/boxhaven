@@ -13,7 +13,7 @@ bh run <name> <cmd...>
 bh sync up <name>
 bh sync down <name> --force
 bh status <name>
-bh image ls|create|activate|deactivate|rm [...]
+bh image ls|create|rm [...]
 bh team list|create|switch|status|members|invite|boxes [...]
 bh login [--backend-url <url>] [--no-open]
 bh logout
@@ -142,14 +142,12 @@ removing a teammate's box).
 ```bash
 bh image ls [--provider <name>]
 bh image create <machine> [--name <name>]
-bh image activate <id> [--provider <name>]
-bh image deactivate [--provider <name>]
 bh image rm <id> [--provider <name>]
 ```
 
-Golden images are admin-only. The active image becomes the default for new
-boxes on its provider; without `--provider` the backend's default provider is
-used. See [Golden Images](/images) for the full workflow.
+Images belong to the active team. Pass an image id to `bh create --image <id>`
+when creating a box; without `--provider` image commands use the backend's
+default provider. See [Images](/images) for the full workflow.
 
 ## bh team
 

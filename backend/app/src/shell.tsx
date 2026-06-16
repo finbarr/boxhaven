@@ -11,9 +11,8 @@ export type ConsoleSection = "boxes" | "team" | "teams" | "images" | "billing";
 // Authed console frame: a persistent left nav sidebar plus the workspace where
 // each section renders its full-width tables. activeSection drives the
 // highlighted nav item (so /boxes/$name keeps "Boxes" lit).
-export function ConsoleShell({ activeSection, isAdmin, email, teams = [], activeTeam, teamSwitching = false, teamSwitchError = "", onTeamSwitch, onLogout, children }: {
+export function ConsoleShell({ activeSection, email, teams = [], activeTeam, teamSwitching = false, teamSwitchError = "", onTeamSwitch, onLogout, children }: {
   activeSection: ConsoleSection;
-  isAdmin: boolean;
   email?: string;
   teams?: TeamInfo[];
   activeTeam?: TeamInfo;
@@ -53,6 +52,10 @@ export function ConsoleShell({ activeSection, isAdmin, email, teams = [], active
             <CreditCard size={17} />
             Billing
           </Link>
+          <Link to="/images" className={activeSection === "images" ? "active" : undefined}>
+            <Layers size={17} />
+            Images
+          </Link>
         </nav>
         <nav className="side-links" aria-label="Global">
           <span className="side-section-label">Global</span>
@@ -60,12 +63,6 @@ export function ConsoleShell({ activeSection, isAdmin, email, teams = [], active
             <Building2 size={17} />
             Teams
           </Link>
-          {isAdmin ? (
-            <Link to="/images" className={activeSection === "images" ? "active" : undefined}>
-              <Layers size={17} />
-              Images
-            </Link>
-          ) : null}
         </nav>
         <div className="side-foot">
           <div className="side-account">

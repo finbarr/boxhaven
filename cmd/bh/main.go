@@ -92,7 +92,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  bh sync up <name>")
 	fmt.Fprintln(os.Stderr, "  bh sync down <name> --force")
 	fmt.Fprintln(os.Stderr, "  bh status <name>")
-	fmt.Fprintln(os.Stderr, "  bh image ls|create|activate|deactivate|rm [...]")
+	fmt.Fprintln(os.Stderr, "  bh image ls|create|rm [...]")
 	fmt.Fprintln(os.Stderr, "  bh team list|create|switch|status|members|invite|boxes [...]")
 	fmt.Fprintln(os.Stderr, "  bh login [--backend-url <url>] [--no-open]")
 	fmt.Fprintln(os.Stderr, "  bh logout")

@@ -11,7 +11,7 @@ import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { StateStore } from "./state.js";
-import { ActiveImage, CreateMachineRequest, MachineImage, MachineProvider, RemoteMachine, defaultProjectPath, defaultSSHUser } from "./types.js";
+import { CreateMachineRequest, MachineImage, MachineProvider, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
 
 export type BackendOptions = {
   auth: BackendAuth;
@@ -112,15 +112,6 @@ type SSHCertificateRequest = {
 type CreateImageRequest = {
   machine?: string;
   name?: string;
-};
-
-type ActivateImageRequest = {
-  provider?: string;
-  id?: string;
-};
-
-type DeactivateImageRequest = {
-  provider?: string;
 };
 
 type OrgMachine = RemoteMachine & {
@@ -333,6 +324,12 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       team = found.team;
     }
     const orgID = team?.id || auth.orgID;
+    if (body.image) {
+      const teamImage = await resolveTeamImageForCreate(options, provider, orgID, body.image, reply);
+      if (!teamImage) return;
+      body.image = teamImage.id;
+      body.image_bootstrapped = teamImage.bootstrapped;
+    }
     // BOXHAVEN_MAX_MACHINES_PER_USER above stays the hard abuse cap; billing
     // gates the target team's free allowance below it.
     if (options.billing && team) {
@@ -601,39 +598,26 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   });
 
   app.get<{ Querystring: { provider?: string } }>("/v1/images", async (request, reply) => {
-    const auth = await requireAdmin(options, request, reply);
+    const auth = await requireAuth(options, request, reply);
     if (!auth) return;
     const providers = imageProvidersForQuery(options, request.query.provider, reply);
     if (!providers) return;
-    const images: MachineImage[] = [];
-    for (const provider of providers) {
-      const active = await options.store.getActiveImage(provider.name);
-      const listed = await (provider.listImages as () => Promise<MachineImage[]>)();
-      for (const image of listed) {
-        images.push({ ...image, provider: provider.name, active: !!active && active.id === image.id });
-      }
-      if (active && !listed.some((image) => image.id === active.id)) {
-        images.push({
-          id: active.id,
-          name: active.name || active.id,
-          provider: provider.name,
-          status: "missing",
-          bootstrapped: active.bootstrapped,
-          active: true,
-        });
-      }
-    }
+    const team = auth.teams.find((candidate) => candidate.id === auth.orgID);
+    const images = await listTeamImages(options, auth.orgID, team, providers);
     return { images };
   });
 
   app.post<{ Body: CreateImageRequest }>("/v1/images", async (request, reply) => {
-    const auth = await requireAdmin(options, request, reply);
+    const auth = await requireAuth(options, request, reply);
     if (!auth) return;
     const machineName = normalizeMachineName(bodyString(request.body?.machine));
     const nameError = validateName(machineName);
     if (nameError) return reply.code(400).send({ id: "bad_request", message: nameError });
     const machine = await options.store.getMachine(auth.userID, machineName);
     if (!machine) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+    if ((machine.org_id || auth.orgID) !== auth.orgID) {
+      return reply.code(403).send({ id: "forbidden", message: "box is not in the active team" });
+    }
     const provider = providerForMachine(options, machine, reply);
     if (!provider) return;
     if (typeof provider.createImage !== "function") {
@@ -641,52 +625,26 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     }
     const imageName = normalizeImageName(bodyString(request.body?.name), machineName);
     const image = await provider.createImage(machine, imageName);
-    return reply.code(202).send({ image: { ...image, provider: provider.name } });
-  });
-
-  app.post<{ Body: ActivateImageRequest }>("/v1/images/activate", async (request, reply) => {
-    const auth = await requireAdmin(options, request, reply);
-    if (!auth) return;
-    const provider = options.providers.get(bodyString(request.body?.provider) || options.providers.defaultName);
-    if (!provider) {
-      return reply.code(400).send({ id: "bad_request", message: "unknown provider" });
-    }
-    if (typeof provider.listImages !== "function") {
-      return reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support managed images` });
-    }
-    const id = bodyString(request.body?.id).trim();
-    if (!id) return reply.code(400).send({ id: "bad_request", message: "image id is required" });
-    const images = await provider.listImages();
-    const image = images.find((candidate) => candidate.id === id);
-    if (!image) return reply.code(404).send({ id: "not_found", message: `image ${id} was not found on ${provider.name}` });
-    if (image.status && image.status !== "available") {
-      return reply.code(409).send({ id: "not_ready", message: `image ${id} is not available yet (status: ${image.status})` });
-    }
-    const active: ActiveImage = {
-      id: image.id,
-      name: image.name,
-      bootstrapped: image.bootstrapped ?? imageNameIsBoxHavenRemote(image.name),
-      activated_at: new Date().toISOString(),
+    const team = auth.teams.find((candidate) => candidate.id === auth.orgID);
+    const record: TeamImageRecord = {
+      id: image.id || undefined,
+      name: image.name || imageName,
+      provider: provider.name,
+      org_id: auth.orgID,
+      org_slug: team?.slug,
+      org_name: team?.name,
+      created_at: image.created_at || new Date().toISOString(),
+      bootstrapped: image.bootstrapped ?? imageNameIsBoxHavenRemote(image.name || imageName),
     };
-    await options.store.setActiveImage(provider.name, active);
-    return { provider: provider.name, active };
-  });
-
-  app.post<{ Body: DeactivateImageRequest }>("/v1/images/deactivate", async (request, reply) => {
-    const auth = await requireAdmin(options, request, reply);
-    if (!auth) return;
-    const provider = options.providers.get(bodyString(request.body?.provider) || options.providers.defaultName);
-    if (!provider) {
-      return reply.code(400).send({ id: "bad_request", message: "unknown provider" });
-    }
-    await options.store.clearActiveImage(provider.name);
-    return reply.code(204).send();
+    await options.store.putImage(record);
+    return reply.code(202).send({ image: teamImageResponse(record, image) });
   });
 
   app.delete<{ Params: { id: string }; Querystring: { provider?: string } }>("/v1/images/:id", async (request, reply) => {
-    const auth = await requireAdmin(options, request, reply);
+    const auth = await requireAuth(options, request, reply);
     if (!auth) return;
-    const provider = options.providers.get(request.query.provider || options.providers.defaultName);
+    const providerName = (request.query.provider || options.providers.defaultName).trim().toLowerCase();
+    const provider = options.providers.get(providerName);
     if (!provider) {
       return reply.code(400).send({ id: "bad_request", message: "unknown provider" });
     }
@@ -694,11 +652,15 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support managed images` });
     }
     const id = request.params.id.trim();
-    const active = await options.store.getActiveImage(provider.name);
-    if (active && active.id === id) {
-      return reply.code(409).send({ id: "conflict", message: "image is active; deactivate it or activate another image first" });
+    const record = await options.store.getImageForOrg(auth.orgID, provider.name, id);
+    if (!record) {
+      return reply.code(404).send({ id: "not_found", message: "image does not belong to the active team" });
     }
-    await provider.deleteImage(id);
+    if (!record.id) {
+      return reply.code(409).send({ id: "not_ready", message: "image is still being created; wait for the provider image id before deleting it" });
+    }
+    await provider.deleteImage(record.id);
+    await options.store.deleteImageForOrg(auth.orgID, provider.name, id);
     return reply.code(204).send();
   });
 
@@ -790,14 +752,6 @@ async function createMachine(
   body.agent_backend_url = agentBackendURL;
   body.ssh_user_ca_public_key = await options.sshCA.publicKey();
   body.ssh_authorized_principal = sshPrincipal;
-
-  if (!body.image) {
-    const active = await options.store.getActiveImage(provider.name);
-    if (active) {
-      body.image = active.id;
-      body.image_bootstrapped = active.bootstrapped;
-    }
-  }
 
   await syncProviderMachines(options, auth);
   const existing = await options.store.getMachine(auth.userID, body.name);
@@ -991,28 +945,12 @@ function isAdmin(options: BackendOptions, auth: AuthContext): boolean {
   return admins.includes(auth.email.trim().toLowerCase());
 }
 
-async function requireAdmin(
-  options: BackendOptions,
-  request: { headers: Record<string, string | string[] | undefined> },
-  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
-): Promise<AuthContext | undefined> {
-  const auth = await requireAuth(options, request, reply);
-  if (!auth) return undefined;
-  if (!isAdmin(options, auth)) {
-    reply.code(403).send({
-      id: "forbidden",
-      message: "image management requires admin access; add your email to BOXHAVEN_ADMIN_EMAILS on the backend",
-    });
-    return undefined;
-  }
-  return auth;
-}
-
 function imageProvidersForQuery(
   options: BackendOptions,
   providerName: string | undefined,
   reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
 ): MachineProvider[] | undefined {
+  providerName = (providerName || "").trim().toLowerCase();
   if (providerName) {
     const provider = options.providers.get(providerName);
     if (!provider) {
@@ -1026,6 +964,80 @@ function imageProvidersForQuery(
     return [provider];
   }
   return options.providers.list().filter((provider) => typeof provider.listImages === "function");
+}
+
+async function listTeamImages(
+  options: BackendOptions,
+  orgID: string,
+  team: TeamInfo | undefined,
+  providers: MachineProvider[],
+): Promise<MachineImage[]> {
+  const records = await options.store.listImagesForOrg(orgID);
+  const images: MachineImage[] = [];
+  for (const provider of providers) {
+    const listed = await (provider.listImages as () => Promise<MachineImage[]>)();
+    for (let record of records.filter((candidate) => candidate.provider === provider.name)) {
+      const providerImage = listed.find((candidate) => providerImageMatchesRecord(candidate, record));
+      if (providerImage?.id && providerImage.id !== record.id) {
+        record = { ...record, id: providerImage.id, created_at: providerImage.created_at || record.created_at };
+        await options.store.putImage(record);
+      }
+      images.push(teamImageResponse({ ...record, org_slug: record.org_slug || team?.slug, org_name: record.org_name || team?.name }, providerImage));
+    }
+  }
+  return images.sort((left, right) => (right.created_at || "").localeCompare(left.created_at || "") || left.name.localeCompare(right.name));
+}
+
+async function resolveTeamImageForCreate(
+  options: BackendOptions,
+  provider: MachineProvider,
+  orgID: string,
+  idOrName: string,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+): Promise<{ id: string; bootstrapped?: boolean } | undefined> {
+  const record = await options.store.getImageForOrg(orgID, provider.name, idOrName);
+  if (!record) {
+    reply.code(400).send({ id: "bad_request", message: "image does not belong to the target team" });
+    return undefined;
+  }
+  if (typeof provider.listImages !== "function") {
+    return { id: record.id || record.name, bootstrapped: record.bootstrapped ?? imageNameIsBoxHavenRemote(record.name) };
+  }
+  const listed = (await provider.listImages()).find((image) => providerImageMatchesRecord(image, record));
+  if (!listed) {
+    reply.code(409).send({ id: "not_ready", message: `image ${idOrName} is not available on ${provider.name} yet` });
+    return undefined;
+  }
+  if (listed.status && listed.status !== "available") {
+    reply.code(409).send({ id: "not_ready", message: `image ${idOrName} is not available yet (status: ${listed.status})` });
+    return undefined;
+  }
+  if (listed.id && listed.id !== record.id) {
+    await options.store.putImage({ ...record, id: listed.id, created_at: listed.created_at || record.created_at });
+  }
+  return {
+    id: listed.id || record.id || record.name,
+    bootstrapped: listed.bootstrapped ?? record.bootstrapped ?? imageNameIsBoxHavenRemote(record.name),
+  };
+}
+
+function providerImageMatchesRecord(image: MachineImage, record: TeamImageRecord): boolean {
+  return (!!record.id && image.id === record.id) || image.name === record.name;
+}
+
+function teamImageResponse(record: TeamImageRecord, image?: MachineImage): MachineImage {
+  return {
+    id: image?.id || record.id || "",
+    name: image?.name || record.name,
+    provider: record.provider,
+    org_id: record.org_id,
+    org_slug: record.org_slug,
+    org_name: record.org_name,
+    status: image?.status || (record.id ? "missing" : "creating"),
+    created_at: image?.created_at || record.created_at,
+    size_gb: image?.size_gb,
+    bootstrapped: image?.bootstrapped ?? record.bootstrapped,
+  };
 }
 
 function normalizeImageName(name: string | undefined, machineName: string): string {

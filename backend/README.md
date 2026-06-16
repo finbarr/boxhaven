@@ -158,9 +158,9 @@ Environment:
 - `BOXHAVEN_EMAIL_FROM`: From address for transactional email, default `BoxHaven <noreply@boxhaven.dev>`.
 - `BOXHAVEN_RESEND_API_URL`: Resend API base URL override for tests.
 
-An image activated through `POST /v1/images/activate` becomes the default image
-for new boxes on that provider and overrides the `BOXHAVEN_REMOTE_IMAGE*` env
-defaults until it is deactivated.
+Team images are optional per-box overrides. When `POST /v1/machines` includes
+`image`, the image must belong to the target team; otherwise the backend uses
+the provider's configured `BOXHAVEN_REMOTE_IMAGE*` default.
 
 Normal user VMs do not receive reusable DigitalOcean account SSH keys. The
 backend uses a one-time no-login key during DigitalOcean create only to prevent
@@ -254,13 +254,11 @@ through Resend from `BOXHAVEN_EMAIL_FROM`. Without it, both hooks log to the
 backend console instead, and invitation links remain copyable from the team
 console.
 
-Image management routes (admin-only, gated by `BOXHAVEN_ADMIN_EMAILS`):
+Image management routes:
 
-- `GET /v1/images` — list golden images, optionally filtered with `?provider=<name>`.
-- `POST /v1/images` — snapshot one of the caller's machines into a golden image; the backend prefixes the image name with `boxhaven-remote-`.
-- `POST /v1/images/activate` — make an available image the default for new boxes on its provider, overriding the env-configured image.
-- `POST /v1/images/deactivate` — fall back to the env-configured image for a provider.
-- `DELETE /v1/images/:id?provider=<name>` — delete an image; returns `409` while the image is active.
+- `GET /v1/images` — list images owned by the caller's active team, optionally filtered with `?provider=<name>`.
+- `POST /v1/images` — snapshot one of the caller's machines in the active team; the backend prefixes the image name with `boxhaven-remote-`.
+- `DELETE /v1/images/:id?provider=<name>` — delete an image owned by the active team; returns `409` while the provider image id is not known yet.
 
 Team routes (Better Auth organization plugin, mounted under `/v1/auth`):
 

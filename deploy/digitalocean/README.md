@@ -69,7 +69,7 @@ and check `https://api.boxhaven.dev/healthz` plus
 `https://app.boxhaven.dev/healthz`. They do not rebuild the remote VM image.
 
 After changing the VM runtime or image-builder code, explicitly rebuild and
-activate the remote VM image:
+publish the remote VM image:
 
 ```bash
 npm run deploy:runtime
@@ -120,7 +120,7 @@ snapshots it, deletes the builder Droplet, and prints the snapshot id.
 
 The snapshot contains the GitHub HTTPS credential helper and machine-agent
 runtime that sources `/run/boxhaven/session.env` for setup commands, direct
-commands, and tmux sessions. Rebuild and activate a new snapshot after changing
+commands, and tmux sessions. Rebuild and publish a new snapshot after changing
 `cmd/bh/assets/remote-vm-install.sh`; otherwise newly created boxes will keep
 the previous runtime behavior.
 

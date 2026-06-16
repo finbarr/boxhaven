@@ -55,11 +55,13 @@ export type MachineImage = {
   id: string;
   name: string;
   provider?: string;
+  org_id?: string;
+  org_slug?: string;
+  org_name?: string;
   status?: string;
   created_at?: string;
   size_gb?: number;
   bootstrapped?: boolean;
-  active?: boolean;
 };
 
 export type MachineProviderCapability = "create" | "destroy" | "list" | "connect" | "images" | "snapshot";
@@ -84,11 +86,15 @@ export type MachineProvider = {
   deleteImage?(imageID: string): Promise<void>;
 };
 
-export type ActiveImage = {
-  id: string;
-  name?: string;
+export type TeamImageRecord = {
+  id?: string;
+  name: string;
+  provider: string;
+  org_id: string;
+  org_slug?: string;
+  org_name?: string;
+  created_at?: string;
   bootstrapped?: boolean;
-  activated_at?: string;
 };
 
 // Billing records are keyed by organization (team) id. `personal` snapshots
@@ -107,11 +113,11 @@ export type BackendState = {
   version: number;
   provider: string;
   machines: Record<string, RemoteMachine>;
-  active_images?: Record<string, ActiveImage>;
+  images?: Record<string, TeamImageRecord>;
   billing?: Record<string, BillingRecord>;
   updated_at?: string;
 };
 
-export const stateVersion = 4;
+export const stateVersion = 5;
 export const defaultProjectPath = "/opt/boxhaven/project";
 export const defaultSSHUser = "boxhaven";

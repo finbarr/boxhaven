@@ -55,6 +55,23 @@ export type Machine = {
   updated_at?: string;
 };
 
+export type MachineImage = {
+  id: string;
+  name: string;
+  provider?: string;
+  org_id?: string;
+  org_slug?: string;
+  org_name?: string;
+  status?: string;
+  created_at?: string;
+  size_gb?: number;
+  bootstrapped?: boolean;
+};
+
+export type ImagesResponse = {
+  images: MachineImage[];
+};
+
 export type LoginResponse = {
   token: string;
   user?: AuthUser;

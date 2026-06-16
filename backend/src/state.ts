@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { ActiveImage, BackendState, BillingRecord, RemoteMachine, stateVersion } from "./types.js";
+import { BackendState, BillingRecord, RemoteMachine, TeamImageRecord, stateVersion } from "./types.js";
 
 export class StateStore {
   private state: BackendState | undefined;
@@ -25,7 +25,7 @@ export class StateStore {
           version: parsed.version || stateVersion,
           provider: parsed.provider || this.provider,
           machines: parsed.machines || {},
-          active_images: parsed.active_images || {},
+          images: parsed.images || {},
           billing: parsed.billing || {},
           updated_at: parsed.updated_at,
         };
@@ -78,20 +78,51 @@ export class StateStore {
     });
   }
 
-  async getActiveImage(provider: string): Promise<ActiveImage | undefined> {
+  async listImagesForOrg(orgID: string): Promise<TeamImageRecord[]> {
     const state = await this.load();
-    return state.active_images?.[provider];
+    return Object.values(state.images || {}).filter((image) => image.org_id === orgID);
   }
 
-  async setActiveImage(provider: string, image: ActiveImage): Promise<void> {
+  async getImageForOrg(orgID: string, provider: string, idOrName: string): Promise<TeamImageRecord | undefined> {
+    const want = idOrName.trim();
+    if (!want) return undefined;
+    const state = await this.load();
+    return Object.values(state.images || {}).find((image) => (
+      image.org_id === orgID
+      && image.provider === provider
+      && (image.id === want || image.name === want)
+    ));
+  }
+
+  async putImage(image: TeamImageRecord): Promise<void> {
+    if (!image.org_id) throw new Error("image org_id is required");
+    if (!image.provider) throw new Error("image provider is required");
+    if (!image.name) throw new Error("image name is required");
     await this.update((state) => {
-      state.active_images = { ...(state.active_images || {}), [provider]: image };
+      state.images = { ...(state.images || {}) };
+      for (const [key, existing] of Object.entries(state.images)) {
+        if (
+          existing.org_id === image.org_id
+          && existing.provider === image.provider
+          && (existing.name === image.name || (!!image.id && existing.id === image.id))
+        ) {
+          delete state.images[key];
+        }
+      }
+      state.images[imageKey(image)] = image;
     });
   }
 
-  async clearActiveImage(provider: string): Promise<void> {
+  async deleteImageForOrg(orgID: string, provider: string, idOrName: string): Promise<void> {
+    const want = idOrName.trim();
+    if (!want) return;
     await this.update((state) => {
-      if (state.active_images) delete state.active_images[provider];
+      if (!state.images) return;
+      for (const [key, image] of Object.entries(state.images)) {
+        if (image.org_id === orgID && image.provider === provider && (image.id === want || image.name === want)) {
+          delete state.images[key];
+        }
+      }
     });
   }
 
@@ -128,7 +159,7 @@ export class StateStore {
     return {
       ...this.state,
       machines: { ...this.state.machines },
-      active_images: { ...(this.state.active_images || {}) },
+      images: { ...(this.state.images || {}) },
       billing: { ...(this.state.billing || {}) },
     };
   }
@@ -136,4 +167,8 @@ export class StateStore {
 
 function machineKey(userID: string, name: string): string {
   return `${userID}:${name}`;
+}
+
+function imageKey(image: TeamImageRecord): string {
+  return `${image.org_id}:${image.provider}:${image.id || image.name}`;
 }

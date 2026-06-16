@@ -47,11 +47,14 @@ function ConsoleLayout() {
       const teamRef = team?.slug || team?.id || organizationId;
       void queryClient.invalidateQueries({ queryKey: ["session", token] });
       void queryClient.invalidateQueries({ queryKey: ["machines", token] });
+      void queryClient.invalidateQueries({ queryKey: ["images", token] });
       void queryClient.invalidateQueries({ queryKey: ["billing"] });
       if (activeSection === "team") {
         void navigate({ to: "/team/$team", params: { team: teamRef } });
       } else if (activeSection === "billing") {
         void navigate({ to: "/billing/$team", params: { team: teamRef } });
+      } else if (activeSection === "images") {
+        void navigate({ to: "/images" });
       } else if (onBox) {
         void navigate({ to: "/" });
       }
@@ -131,7 +134,6 @@ function ConsoleLayout() {
     <ConsoleProvider value={consoleValue}>
       <ConsoleShell
         activeSection={activeSection}
-        isAdmin={isAdmin}
         email={session.data?.user?.email}
         teams={consoleValue.teams}
         activeTeam={consoleValue.activeTeam}

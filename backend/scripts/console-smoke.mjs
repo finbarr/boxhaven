@@ -46,6 +46,8 @@ try {
 
   const membersFacts = await checkMembersPage(page);
   const teamsFacts = await checkTeamsPage(page);
+  const imagesFacts = await checkImagesPage(page);
+  const boxCreateFacts = await checkBoxCreateDrawer(page);
   const mobileFacts = await checkMobileTeams(page);
 
   console.log(JSON.stringify({
@@ -57,10 +59,14 @@ try {
       members: join(outDir, "members.png"),
       teams: join(outDir, "teams.png"),
       teamEditor: join(outDir, "team-editor.png"),
+      images: join(outDir, "images.png"),
+      boxCreate: join(outDir, "box-create.png"),
       mobileTeams: join(outDir, "mobile-teams.png"),
     },
     membersFacts,
     teamsFacts,
+    imagesFacts,
+    boxCreateFacts,
     mobileFacts,
   }, null, 2));
 } finally {
@@ -71,6 +77,14 @@ try {
 
 async function startSeededBackend() {
   const dir = mkdtempSync(join(tmpdir(), "boxhaven-console-smoke-"));
+  const fakeImages = [{
+    id: "img-acme",
+    name: "boxhaven-remote-acme-tools",
+    provider: "fake",
+    status: "available",
+    created_at: "2026-06-01T12:00:00.000Z",
+    bootstrapped: true,
+  }];
   const fakeProvider = {
     name: "fake",
     label: "Fake Cloud",
@@ -93,7 +107,7 @@ async function startSeededBackend() {
     },
     async releaseMachine() {},
     async listImages() {
-      return [];
+      return fakeImages;
     },
   };
   const providers = new ProviderRegistry([fakeProvider], fakeProvider.name);
@@ -134,6 +148,16 @@ async function startSeededBackend() {
     payload: { organizationId: acme.id },
   });
   assert.equal(active.statusCode, 200, active.body);
+  await store.putImage({
+    id: "img-acme",
+    name: "boxhaven-remote-acme-tools",
+    provider: "fake",
+    org_id: acme.id,
+    org_slug: "acme-labs",
+    org_name: "Acme Labs",
+    created_at: "2026-06-01T12:00:00.000Z",
+    bootstrapped: true,
+  });
   await app.listen({ host: "127.0.0.1", port: apiPort });
   return { app, token };
 }
@@ -200,8 +224,8 @@ async function checkMembersPage(page) {
   assert.equal(facts.billingHintPresent, false);
   assert.deepEqual(facts.panelHeadings, []);
   assert.equal(facts.removeCellAlign, "right");
-  assert.deepEqual(facts.teamNav, ["Boxes", "Members", "Billing"]);
-  assert.deepEqual(facts.globalNav, ["Teams", "Images"]);
+  assert.deepEqual(facts.teamNav, ["Boxes", "Members", "Billing", "Images"]);
+  assert.deepEqual(facts.globalNav, ["Teams"]);
   for (const heading of ["Email", "Name", "Role"]) {
     assert.ok(facts.tableHeadings.includes(heading), `members table missing ${heading}`);
   }
@@ -248,6 +272,56 @@ async function checkTeamsPage(page) {
   assert.ok(drawerFacts.buttons.some((text) => text?.includes("Save team")), "missing drawer Save action");
   assert.ok(drawerFacts.buttons.some((text) => text?.includes("Delete team")), "missing drawer Delete action");
   facts.drawerFacts = drawerFacts;
+  return facts;
+}
+
+async function checkImagesPage(page) {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${appURL}/images`, { waitUntil: "domcontentloaded" });
+  await waitForConsole(page);
+  await page.waitForSelector(".data-table tbody tr", { timeout: 10_000 });
+  await page.screenshot({ path: join(outDir, "images.png"), fullPage: true });
+  const facts = await page.evaluate(() => ({
+    title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
+    eyebrow: document.querySelector(".workspace-title span")?.textContent?.trim(),
+    activeTeamNav: document.querySelector("nav[aria-label='Team'] a.active")?.textContent?.trim(),
+    globalNav: [...document.querySelectorAll("nav[aria-label='Global'] a")].map((node) => node.textContent?.trim()),
+    rows: [...document.querySelectorAll(".data-table tbody tr")]
+      .map((row) => [...row.querySelectorAll("td")].map((cell) => cell.textContent?.trim() || "")),
+    hasActivate: [...document.querySelectorAll("button")].some((button) => button.textContent?.includes("Activate")),
+    deleteCellAlign: getComputedStyle(document.querySelector(".data-table td:last-child")).textAlign,
+  }));
+  assert.equal(facts.title, "Images");
+  assert.equal(facts.eyebrow, "team / Acme Labs");
+  assert.equal(facts.activeTeamNav, "Images");
+  assert.deepEqual(facts.globalNav, ["Teams"]);
+  assert.equal(facts.hasActivate, false);
+  assert.equal(facts.deleteCellAlign, "right");
+  assert.ok(facts.rows.some(([provider, name, id]) => provider === "fake" && name === "boxhaven-remote-acme-tools" && id === "img-acme"), "missing seeded team image");
+  return facts;
+}
+
+async function checkBoxCreateDrawer(page) {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(appURL, { waitUntil: "domcontentloaded" });
+  await waitForConsole(page);
+  await page.getByRole("button", { name: "New box" }).click();
+  await page.waitForSelector(".drawer-panel select", { timeout: 10_000 });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(outDir, "box-create.png"), fullPage: true });
+  const facts = await page.evaluate(() => {
+    const imageLabel = [...document.querySelectorAll(".drawer-panel label")]
+      .find((label) => label.textContent?.includes("Image"));
+    return {
+      drawerTitle: document.querySelector(".drawer-panel h2")?.textContent?.trim(),
+      imageOptions: imageLabel
+        ? [...imageLabel.querySelectorAll("option")].map((option) => option.textContent?.trim())
+        : [],
+    };
+  });
+  assert.equal(facts.drawerTitle, "Create a box");
+  assert.ok(facts.imageOptions.includes("BoxHaven default"), "missing default image option");
+  assert.ok(facts.imageOptions.some((option) => option?.includes("boxhaven-remote-acme-tools")), "missing team image option");
   return facts;
 }
 

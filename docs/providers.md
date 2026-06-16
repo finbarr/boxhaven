@@ -54,11 +54,11 @@ boxes without `--tier`.
 ## Golden Snapshots
 
 Providers create boxes from a prebuilt BoxHaven snapshot when the
-`BOXHAVEN_REMOTE_IMAGE*` variable for that provider is configured, or when a
-backend admin has activated a managed golden image for that provider with
-`bh image activate`. Machines created from these images are treated as
-backend-bootstrapped. Plain Ubuntu fallback images are not considered fully
-bootstrapped for normal CLI use; the CLI does not bootstrap plain hosts.
+`BOXHAVEN_REMOTE_IMAGE*` variable for that provider is configured, or when the
+caller selects a team image with `bh create --image <image-id>`. Machines
+created from these images are treated as backend-bootstrapped. Plain Ubuntu
+fallback images are not considered fully bootstrapped for normal CLI use; the
+CLI does not bootstrap plain hosts.
 
-See [Golden Images](/images) for managing images and
+See [Images](/images) for managing images and
 [Self-Hosting](/self-hosting) for the rest of the backend environment.

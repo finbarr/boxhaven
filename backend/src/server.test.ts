@@ -754,13 +754,8 @@ test("backend keeps listing machines when one provider is down", async () => {
 });
 
 test("backend handles non-string image request fields without 500s", async () => {
-  const { app, provider, token } = await createTestBackend("admin@example.com", "password123", { adminEmails: ["admin@example.com"] });
+  const { app, token } = await createTestBackend("images@example.com");
   const headers = { authorization: `Bearer ${token}` };
-  provider.images = [{ id: "222", name: "boxhaven-remote-new", status: "available", bootstrapped: true }];
-
-  const numericID = await app.inject({ method: "POST", url: "/v1/images/activate", headers, payload: { provider: "fake", id: 222 } });
-  assert.equal(numericID.statusCode, 200, numericID.body);
-  assert.equal(numericID.json().active.id, "222");
 
   const numericMachine = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: 123 } });
   assert.equal(numericMachine.statusCode, 404, numericMachine.body);
@@ -768,84 +763,20 @@ test("backend handles non-string image request fields without 500s", async () =>
   const objectMachine = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: { name: "x" } } });
   assert.equal(objectMachine.statusCode, 400, objectMachine.body);
 
-  const numericProvider = await app.inject({ method: "POST", url: "/v1/images/deactivate", headers, payload: { provider: 5 } });
+  const numericProvider = await app.inject({ method: "DELETE", url: "/v1/images/222?provider=5", headers });
   assert.equal(numericProvider.statusCode, 400, numericProvider.body);
+
+  const numericCreateImage = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "uses-number", image: 222 } });
+  assert.equal(numericCreateImage.statusCode, 400, numericCreateImage.body);
 });
 
-test("backend gates image management behind admin emails", async () => {
-  const { app, token } = await createTestBackend("user@example.com", "password123", { adminEmails: ["admin@example.com"] });
-  const denied = await app.inject({ method: "GET", url: "/v1/images", headers: { authorization: `Bearer ${token}` } });
-  assert.equal(denied.statusCode, 403, denied.body);
-  assert.match(denied.body, /BOXHAVEN_ADMIN_EMAILS/);
-});
-
-test("backend lists, activates, and deletes provider images for admins", async () => {
-  const { app, provider, token } = await createTestBackend("admin@example.com", "password123", { adminEmails: ["Admin@example.com"] });
+test("backend snapshots, lists, selects, and deletes images for the active team", async () => {
+  const { app, provider, token } = await createTestBackend("image-owner@example.com");
   const headers = { authorization: `Bearer ${token}` };
-  provider.images = [
-    { id: "111", name: "boxhaven-remote-old", status: "available", bootstrapped: true },
-    { id: "222", name: "boxhaven-remote-new", status: "available", bootstrapped: true },
-  ];
 
-  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
-  assert.equal(whoami.json().admin, true);
-
-  const listed = await app.inject({ method: "GET", url: "/v1/images", headers });
-  assert.equal(listed.statusCode, 200, listed.body);
-  assert.equal(listed.json().images.length, 2);
-  assert.equal(listed.json().images.every((image: MachineImage) => image.active === false), true);
-
-  const activated = await app.inject({
-    method: "POST",
-    url: "/v1/images/activate",
-    headers,
-    payload: { provider: "fake", id: "222" },
-  });
-  assert.equal(activated.statusCode, 200, activated.body);
-  assert.equal(activated.json().active.id, "222");
-
-  const listedAfter = await app.inject({ method: "GET", url: "/v1/images", headers });
-  const activeImage = listedAfter.json().images.find((image: MachineImage) => image.active);
-  assert.equal(activeImage.id, "222");
-
-  const created = await app.inject({
-    method: "POST",
-    url: "/v1/machines",
-    headers,
-    payload: { name: "uses-active" },
-  });
-  assert.equal(created.statusCode, 201, created.body);
-  assert.equal(provider.created[0].image, "222");
-  assert.equal(provider.created[0].image_bootstrapped, true);
-
-  const deleteActive = await app.inject({ method: "DELETE", url: "/v1/images/222?provider=fake", headers });
-  assert.equal(deleteActive.statusCode, 409, deleteActive.body);
-
-  const deleteOld = await app.inject({ method: "DELETE", url: "/v1/images/111?provider=fake", headers });
-  assert.equal(deleteOld.statusCode, 204, deleteOld.body);
-  assert.deepEqual(provider.deletedImages, ["111"]);
-
-  const deactivated = await app.inject({ method: "POST", url: "/v1/images/deactivate", headers, payload: { provider: "fake" } });
-  assert.equal(deactivated.statusCode, 204, deactivated.body);
-
-  const explicitImage = await app.inject({
-    method: "POST",
-    url: "/v1/machines",
-    headers,
-    payload: { name: "explicit-image", image: "333", region: "fra1" },
-  });
-  assert.equal(explicitImage.statusCode, 201, explicitImage.body);
-  const explicitRequest = provider.created.find((request) => request.name === "explicit-image");
-  assert.equal(explicitRequest?.image, "333");
-  assert.equal(explicitRequest?.region, "fra1");
-  assert.equal(explicitRequest?.image_bootstrapped, undefined);
-});
-
-test("backend snapshots a machine into a managed image", async () => {
-  const { app, provider, token } = await createTestBackend("admin@example.com", "password123", { adminEmails: ["admin@example.com"] });
-  const headers = { authorization: `Bearer ${token}` };
   const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "golden" } });
   assert.equal(created.statusCode, 201, created.body);
+  assert.equal(provider.created[0].image, undefined);
 
   const snapshot = await app.inject({
     method: "POST",
@@ -856,6 +787,98 @@ test("backend snapshots a machine into a managed image", async () => {
   assert.equal(snapshot.statusCode, 202, snapshot.body);
   assert.equal(snapshot.json().image.name, "boxhaven-remote-my-custom-build");
   assert.deepEqual(provider.snapshotted, [{ machine: "golden", name: "boxhaven-remote-my-custom-build" }]);
+  provider.images = [{ id: snapshot.json().image.id, name: snapshot.json().image.name, status: "available", bootstrapped: true }];
+
+  const listed = await app.inject({ method: "GET", url: "/v1/images", headers });
+  assert.equal(listed.statusCode, 200, listed.body);
+  assert.equal(listed.json().images.length, 1);
+  assert.equal(listed.json().images[0].name, "boxhaven-remote-my-custom-build");
+  assert.equal(listed.json().images[0].active, undefined);
+
+  const explicitImage = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "explicit-image", image: snapshot.json().image.id, region: "fra1" },
+  });
+  assert.equal(explicitImage.statusCode, 201, explicitImage.body);
+  const explicitRequest = provider.created.find((request) => request.name === "explicit-image");
+  assert.equal(explicitRequest?.image, snapshot.json().image.id);
+  assert.equal(explicitRequest?.region, "fra1");
+  assert.equal(explicitRequest?.image_bootstrapped, true);
+
+  const defaultImage = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "default-image" } });
+  assert.equal(defaultImage.statusCode, 201, defaultImage.body);
+  const defaultRequest = provider.created.find((request) => request.name === "default-image");
+  assert.equal(defaultRequest?.image, undefined);
+
+  const deleted = await app.inject({ method: "DELETE", url: `/v1/images/${snapshot.json().image.id}?provider=fake`, headers });
+  assert.equal(deleted.statusCode, 204, deleted.body);
+  assert.deepEqual(provider.deletedImages, [snapshot.json().image.id]);
+  const listedAfterDelete = await app.inject({ method: "GET", url: "/v1/images", headers });
+  assert.deepEqual(listedAfterDelete.json().images, []);
+});
+
+test("backend scopes images to teams", async () => {
+  const { app, provider, token } = await createTestBackend("owner@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  assert.equal(whoami.statusCode, 200, whoami.body);
+  const personalTeamID = whoami.json().team.id;
+
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "personal-box" } })).statusCode, 201);
+  const personalSnapshot = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "personal-box", name: "Personal Build" } });
+  assert.equal(personalSnapshot.statusCode, 202, personalSnapshot.body);
+  provider.images = [{ id: personalSnapshot.json().image.id, name: personalSnapshot.json().image.name, status: "available", bootstrapped: true }];
+
+  const orgCreated = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name: "Acme", slug: "acme" },
+  });
+  assert.equal(orgCreated.statusCode, 200, orgCreated.body);
+  const orgID = orgCreated.json().id || orgCreated.json().organization?.id;
+  assert.equal(typeof orgID, "string");
+
+  const switched = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/set-active",
+    headers,
+    payload: { organizationId: orgID },
+  });
+  assert.equal(switched.statusCode, 200, switched.body);
+
+  const acmeImages = await app.inject({ method: "GET", url: "/v1/images", headers });
+  assert.equal(acmeImages.statusCode, 200, acmeImages.body);
+  assert.deepEqual(acmeImages.json().images, []);
+
+  const wrongTeamImage = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "wrong-team-image", team: "acme", image: personalSnapshot.json().image.id },
+  });
+  assert.equal(wrongTeamImage.statusCode, 400, wrongTeamImage.body);
+
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "team-box" } })).statusCode, 201);
+  const teamSnapshot = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "team-box", name: "Team Build" } });
+  assert.equal(teamSnapshot.statusCode, 202, teamSnapshot.body);
+  provider.images.push({ id: teamSnapshot.json().image.id, name: teamSnapshot.json().image.name, status: "available", bootstrapped: true });
+
+  const teamImages = await app.inject({ method: "GET", url: "/v1/images", headers });
+  assert.equal(teamImages.statusCode, 200, teamImages.body);
+  assert.deepEqual(teamImages.json().images.map((image: MachineImage) => image.name), ["boxhaven-remote-team-build"]);
+
+  const backToPersonal = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/set-active",
+    headers,
+    payload: { organizationId: personalTeamID },
+  });
+  assert.equal(backToPersonal.statusCode, 200, backToPersonal.body);
+  const personalImages = await app.inject({ method: "GET", url: "/v1/images", headers });
+  assert.deepEqual(personalImages.json().images.map((image: MachineImage) => image.name), ["boxhaven-remote-personal-build"]);
 });
 
 test("backend creates a personal team automatically and scopes boxes to teams", async () => {

@@ -18,7 +18,6 @@ type remoteImage struct {
 	CreatedAt    string  `json:"created_at,omitempty"`
 	SizeGB       float64 `json:"size_gb,omitempty"`
 	Bootstrapped bool    `json:"bootstrapped,omitempty"`
-	Active       bool    `json:"active,omitempty"`
 }
 
 type remoteImageListResponse struct {
@@ -34,27 +33,6 @@ type remoteImageCreateRequest struct {
 	Name    string `json:"name,omitempty"`
 }
 
-type remoteImageActivateRequest struct {
-	Provider string `json:"provider,omitempty"`
-	ID       string `json:"id"`
-}
-
-type remoteImageDeactivateRequest struct {
-	Provider string `json:"provider,omitempty"`
-}
-
-type remoteImageActiveState struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Bootstrapped bool   `json:"bootstrapped,omitempty"`
-	ActivatedAt  string `json:"activated_at,omitempty"`
-}
-
-type remoteImageActivateResponse struct {
-	Provider string                 `json:"provider"`
-	Active   remoteImageActiveState `json:"active"`
-}
-
 func runImage(args []string, projectDir string) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
 		printImageUsage()
@@ -66,10 +44,6 @@ func runImage(args []string, projectDir string) error {
 		return runImageList(args[1:], projectDir)
 	case "create":
 		return runImageCreate(args[1:], projectDir)
-	case "activate":
-		return runImageActivate(args[1:], projectDir)
-	case "deactivate":
-		return runImageDeactivate(args[1:], projectDir)
 	case "rm":
 		return runImageRemove(args[1:], projectDir)
 	default:
@@ -81,12 +55,10 @@ func printImageUsage() {
 	fmt.Fprintln(os.Stderr, "USAGE:")
 	fmt.Fprintln(os.Stderr, "  bh image ls [--provider <name>]")
 	fmt.Fprintln(os.Stderr, "  bh image create <machine> [--name <name>]")
-	fmt.Fprintln(os.Stderr, "  bh image activate <id> [--provider <name>]")
-	fmt.Fprintln(os.Stderr, "  bh image deactivate [--provider <name>]")
 	fmt.Fprintln(os.Stderr, "  bh image rm <id> [--provider <name>]")
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Golden images are admin-only. The active image becomes the default for new boxes")
-	fmt.Fprintln(os.Stderr, "on its provider; without --provider the backend's default provider is used.")
+	fmt.Fprintln(os.Stderr, "Images belong to the active team. Pass one to `bh create --image <id>`")
+	fmt.Fprintln(os.Stderr, "when creating a box; otherwise BoxHaven uses its default image.")
 }
 
 func parseImageArgs(command string, args []string, wantPositional bool) (string, string, error) {
@@ -139,24 +111,19 @@ func runImageList(args []string, projectDir string) error {
 		return nil
 	}
 	table := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(table, "PROVIDER\tNAME\tID\tSTATUS\tSIZE\tCREATED\tACTIVE"); err != nil {
+	if _, err := fmt.Fprintln(table, "PROVIDER\tNAME\tID\tSTATUS\tSIZE\tCREATED"); err != nil {
 		return err
 	}
 	for _, image := range response.Images {
-		active := ""
-		if image.Active {
-			active = "yes"
-		}
 		if _, err := fmt.Fprintf(
 			table,
-			"%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			"%s\t%s\t%s\t%s\t%s\t%s\n",
 			valueOrDash(image.Provider),
 			valueOrDash(image.Name),
 			valueOrDash(image.ID),
 			valueOrDash(image.Status),
 			imageSizeDisplay(image.SizeGB),
 			valueOrDash(image.CreatedAt),
-			active,
 		); err != nil {
 			return err
 		}
@@ -213,44 +180,6 @@ func runImageCreate(args []string, projectDir string) error {
 	imageName := firstNonEmpty(response.Image.Name, req.Name, machine)
 	success("Snapshot %s started from %s", imageName, machine)
 	info("Snapshots take a few minutes; watch progress with `bh image ls`.")
-	return nil
-}
-
-func runImageActivate(args []string, projectDir string) error {
-	id, provider, err := parseImageArgs("activate", args, true)
-	if err != nil {
-		return err
-	}
-	if id == "" {
-		return fmt.Errorf("bh image activate requires an image id")
-	}
-	cfg, err := loadConfig(projectDir)
-	if err != nil {
-		return err
-	}
-	req := remoteImageActivateRequest{Provider: provider, ID: id}
-	var response remoteImageActivateResponse
-	if err := remoteBackendRequest(cfg, http.MethodPost, "/v1/images/activate", req, &response); err != nil {
-		return err
-	}
-	success("Activated image %s on %s; new boxes now boot from it", firstNonEmpty(response.Active.Name, id), firstNonEmpty(response.Provider, provider, "the default provider"))
-	return nil
-}
-
-func runImageDeactivate(args []string, projectDir string) error {
-	_, provider, err := parseImageArgs("deactivate", args, false)
-	if err != nil {
-		return err
-	}
-	cfg, err := loadConfig(projectDir)
-	if err != nil {
-		return err
-	}
-	req := remoteImageDeactivateRequest{Provider: provider}
-	if err := remoteBackendRequest(cfg, http.MethodPost, "/v1/images/deactivate", req, nil); err != nil {
-		return err
-	}
-	success("Deactivated the active image on %s; new boxes fall back to the backend's configured image", firstNonEmpty(provider, "the default provider"))
 	return nil
 }
 
