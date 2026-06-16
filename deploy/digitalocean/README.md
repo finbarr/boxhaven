@@ -43,7 +43,9 @@ traffic somewhere else.
 
 Remote apps do not need to manage public TLS for the preview URL. The backend
 warms the preview URL during machine create so Caddy has already completed
-on-demand certificate issuance before the URL is shown. Caddy terminates HTTPS
+on-demand certificate issuance before the URL is shown. The warmup request uses
+`/.well-known/boxhaven/preview-tls-warmup`, which Caddy answers directly after
+TLS is ready instead of proxying to a not-yet-serving VM. Caddy terminates HTTPS
 on the control-plane Droplet, the backend maps the preview hostname back to the
 owning machine, and the backend fetches
 `http://<machine-public-ip>:BOXHAVEN_PREVIEW_TARGET_PORT` or opens a WebSocket

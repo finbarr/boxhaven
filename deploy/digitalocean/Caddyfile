@@ -20,6 +20,14 @@
 		on_demand
 	}
 
+	@preview_tls_warmup {
+		host *.{$BOXHAVEN_PREVIEW_BASE_DOMAIN}
+		path /.well-known/boxhaven/preview-tls-warmup
+	}
+	handle @preview_tls_warmup {
+		respond "ok" 200
+	}
+
 	@preview host *.{$BOXHAVEN_PREVIEW_BASE_DOMAIN}
 	handle @preview {
 		rewrite * /v1/preview/proxy/{host}{uri}

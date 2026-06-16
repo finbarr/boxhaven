@@ -99,13 +99,14 @@ function publicOrigin(value: string): string {
 }
 
 async function warmPreviewTLS(previewURL: string): Promise<void> {
+  const warmupURL = previewTLSWarmupURL(previewURL);
   const deadline = Date.now() + 60_000;
   let lastError: Error | undefined;
   while (Date.now() < deadline) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);
     try {
-      await fetch(previewURL, {
+      await fetch(warmupURL, {
         method: "HEAD",
         headers: { "user-agent": "BoxHaven preview TLS warmup" },
         signal: controller.signal,
@@ -118,7 +119,15 @@ async function warmPreviewTLS(previewURL: string): Promise<void> {
       clearTimeout(timer);
     }
   }
-  throw new Error(`preview TLS warmup timed out for ${previewURL}: ${lastError?.message || "unknown error"}`);
+  throw new Error(`preview TLS warmup timed out for ${warmupURL}: ${lastError?.message || "unknown error"}`);
+}
+
+function previewTLSWarmupURL(previewURL: string): string {
+  const url = new URL(previewURL);
+  url.pathname = "/.well-known/boxhaven/preview-tls-warmup";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
 
 function delay(ms: number): Promise<void> {
