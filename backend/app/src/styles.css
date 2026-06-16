@@ -434,6 +434,19 @@ select:focus {
   background: rgba(255, 252, 243, 0.78);
 }
 
+.icon-button:not(:disabled):hover,
+.icon-button:not(:disabled):focus-visible {
+  border-color: rgba(47, 111, 92, 0.34);
+  background: #fffaf0;
+  color: #244f43;
+  box-shadow: 0 8px 18px rgba(90, 67, 41, 0.14);
+  transform: translateY(-1px);
+}
+
+.icon-button:focus-visible {
+  outline: none;
+}
+
 .github-button {
   display: inline-flex;
   align-items: center;
@@ -589,6 +602,11 @@ a.secondary-button {
   color: #60736a;
 }
 
+.empty-action {
+  align-items: center;
+  justify-content: flex-start;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -675,6 +693,29 @@ a.secondary-button {
 
 .move-team .error {
   grid-column: 1 / -1;
+}
+
+.active-team-note {
+  display: grid;
+  gap: 5px;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid rgba(96, 75, 53, 0.14);
+  border-radius: 7px;
+  background: rgba(244, 240, 229, 0.72);
+}
+
+.active-team-note span {
+  color: #6a776f;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.active-team-note strong {
+  overflow: hidden;
+  color: #24352f;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .panel {
@@ -875,6 +916,32 @@ a.secondary-button {
   box-shadow: 0 4px 12px rgba(90, 67, 41, 0.12);
 }
 
+.side-team {
+  display: grid;
+  gap: 8px;
+  padding: 12px 6px 0;
+  border-top: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.side-team-select {
+  display: grid;
+  gap: 7px;
+}
+
+.side-team-select span {
+  color: #6a776f;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.side-team-select select {
+  min-height: 38px;
+}
+
+.side-team-error {
+  font-size: 12px;
+}
+
 .side-foot {
   margin-top: auto;
   display: grid;
@@ -920,20 +987,6 @@ a.secondary-button {
 .side-logout:hover {
   border-color: rgba(157, 63, 48, 0.4);
   color: #9d3f30;
-}
-
-.side-repo {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #6a776f;
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.side-repo:hover {
-  color: #2f6f5c;
 }
 
 .workspace {
@@ -985,23 +1038,6 @@ a.secondary-button {
   gap: 8px;
   justify-items: start;
   padding-top: 4px;
-}
-
-.inline-select {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #60736a;
-}
-
-.inline-select span {
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
-.inline-select select {
-  width: auto;
-  min-height: 38px;
 }
 
 .table-panel {
@@ -1085,6 +1121,10 @@ a.secondary-button {
   background: #fbf7ec;
   box-shadow: -30px 0 70px rgba(90, 67, 41, 0.22);
   animation: drawer-slide 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.drawer-panel.wide {
+  width: min(680px, calc(100vw - 28px));
 }
 
 .drawer-head {
@@ -1695,6 +1735,12 @@ a.secondary-button {
     flex: 1;
   }
 
+  .side-team {
+    flex: 1 1 220px;
+    padding: 0;
+    border-top: 0;
+  }
+
   .side-foot {
     margin-top: 0;
     grid-auto-flow: column;
@@ -1784,6 +1830,11 @@ a.secondary-button {
 
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .drawer-panel,
+  .drawer-panel.wide {
+    width: 100%;
   }
 
   .command-block span,

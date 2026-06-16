@@ -74,7 +74,7 @@ export function ImagesView({ token }: { token: string }) {
   return (
     <>
       <WorkspaceHead
-        eyebrow="admin"
+        eyebrow="admin / global"
         title="Images"
         actions={(
           <button className="primary-button" type="button" onClick={() => setAddOpen(true)}>
@@ -85,6 +85,7 @@ export function ImagesView({ token }: { token: string }) {
       />
 
       <div className="workspace-body">
+        <p className="hint">Golden images are global per provider and are not scoped to a team.</p>
         {notice ? <p className="hint">{notice}</p> : null}
         <div className="panel table-panel">
           {images.error ? <p className="error panel-error">{(images.error as Error).message}</p> : null}

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRightLeft, ChevronRight, MonitorDot, Plus, RefreshCw, Server, Trash2 } from "lucide-react";
+import { ArrowRightLeft, ChevronRight, MonitorDot, Plus, Server, Trash2 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { CommandBlock, installCommand } from "./access";
 import {
@@ -43,7 +43,6 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   const [name, setName] = useState("");
   const [tier, setTier] = useState<MachineTier>("small");
   const [provider, setProvider] = useState("");
-  const [team, setTeam] = useState("");
   const queryClient = useQueryClient();
   const providers = useQuery({
     queryKey: ["providers"],
@@ -57,10 +56,11 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   const providerList = providers.data?.providers || [];
   const defaultProvider = providerList.find((option) => option.default)?.name || providerList[0]?.name || "";
   const defaultTeam = activeTeam ? activeTeam.slug || activeTeam.id : teams[0]?.slug || teams[0]?.id || "";
+  const activeTeamID = activeTeam?.id || "";
   const createMachine = useMutation({
     mutationFn: () => apiFetch<MachineResponse>("/v1/machines", token, {
       method: "POST",
-      body: { name, tier, ...(provider ? { provider } : {}), ...((team || defaultTeam) ? { team: team || defaultTeam } : {}) },
+      body: { name, tier, ...(provider ? { provider } : {}), ...(defaultTeam ? { team: defaultTeam } : {}) },
     }),
     onSuccess: (data) => {
       setName("");
@@ -81,9 +81,16 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
       method: "POST",
       body: { team: input.team },
     }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["machines", token] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["machines", token] });
+      void navigate({ to: "/" });
+    },
   });
-  const machineList = useMemo(() => [...(machines.data?.machines || [])].sort((a, b) => a.name.localeCompare(b.name)), [machines.data]);
+  const allMachines = useMemo(() => [...(machines.data?.machines || [])].sort((a, b) => a.name.localeCompare(b.name)), [machines.data]);
+  const machineList = useMemo(() => {
+    if (!activeTeamID) return allMachines;
+    return allMachines.filter((machine) => (machine.team_id || machine.org_id) === activeTeamID);
+  }, [activeTeamID, allMachines]);
   const selectedMachine = selectedName ? machineList.find((machine) => machine.name === selectedName) : undefined;
   const missingName = selectedName && machines.data && !selectedMachine ? selectedName : undefined;
   const connect = useQuery({
@@ -94,7 +101,6 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
 
   const createError = createMachine.error ? (createMachine.error as Error).message : "";
   const paymentRequired = createError.includes("/billing") || createError.toLowerCase().includes("free tier");
-  const billingTeamRef = team || defaultTeam;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -107,15 +113,10 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
         eyebrow="console"
         title="Boxes"
         actions={(
-          <>
-            <button className="icon-button" type="button" onClick={() => void machines.refetch()} title="Refresh" aria-label="Refresh boxes">
-              <RefreshCw size={16} />
-            </button>
-            <button className="primary-button" type="button" onClick={() => setAddOpen(true)}>
-              <Plus size={16} />
-              New box
-            </button>
-          </>
+          <button className="primary-button" type="button" onClick={() => setAddOpen(true)}>
+            <Plus size={16} />
+            New box
+          </button>
         )}
       />
 
@@ -129,7 +130,6 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
                   <th>Name</th>
                   <th>Location</th>
                   <th>Endpoint</th>
-                  <th>Team</th>
                   <th aria-label="Open" />
                 </tr>
               </thead>
@@ -144,7 +144,6 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
                     <td><strong>{machine.name}</strong></td>
                     <td>{machine.provider_label || machine.provider || "-"} / {machine.region || "-"}</td>
                     <td><code title={machine.preview_hostname || machine.public_ipv4 || ""}>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code></td>
-                    <td>{machine.team_name || machine.team_slug || "-"}</td>
                     <td className="cell-chevron"><ChevronRight size={16} /></td>
                   </tr>
                 ))}
@@ -154,6 +153,10 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
         ) : machines.isLoading ? (
           <div className="panel">
             <div className="empty"><Server size={22} /><span>Loading boxes</span></div>
+          </div>
+        ) : allMachines.length ? (
+          <div className="panel">
+            <NoTeamBoxes teamName={activeTeam?.name || "this team"} onCreate={() => setAddOpen(true)} />
           </div>
         ) : (
           <div className="panel"><GettingStarted onCreate={() => setAddOpen(true)} /></div>
@@ -185,14 +188,10 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
             </select>
           </label>
           {teams.length ? (
-            <label>
-              Team
-              <select value={team || defaultTeam} onChange={(event) => setTeam(event.target.value)}>
-                {teams.map((option) => (
-                  <option value={option.slug || option.id} key={option.id}>{option.name}{option.id === activeTeam?.id ? " (active)" : ""}</option>
-                ))}
-              </select>
-            </label>
+            <div className="active-team-note">
+              <span>Active team</span>
+              <strong>{activeTeam?.name || teams[0]?.name || "Team"}</strong>
+            </div>
           ) : null}
           <button className="primary-button" type="submit" disabled={createMachine.isPending}>
             <Plus size={16} />
@@ -204,11 +203,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
               {paymentRequired ? (
                 <>
                   {" "}
-                  {billingTeamRef ? (
-                    <Link className="link-button" to="/billing/$team" params={{ team: billingTeamRef }}>Upgrade</Link>
-                  ) : (
-                    <Link className="link-button" to="/billing">Upgrade</Link>
-                  )}
+                  <Link className="link-button" to="/billing">Upgrade</Link>
                 </>
               ) : null}
             </p>
@@ -274,6 +269,16 @@ function GettingStarted({ onCreate }: { onCreate: () => void }) {
   );
 }
 
+function NoTeamBoxes({ teamName, onCreate }: { teamName: string; onCreate: () => void }) {
+  return (
+    <div className="empty empty-action">
+      <Server size={22} />
+      <span>No boxes in {teamName}.</span>
+      <button className="link-button" type="button" onClick={onCreate}>Create one</button>
+    </div>
+  );
+}
+
 function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClose, onDestroy, destroying, onMove, moving, moveError }: {
   open: boolean;
   machine?: Machine;
@@ -291,6 +296,7 @@ function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClos
   if (machine) {
     return (
       <Drawer
+        wide
         open={open}
         onClose={onClose}
         eyebrow={connect?.status || "box"}
@@ -326,7 +332,7 @@ function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClos
   }
 
   return (
-    <Drawer open={open} onClose={onClose} eyebrow="box" title={missingName || "Box"}>
+    <Drawer wide open={open} onClose={onClose} eyebrow="box" title={missingName || "Box"}>
       {missingName ? (
         <div className="detail-notfound">
           <Server size={32} />

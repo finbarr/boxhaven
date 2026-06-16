@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { CreditCard, Layers, LogOut, Server, Users } from "lucide-react";
 import { ReactNode } from "react";
+import { TeamInfo } from "./api";
 import logoURL from "./assets/boxhaven-logo.png";
 
 export const repoURL = "https://github.com/finbarr/boxhaven";
@@ -10,10 +11,15 @@ export type ConsoleSection = "boxes" | "team" | "images" | "billing";
 // Authed console frame: a persistent left nav sidebar plus the workspace where
 // each section renders its full-width tables. activeSection drives the
 // highlighted nav item (so /boxes/$name keeps "Boxes" lit).
-export function ConsoleShell({ activeSection, isAdmin, email, onLogout, children }: {
+export function ConsoleShell({ activeSection, isAdmin, email, teams = [], activeTeam, teamSwitching = false, teamSwitchError = "", onTeamSwitch, onLogout, children }: {
   activeSection: ConsoleSection;
   isAdmin: boolean;
   email?: string;
+  teams?: TeamInfo[];
+  activeTeam?: TeamInfo;
+  teamSwitching?: boolean;
+  teamSwitchError?: string;
+  onTeamSwitch?: (teamId: string) => void;
   onLogout: () => void;
   children: ReactNode;
 }) {
@@ -44,6 +50,15 @@ export function ConsoleShell({ activeSection, isAdmin, email, onLogout, children
             Billing
           </Link>
         </nav>
+        {teams.length ? (
+          <TeamSwitcher
+            teams={teams}
+            activeTeam={activeTeam}
+            switching={teamSwitching}
+            error={teamSwitchError}
+            onSwitch={onTeamSwitch}
+          />
+        ) : null}
         <div className="side-foot">
           <div className="side-account">
             <span>signed in</span>
@@ -53,13 +68,36 @@ export function ConsoleShell({ activeSection, isAdmin, email, onLogout, children
             <LogOut size={16} />
             Log out
           </button>
-          <a className="side-repo" href={repoURL} target="_blank" rel="noreferrer">
-            <GitHubMark size={14} />
-            GitHub
-          </a>
         </div>
       </aside>
       <div className="workspace">{children}</div>
+    </div>
+  );
+}
+
+function TeamSwitcher({ teams, activeTeam, switching, error, onSwitch }: {
+  teams: TeamInfo[];
+  activeTeam?: TeamInfo;
+  switching: boolean;
+  error: string;
+  onSwitch?: (teamId: string) => void;
+}) {
+  const selected = activeTeam?.id || teams[0]?.id || "";
+  return (
+    <div className="side-team">
+      <label className="side-team-select">
+        <span>Active team</span>
+        <select
+          value={selected}
+          disabled={teams.length < 2 || switching}
+          onChange={(event) => onSwitch?.(event.target.value)}
+        >
+          {teams.map((team) => (
+            <option value={team.id} key={team.id}>{team.name}</option>
+          ))}
+        </select>
+      </label>
+      {error ? <p className="error side-team-error">{error}</p> : null}
     </div>
   );
 }

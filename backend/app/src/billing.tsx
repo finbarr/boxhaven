@@ -1,5 +1,4 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowUpRight, CreditCard } from "lucide-react";
 import { apiFetch, BillingResponse, BillingStatus } from "./api";
 import { useConsole } from "./console-context";
@@ -9,7 +8,6 @@ import { WorkspaceHead } from "./shell";
 // session's active team (or first team) is shown.
 export function BillingView({ teamRef }: { teamRef?: string }) {
   const { token, teams, activeTeam } = useConsole();
-  const navigate = useNavigate();
   const defaultTeam = activeTeam ? activeTeam.slug || activeTeam.id : teams[0]?.slug || teams[0]?.id || "";
   const selectedTeam = teamRef || defaultTeam;
   const billing = useQuery({
@@ -30,24 +28,11 @@ export function BillingView({ teamRef }: { teamRef?: string }) {
   });
 
   const info = billing.data;
-  const teamSelector = teams.length > 1 ? (
-    <label className="inline-select">
-      <span>Team</span>
-      <select
-        value={selectedTeam}
-        onChange={(event) => void navigate({ to: "/billing/$team", params: { team: event.target.value } })}
-      >
-        {teams.map((option) => (
-          <option value={option.slug || option.id} key={option.id}>{option.name}{option.id === activeTeam?.id ? " (active)" : ""}</option>
-        ))}
-      </select>
-    </label>
-  ) : undefined;
 
   if (info && !info.enabled) {
     return (
       <>
-        <WorkspaceHead eyebrow="billing" title="Billing" actions={teamSelector} />
+        <WorkspaceHead eyebrow="billing" title="Billing" />
         <div className="workspace-body billing-body">
           <div className="panel">
             <div className="panel-heading small">
@@ -63,11 +48,8 @@ export function BillingView({ teamRef }: { teamRef?: string }) {
 
   return (
     <>
-      <WorkspaceHead eyebrow="billing" title="Billing" actions={teamSelector} />
+      <WorkspaceHead eyebrow="billing" title="Billing" />
       <div className="workspace-body billing-body">
-        {teams.length > 1 ? (
-          <p className="hint">Billing is per team: your personal team carries your free allowance, shared teams subscribe separately.</p>
-        ) : null}
         {billing.isLoading ? (
           <div className="panel"><p className="hint">Loading billing</p></div>
         ) : null}

@@ -4,13 +4,14 @@ import { createPortal } from "react-dom";
 
 // Right-side overlay panel used for "Add" forms and row detail/edit across the
 // console. Closes on Escape or a backdrop click.
-export function Drawer({ open, onClose, eyebrow, title, children, footer }: {
+export function Drawer({ open, onClose, eyebrow, title, children, footer, wide = false }: {
   open: boolean;
   onClose: () => void;
   eyebrow?: string;
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  wide?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -24,7 +25,7 @@ export function Drawer({ open, onClose, eyebrow, title, children, footer }: {
   if (!open) return null;
   return createPortal(
     <div className="drawer-overlay" onClick={onClose}>
-      <aside className="drawer-panel" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <aside className={wide ? "drawer-panel wide" : "drawer-panel"} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <header className="drawer-head">
           <div className="panel-heading small">
             {eyebrow ? <span>{eyebrow}</span> : null}

@@ -43,37 +43,18 @@ type OrgMachinesResponse = {
 const memberRoles = ["member", "admin", "owner"] as const;
 
 // teamRef is the /team/$team path param (slug or id). Without it, the
-// session's active team is shown. A deep-link visit only VIEWS the team —
-// only the selector below re-pins the session's active team.
+// session's active team from the shared console switcher is shown.
 export function TeamView({ teamRef }: { teamRef?: string }) {
   const { token, user, activeTeam } = useConsole();
   const activeTeamId = activeTeam?.id;
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const orgs = useQuery({
     queryKey: ["orgs", token],
     queryFn: () => apiFetch<Organization[]>("/v1/auth/organization/list", token),
-  });
-  const setActive = useMutation({
-    mutationFn: (organizationId: string) => apiFetch("/v1/auth/organization/set-active", token, {
-      method: "POST",
-      body: { organizationId },
-    }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["session", token] }),
   });
   const orgList = orgs.data || [];
   const viewedOrg = teamRef
     ? orgList.find((org) => org.slug === teamRef || org.id === teamRef)
     : orgList.find((org) => org.id === activeTeamId) || orgList[0];
-
-  function selectOrg(id: string) {
-    const org = orgList.find((candidate) => candidate.id === id);
-    if (!org) return;
-    void navigate({ to: "/team/$team", params: { team: org.slug || org.id } });
-    // The selector both navigates AND re-pins the session's active team, so
-    // the dropdown never disagrees with where new boxes land.
-    if (id !== activeTeamId) setActive.mutate(id);
-  }
 
   if (orgs.isLoading) {
     return (
@@ -115,10 +96,7 @@ export function TeamView({ teamRef }: { teamRef?: string }) {
       token={token}
       user={user}
       org={viewedOrg}
-      orgList={orgList}
       activeTeamId={activeTeamId}
-      onSelectOrg={selectOrg}
-      switchError={setActive.error ? (setActive.error as Error).message : ""}
     />
   );
 }
@@ -171,14 +149,11 @@ function CreateTeamPanel({ token }: { token: string }) {
   );
 }
 
-function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, switchError }: {
+function TeamDetail({ token, user, org, activeTeamId }: {
   token: string;
   user?: AuthUser;
   org: Organization;
-  orgList: Organization[];
   activeTeamId?: string;
-  onSelectOrg: (id: string) => void;
-  switchError: string;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -271,6 +246,8 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
   const canManage = callerRoles.includes("owner") || callerRoles.includes("admin");
   const pendingInvitations = (invitations.data || []).filter((invitation) => invitation.status === "pending");
   const machineList = orgMachines.data?.machines || [];
+  const onlyMember = memberList.length === 1;
+  const orgIsActive = org.id === activeTeamId;
 
   function submitInvite(event: FormEvent) {
     event.preventDefault();
@@ -284,16 +261,6 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
         title={org.name}
         actions={(
           <>
-            {orgList.length > 1 ? (
-              <label className="inline-select">
-                <span>Team</span>
-                <select value={org.id} onChange={(event) => onSelectOrg(event.target.value)}>
-                  {orgList.map((option) => (
-                    <option value={option.id} key={option.id}>{option.name}{option.id === activeTeamId ? " (active)" : ""}</option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
             <button className="secondary-button" type="button" onClick={() => setNewTeamOpen(true)}>
               <Plus size={16} />
               New team
@@ -309,7 +276,6 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
       />
 
       <div className="workspace-body">
-        {switchError ? <p className="error">{switchError}</p> : null}
         <TeamBillingHint token={token} org={org} />
 
         <div className="panel table-panel">
@@ -328,36 +294,44 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
               </tr>
             </thead>
             <tbody>
-              {memberList.map((member) => (
-                <tr key={member.id}>
-                  <td>{member.user?.email || "-"}</td>
-                  <td>{member.user?.name || "-"}</td>
-                  <td>
-                    <select
-                      value={member.role}
-                      disabled={!canManage || updateRole.isPending}
-                      onChange={(event) => updateRole.mutate({ memberId: member.id, role: event.target.value })}
-                    >
-                      {memberRoles.map((role) => (
-                        <option value={role} key={role}>{role}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <button
-                      className="danger-button"
-                      type="button"
-                      disabled={!canManage || removeMember.isPending}
-                      onClick={() => {
-                        if (window.confirm(`Remove ${member.user?.email || "this member"} from ${org.name}?`)) removeMember.mutate(member.id);
-                      }}
-                    >
-                      <Trash2 size={14} />
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {memberList.map((member) => {
+                const isSelf = member.userId === user?.id;
+                const selfOnlyMember = onlyMember && isSelf;
+                const roleDisabled = !canManage || updateRole.isPending || selfOnlyMember;
+                const removeDisabled = !canManage || removeMember.isPending || onlyMember;
+                return (
+                  <tr key={member.id}>
+                    <td>{member.user?.email || "-"}</td>
+                    <td>{member.user?.name || "-"}</td>
+                    <td>
+                      <select
+                        value={member.role}
+                        disabled={roleDisabled}
+                        title={selfOnlyMember ? "The only team member must keep their role" : undefined}
+                        onChange={(event) => updateRole.mutate({ memberId: member.id, role: event.target.value })}
+                      >
+                        {memberRoles.map((role) => (
+                          <option value={role} key={role}>{role}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <button
+                        className="danger-button"
+                        type="button"
+                        disabled={removeDisabled}
+                        title={onlyMember ? "Cannot remove the only team member" : undefined}
+                        onClick={() => {
+                          if (window.confirm(`Remove ${member.user?.email || "this member"} from ${org.name}?`)) removeMember.mutate(member.id);
+                        }}
+                      >
+                        <Trash2 size={14} />
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {!memberList.length ? (
@@ -427,8 +401,17 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
             <h2>This team's boxes</h2>
           </div>
           <p className="hint">
-            New boxes land here while <strong>{org.name}</strong> is your active team, or target it directly:{" "}
-            <code>bh create work --team {org.slug || org.name}</code>
+            {orgIsActive ? (
+              <>
+                New boxes land in <strong>{org.name}</strong>, or target it directly:{" "}
+                <code>bh create work --team {org.slug || org.name}</code>
+              </>
+            ) : (
+              <>
+                This is not the active team. Switch to <strong>{org.name}</strong> in the sidebar, or target it directly:{" "}
+                <code>bh create work --team {org.slug || org.name}</code>
+              </>
+            )}
           </p>
           {orgMachines.error ? <p className="error panel-error">{(orgMachines.error as Error).message}</p> : null}
           <table className="data-table">

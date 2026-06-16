@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { AccessPanel, LandingPage } from "../../access";
@@ -36,6 +36,26 @@ function ConsoleLayout() {
   const activeSection: ConsoleSection = onTeam ? "team" : onImages ? "images" : (onHome || onBox) ? "boxes" : "billing";
   // Surfaced in the sign-in hint when someone deep-links to /device.
   const deviceUserCode = typeof search.user_code === "string" ? search.user_code : "";
+  const switchTeam = useMutation({
+    mutationFn: (organizationId: string) => apiFetch("/v1/auth/organization/set-active", token, {
+      method: "POST",
+      body: { organizationId },
+    }),
+    onSuccess: (_data, organizationId) => {
+      const team = (session.data?.teams || []).find((candidate) => candidate.id === organizationId);
+      const teamRef = team?.slug || team?.id || organizationId;
+      void queryClient.invalidateQueries({ queryKey: ["session", token] });
+      void queryClient.invalidateQueries({ queryKey: ["machines", token] });
+      void queryClient.invalidateQueries({ queryKey: ["billing"] });
+      if (activeSection === "team") {
+        void navigate({ to: "/team/$team", params: { team: teamRef } });
+      } else if (activeSection === "billing") {
+        void navigate({ to: "/billing/$team", params: { team: teamRef } });
+      } else if (onBox) {
+        void navigate({ to: "/" });
+      }
+    },
+  });
 
   function handleToken(nextToken: string) {
     localStorage.setItem(tokenKey, nextToken);
@@ -50,6 +70,11 @@ function ConsoleLayout() {
     setToken("");
     queryClient.clear();
     void navigate({ to: "/" });
+  }
+
+  function handleTeamSwitch(organizationId: string) {
+    if (!organizationId || organizationId === session.data?.team?.id || switchTeam.isPending) return;
+    switchTeam.mutate(organizationId);
   }
 
   if (token && session.isPending) {
@@ -107,6 +132,11 @@ function ConsoleLayout() {
         activeSection={activeSection}
         isAdmin={isAdmin}
         email={session.data?.user?.email}
+        teams={consoleValue.teams}
+        activeTeam={consoleValue.activeTeam}
+        teamSwitching={switchTeam.isPending}
+        teamSwitchError={switchTeam.error ? (switchTeam.error as Error).message : ""}
+        onTeamSwitch={handleTeamSwitch}
         onLogout={handleLogout}
       >
         <Outlet />
