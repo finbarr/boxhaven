@@ -228,7 +228,7 @@ image for that provider.
 bh image ls
 bh image create work            # snapshot the box "work" into a golden image
 bh create work-clone --image <image-id>
-bh image rm <image-id>
+bh image rm <image-id> --force
 ```
 
 ## GitHub Repository Access

@@ -5,7 +5,7 @@ The `bh` CLI is intentionally small. This page covers every command and flag.
 ```text
 bh create <name> [--provider <name>] [--tier small|medium|large] [--region <region>] [--image <image>] [--team <team>] [--no-sync]
 bh list
-bh destroy <name>
+bh destroy <name> [--force]
 bh rename <old-name> <new-name>
 bh move <name> <team>
 bh connect <name>
@@ -130,24 +130,27 @@ Moves one of your boxes to another of your teams. See [Teams](/teams).
 ## bh destroy
 
 ```bash
-bh destroy <name>
+bh destroy <name> [--force]
 ```
 
 Destroys the box and its provider VM. Owners and admins can destroy team
 boxes; members can only destroy their own (see `bh team destroy` below for
-removing a teammate's box).
+removing a teammate's box). Without `--force`, the CLI prompts for
+confirmation in interactive terminals and refuses to continue in noninteractive
+sessions.
 
 ## bh image
 
 ```bash
 bh image ls [--provider <name>]
 bh image create <machine> [--name <name>]
-bh image rm <id> [--provider <name>]
+bh image rm <id> [--provider <name>] [--force]
 ```
 
 Images belong to the active team. Pass an image id to `bh create --image <id>`
 when creating a box; without `--provider` image commands use the backend's
-default provider. See [Images](/images) for the full workflow.
+default provider. `bh image rm` prompts unless `--force` is passed. See
+[Images](/images) for the full workflow.
 
 ## bh team
 
@@ -159,12 +162,12 @@ bh team status
 bh team members [--team <slug-or-id>]
 bh team invite <email> [--role member|admin|owner] [--team <slug-or-id>]
 bh team boxes [--team <slug-or-id>]
-bh team destroy <box> --force [--team <slug-or-id>]
+bh team destroy <box> [--force] [--team <slug-or-id>]
 ```
 
 `--team` is optional when you belong to exactly one team. `bh team destroy`
-removes a teammate's box; it requires the owner or admin role. See
-[Teams](/teams) for the team workflow.
+removes a teammate's box; it requires the owner or admin role and prompts
+unless `--force` is passed. See [Teams](/teams) for the team workflow.
 
 ## bh login
 

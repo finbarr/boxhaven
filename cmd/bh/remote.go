@@ -109,7 +109,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  bh status <name>")
 	fmt.Fprintln(os.Stderr, "  bh rename <old-name> <new-name>")
 	fmt.Fprintln(os.Stderr, "  bh move <name> <team>")
-	fmt.Fprintln(os.Stderr, "  bh destroy <name>")
+	fmt.Fprintln(os.Stderr, "  bh destroy <name> [--force]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "OPTIONS:")
 	fmt.Fprintln(os.Stderr, "  --no-sync            Skip the create command's initial project sync")
@@ -121,6 +121,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  --team <team>        Team that owns the new box (defaults to your active team)")
 	fmt.Fprintln(os.Stderr, "  --ssh-user <user>    SSH user for create")
 	fmt.Fprintln(os.Stderr, "  --backend-url <url>  Remote backend API URL for create")
+	fmt.Fprintln(os.Stderr, "  --force              Skip destructive confirmation prompts")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "EXAMPLES:")
 	fmt.Fprintln(os.Stderr, "  bh login")
@@ -500,10 +501,13 @@ func runRemoteDestroy(args []string, projectDir string) error {
 		return fmt.Errorf("bh destroy requires a remote name")
 	}
 	name := ""
+	force := false
 	for _, arg := range args {
-		switch arg {
-		case "--force":
-			continue
+		switch {
+		case arg == "--force":
+			force = true
+		case strings.HasPrefix(arg, "-"):
+			return fmt.Errorf("unknown bh destroy option: %s", arg)
 		default:
 			if name != "" {
 				return fmt.Errorf("unexpected destroy argument: %s", arg)
@@ -519,6 +523,9 @@ func runRemoteDestroy(args []string, projectDir string) error {
 	}
 	cfg, err := loadConfig(projectDir)
 	if err != nil {
+		return err
+	}
+	if err := confirmDestructiveAction(fmt.Sprintf("Destroy remote %s", name), force); err != nil {
 		return err
 	}
 	if err := releaseRemoteBackendMachine(cfg, name); err != nil {

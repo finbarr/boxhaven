@@ -61,10 +61,11 @@ Owners and admins can destroy team boxes; members can only destroy their own.
 Owners and admins can remove a teammate's box with:
 
 ```bash
-bh team destroy <box> --force [--team <slug>]
+bh team destroy <box> [--force] [--team <slug>]
 ```
 
-or from the console.
+or from the console. Without `--force`, the CLI prompts before destroying the
+box and refuses to continue in noninteractive terminals.
 
 ## Inspect Teams From The CLI
 

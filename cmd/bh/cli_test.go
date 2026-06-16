@@ -184,6 +184,29 @@ func TestRemoteVMInstallSupportsGhosttyTerminfo(t *testing.T) {
 	}
 }
 
+func TestConfirmDestructiveActionRequiresForceWithoutTTY(t *testing.T) {
+	if err := confirmDestructiveAction("Destroy test", true); err != nil {
+		t.Fatal(err)
+	}
+
+	oldStdin := os.Stdin
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = write.Close()
+	os.Stdin = read
+	defer func() {
+		os.Stdin = oldStdin
+		_ = read.Close()
+	}()
+
+	err = confirmDestructiveAction("Destroy test", false)
+	if err == nil || !strings.Contains(err.Error(), "pass --force") {
+		t.Fatalf("confirmDestructiveAction error = %v, want pass --force", err)
+	}
+}
+
 func TestTeamActiveLabel(t *testing.T) {
 	cases := []struct {
 		team *teamOrganization

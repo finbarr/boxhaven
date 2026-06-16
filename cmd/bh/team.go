@@ -129,10 +129,11 @@ func printTeamUsage() {
 	fmt.Fprintln(os.Stderr, "  bh team members [--team <slug-or-id>]")
 	fmt.Fprintln(os.Stderr, "  bh team invite <email> [--role member|admin|owner] [--team <slug-or-id>]")
 	fmt.Fprintln(os.Stderr, "  bh team boxes [--team <slug-or-id>]")
-	fmt.Fprintln(os.Stderr, "  bh team destroy <box> --force [--team <slug-or-id>]")
+	fmt.Fprintln(os.Stderr, "  bh team destroy <box> [--force] [--team <slug-or-id>]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "--team is optional when you belong to exactly one team.")
-	fmt.Fprintln(os.Stderr, "destroy removes a teammate's box; it requires the owner or admin role.")
+	fmt.Fprintln(os.Stderr, "destroy removes a teammate's box; it requires the owner or admin role")
+	fmt.Fprintln(os.Stderr, "and prompts unless --force is passed.")
 }
 
 func parseTeamArgs(command string, args []string, wantPositional bool) (string, string, string, error) {
@@ -226,11 +227,11 @@ func runTeamDestroy(args []string, projectDir string) error {
 		return fmt.Errorf("no box named %s in %s", name, teamLabel)
 	}
 	owner := firstNonEmpty(target.OwnerEmail, target.OwnerName, target.UserID)
-	if !force {
-		return fmt.Errorf("bh team destroy removes %s owned by %s; pass --force to continue", name, owner)
-	}
 	if target.UserID == "" {
 		return fmt.Errorf("box %s has no owner id; destroy it from the console instead", name)
+	}
+	if err := confirmDestructiveAction(fmt.Sprintf("Destroy box %s owned by %s in team %s", name, owner, teamLabel), force); err != nil {
+		return err
 	}
 	endpoint := "/v1/orgs/" + url.PathEscape(org.ID) + "/machines/" + url.PathEscape(target.UserID) + "/" + url.PathEscape(name)
 	if err := remoteBackendRequest(cfg, http.MethodDelete, endpoint, nil, nil); err != nil {

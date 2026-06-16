@@ -19,7 +19,7 @@ console Images page or the CLI:
 bh image ls
 bh image create work            # snapshot the box "work" into a team image
 bh create work-clone --image <image-id>
-bh image rm <image-id>
+bh image rm <image-id> --force
 ```
 
 `bh image create` snapshots one of your own boxes in the active team; the
@@ -29,7 +29,8 @@ it as `available`.
 
 Without `--provider`, image commands use the backend's default provider. When
 creating a box without `--image`, BoxHaven uses the provider's configured
-default image.
+default image. Without `--force`, `bh image rm` prompts before deleting the
+image and refuses to continue in noninteractive terminals.
 
 Keep the previous image around until a new box has been created from the new
 image and verified.

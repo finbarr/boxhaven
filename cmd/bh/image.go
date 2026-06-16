@@ -55,10 +55,11 @@ func printImageUsage() {
 	fmt.Fprintln(os.Stderr, "USAGE:")
 	fmt.Fprintln(os.Stderr, "  bh image ls [--provider <name>]")
 	fmt.Fprintln(os.Stderr, "  bh image create <machine> [--name <name>]")
-	fmt.Fprintln(os.Stderr, "  bh image rm <id> [--provider <name>]")
+	fmt.Fprintln(os.Stderr, "  bh image rm <id> [--provider <name>] [--force]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Images belong to the active team. Pass one to `bh create --image <id>`")
 	fmt.Fprintln(os.Stderr, "when creating a box; otherwise BoxHaven uses its default image.")
+	fmt.Fprintln(os.Stderr, "Removing an image prompts unless --force is passed.")
 }
 
 func parseImageArgs(command string, args []string, wantPositional bool) (string, string, error) {
@@ -184,7 +185,16 @@ func runImageCreate(args []string, projectDir string) error {
 }
 
 func runImageRemove(args []string, projectDir string) error {
-	id, provider, err := parseImageArgs("rm", args, true)
+	filtered := make([]string, 0, len(args))
+	force := false
+	for _, arg := range args {
+		if arg == "--force" {
+			force = true
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+	id, provider, err := parseImageArgs("rm", filtered, true)
 	if err != nil {
 		return err
 	}
@@ -193,6 +203,9 @@ func runImageRemove(args []string, projectDir string) error {
 	}
 	cfg, err := loadConfig(projectDir)
 	if err != nil {
+		return err
+	}
+	if err := confirmDestructiveAction(fmt.Sprintf("Delete image %s", id), force); err != nil {
 		return err
 	}
 	endpoint := "/v1/images/" + url.PathEscape(id)

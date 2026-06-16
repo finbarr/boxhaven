@@ -211,4 +211,5 @@ bh destroy work
 ```
 
 Destroy boxes when the work is done so the cloud provider does not keep billing
-for idle machines.
+for idle machines. The CLI prompts before destroying; pass `--force` only for
+noninteractive cleanup scripts.
