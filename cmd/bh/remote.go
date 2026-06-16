@@ -1103,7 +1103,7 @@ func syncRemoteAuthState(machine remoteMachine, projectDir string) error {
 	script.WriteString(remoteGitIdentityScript(currentGitIdentity(projectDir)))
 	script.WriteString(remoteAuthFilesScript(machine, localRemoteAuthFiles(machine.SSHUser)))
 	info("Syncing session auth to remote %s", machine.Name)
-	return runSSHCommand(machine, script.String(), false, false)
+	return runSSHCommand(machine, "bash -s", false, false, strings.NewReader(script.String()))
 }
 
 func remoteSessionEnvScript(env map[string]string) string {
