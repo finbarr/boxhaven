@@ -50,7 +50,7 @@ cleanup() {
   if [ "$keep" != "1" ]; then
     for name in "${created[@]}"; do
       log "destroying ${name}"
-      (cd "$project_dir" && BOXHAVEN_BACKEND_URL="$backend_url" "$bh_bin" destroy "$name") || true
+      (cd "$project_dir" && BOXHAVEN_BACKEND_URL="$backend_url" "$bh_bin" destroy "$name" --force) || true
     done
   else
     log "BOXHAVEN_SMOKE_KEEP=1, leaving boxes: ${created[*]:-(none)}"
