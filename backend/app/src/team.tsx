@@ -6,6 +6,8 @@ import { apiFetch, AuthUser, BillingResponse, formatDate, inviteLink, Machine } 
 import { CommandBlock } from "./access";
 import { statusLabel } from "./billing";
 import { useConsole } from "./console-context";
+import { Drawer } from "./drawer";
+import { WorkspaceHead } from "./shell";
 
 type Organization = {
   id: string;
@@ -183,6 +185,8 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<string>("member");
   const [lastInvitation, setLastInvitation] = useState<Invitation | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [newTeamOpen, setNewTeamOpen] = useState(false);
   const members = useQuery({
     queryKey: ["org-members", org.id, token],
     queryFn: async () => {
@@ -274,77 +278,46 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
   }
 
   return (
-    <section className="dashboard two-col">
-      <aside className="rail rail-grid">
-        <div className="panel-heading small">
-          <span>team / {callerRole}</span>
-          <h2>{org.name}</h2>
-        </div>
-        {orgList.length > 1 ? (
-          <label>
-            Switch team
-            <select value={org.id} onChange={(event) => onSelectOrg(event.target.value)}>
-              {orgList.map((option) => (
-                <option value={option.id} key={option.id}>{option.name}{option.id === activeTeamId ? " (active)" : ""}</option>
-              ))}
-            </select>
-          </label>
-        ) : null}
+    <>
+      <WorkspaceHead
+        eyebrow={`team / ${callerRole}`}
+        title={org.name}
+        actions={(
+          <>
+            {orgList.length > 1 ? (
+              <label className="inline-select">
+                <span>Team</span>
+                <select value={org.id} onChange={(event) => onSelectOrg(event.target.value)}>
+                  {orgList.map((option) => (
+                    <option value={option.id} key={option.id}>{option.name}{option.id === activeTeamId ? " (active)" : ""}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <button className="secondary-button" type="button" onClick={() => setNewTeamOpen(true)}>
+              <Plus size={16} />
+              New team
+            </button>
+            {canManage ? (
+              <button className="primary-button" type="button" onClick={() => { setLastInvitation(null); setInviteOpen(true); }}>
+                <Send size={16} />
+                Invite
+              </button>
+            ) : null}
+          </>
+        )}
+      />
+
+      <div className="workspace-body">
         {switchError ? <p className="error">{switchError}</p> : null}
         <TeamBillingHint token={token} org={org} />
-        <form className="create-form" onSubmit={submitInvite}>
-          <div className="panel-heading small">
-            <span>invite</span>
-            <h2>Add a teammate</h2>
-          </div>
-          <label>
-            Email
-            <input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} type="email" placeholder="friend@example.com" required />
-          </label>
-          <label>
-            Role
-            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)}>
-              {memberRoles.map((role) => (
-                <option value={role} key={role}>{role}</option>
-              ))}
-            </select>
-          </label>
-          <button className="primary-button" type="submit" disabled={invite.isPending}>
-            <Send size={16} />
-            {invite.isPending ? "Inviting" : "Invite"}
-          </button>
-          {invite.error ? <p className="error">{(invite.error as Error).message}</p> : null}
-        </form>
-        {lastInvitation ? (
-          <div className="invite-result">
-            <CommandBlock label="Invite" value={inviteLink(lastInvitation.id)} />
-            <p className="hint">Share this link with <strong>{lastInvitation.email}</strong> — it only works for that email.</p>
-          </div>
-        ) : null}
-        <NewTeamForm token={token} />
-        {!callerRoles.includes("owner") ? (
-          <button
-            className="danger-button"
-            type="button"
-            disabled={leave.isPending}
-            onClick={() => {
-              if (window.confirm(`Leave ${org.name}?`)) leave.mutate();
-            }}
-          >
-            <LogOut size={16} />
-            Leave team
-          </button>
-        ) : null}
-        {leave.error ? <p className="error">{(leave.error as Error).message}</p> : null}
-      </aside>
 
-      <div className="panel-stack">
-        <div className="panel">
+        <div className="panel table-panel">
           <div className="panel-heading small">
             <span>members</span>
             <h2>Team members</h2>
           </div>
-          {members.error ? <p className="error">{(members.error as Error).message}</p> : null}
+          {members.error ? <p className="error panel-error">{(members.error as Error).message}</p> : null}
           <table className="data-table">
             <thead>
               <tr>
@@ -393,12 +366,12 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
               <span>{members.isLoading ? "Loading members" : "No members yet."}</span>
             </div>
           ) : null}
-          {updateRole.error ? <p className="error">{(updateRole.error as Error).message}</p> : null}
-          {removeMember.error ? <p className="error">{(removeMember.error as Error).message}</p> : null}
+          {updateRole.error ? <p className="error panel-error">{(updateRole.error as Error).message}</p> : null}
+          {removeMember.error ? <p className="error panel-error">{(removeMember.error as Error).message}</p> : null}
         </div>
 
         {pendingInvitations.length ? (
-          <div className="panel">
+          <div className="panel table-panel">
             <div className="panel-heading small">
               <span>pending</span>
               <h2>Invitations</h2>
@@ -444,20 +417,20 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
                 ))}
               </tbody>
             </table>
-            {cancelInvitation.error ? <p className="error">{(cancelInvitation.error as Error).message}</p> : null}
+            {cancelInvitation.error ? <p className="error panel-error">{(cancelInvitation.error as Error).message}</p> : null}
           </div>
         ) : null}
 
-        <div className="panel">
+        <div className="panel table-panel">
           <div className="panel-heading small">
             <span>team boxes</span>
             <h2>This team's boxes</h2>
           </div>
           <p className="hint">
-            New boxes land here while <strong>{org.name}</strong> is your active team, or target it directly:
+            New boxes land here while <strong>{org.name}</strong> is your active team, or target it directly:{" "}
+            <code>bh create work --team {org.slug || org.name}</code>
           </p>
-          <p className="hint"><code>bh create work --team {org.slug || org.name}</code></p>
-          {orgMachines.error ? <p className="error">{(orgMachines.error as Error).message}</p> : null}
+          {orgMachines.error ? <p className="error panel-error">{(orgMachines.error as Error).message}</p> : null}
           <table className="data-table">
             <thead>
               <tr>
@@ -506,16 +479,68 @@ function TeamDetail({ token, user, org, orgList, activeTeamId, onSelectOrg, swit
               <span>{orgMachines.isLoading ? "Loading boxes" : "No boxes in this team yet."}</span>
             </div>
           ) : null}
-          {destroyMachine.error ? <p className="error">{(destroyMachine.error as Error).message}</p> : null}
+          {destroyMachine.error ? <p className="error panel-error">{(destroyMachine.error as Error).message}</p> : null}
         </div>
+
+        {!callerRoles.includes("owner") ? (
+          <div className="workspace-foot">
+            <button
+              className="danger-button"
+              type="button"
+              disabled={leave.isPending}
+              onClick={() => {
+                if (window.confirm(`Leave ${org.name}?`)) leave.mutate();
+              }}
+            >
+              <LogOut size={16} />
+              Leave team
+            </button>
+            {leave.error ? <p className="error">{(leave.error as Error).message}</p> : null}
+          </div>
+        ) : null}
       </div>
-    </section>
+
+      <Drawer open={inviteOpen} onClose={() => setInviteOpen(false)} eyebrow="invite" title="Add a teammate">
+        <form className="create-form" onSubmit={submitInvite}>
+          <label>
+            Email
+            <input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} type="email" placeholder="friend@example.com" required />
+          </label>
+          <label>
+            Role
+            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)}>
+              {memberRoles.map((role) => (
+                <option value={role} key={role}>{role}</option>
+              ))}
+            </select>
+          </label>
+          <button className="primary-button" type="submit" disabled={invite.isPending}>
+            <Send size={16} />
+            {invite.isPending ? "Inviting" : "Send invite"}
+          </button>
+          {invite.error ? <p className="error">{(invite.error as Error).message}</p> : null}
+        </form>
+        {lastInvitation ? (
+          <div className="invite-result">
+            <CommandBlock label="Invite" value={inviteLink(lastInvitation.id)} />
+            <p className="hint">Share this link with <strong>{lastInvitation.email}</strong> — it only works for that email.</p>
+          </div>
+        ) : null}
+      </Drawer>
+
+      <Drawer open={newTeamOpen} onClose={() => setNewTeamOpen(false)} eyebrow="teams" title="New team">
+        <NewTeamForm token={token} onCreated={() => setNewTeamOpen(false)} />
+      </Drawer>
+    </>
   );
 }
 
-function NewTeamForm({ token }: { token: string }) {
+function NewTeamForm({ token, onCreated }: { token: string; onCreated?: () => void }) {
   const [name, setName] = useState("");
-  const create = useCreateTeam(token, () => setName(""));
+  const create = useCreateTeam(token, () => {
+    setName("");
+    onCreated?.();
+  });
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -524,10 +549,7 @@ function NewTeamForm({ token }: { token: string }) {
 
   return (
     <form className="create-form" onSubmit={submit}>
-      <div className="panel-heading small">
-        <span>teams</span>
-        <h2>New team</h2>
-      </div>
+      <p className="hint">Create a team to share boxes and invite teammates. It becomes your active team.</p>
       <label>
         Team name
         <input value={name} onChange={(event) => setName(event.target.value)} placeholder="The Treehouse" required />

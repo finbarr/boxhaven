@@ -1,11 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { CreditCard, Layers, LogOut, Server, Users } from "lucide-react";
 import { useState } from "react";
 import { AccessPanel, LandingPage } from "../../access";
 import { apiFetch, tokenKey, WhoamiResponse } from "../../api";
 import { ConsoleProvider } from "../../console-context";
-import { TopBar } from "../../shell";
+import { ConsoleSection, ConsoleShell, TopBar } from "../../shell";
 
 // Pathless authed layout: owns the localStorage token, the whoami session
 // query, the topbar and section nav. Unauthenticated visitors get the
@@ -32,6 +31,9 @@ function ConsoleLayout() {
   const onHome = Boolean(matchRoute({ to: "/", fuzzy: false }));
   const onBox = Boolean(matchRoute({ to: "/boxes/$name" }));
   const onDevice = Boolean(matchRoute({ to: "/device" }));
+  const onTeam = Boolean(matchRoute({ to: "/team" }) || matchRoute({ to: "/team/$team" }));
+  const onImages = Boolean(matchRoute({ to: "/images" }));
+  const activeSection: ConsoleSection = onTeam ? "team" : onImages ? "images" : (onHome || onBox) ? "boxes" : "billing";
   // Surfaced in the sign-in hint when someone deep-links to /device.
   const deviceUserCode = typeof search.user_code === "string" ? search.user_code : "";
 
@@ -78,54 +80,37 @@ function ConsoleLayout() {
     );
   }
 
+  const consoleValue = {
+    token,
+    user: session.data?.user,
+    teams: session.data?.teams || [],
+    activeTeam: session.data?.team || undefined,
+    isAdmin,
+  };
+
+  // The CLI device-approval page is a focused confirmation; render it without
+  // the nav shell so nothing competes with the approve/deny choice.
+  if (onDevice) {
+    return (
+      <>
+        <TopBar subtitle="remote dev boxes" />
+        <ConsoleProvider value={consoleValue}>
+          <Outlet />
+        </ConsoleProvider>
+      </>
+    );
+  }
+
   return (
-    <>
-      <TopBar
-        subtitle="remote dev boxes"
-        nav={onDevice ? undefined : (
-          <nav className="section-tabs">
-            <Link
-              to="/"
-              activeOptions={{ exact: true }}
-              activeProps={{ className: "active" }}
-              className={onBox ? "active" : undefined}
-            >
-              <Server size={15} />
-              Boxes
-            </Link>
-            <Link to="/team" activeProps={{ className: "active" }}>
-              <Users size={15} />
-              Team
-            </Link>
-            {isAdmin ? (
-              <Link to="/images" activeProps={{ className: "active" }}>
-                <Layers size={15} />
-                Images
-              </Link>
-            ) : null}
-            <Link to="/billing" activeProps={{ className: "active" }}>
-              <CreditCard size={15} />
-              Billing
-            </Link>
-          </nav>
-        )}
-        actions={(
-          <button className="icon-button" type="button" onClick={handleLogout} title="Log out" aria-label="Log out">
-            <LogOut size={17} />
-          </button>
-        )}
-      />
-      <ConsoleProvider
-        value={{
-          token,
-          user: session.data?.user,
-          teams: session.data?.teams || [],
-          activeTeam: session.data?.team || undefined,
-          isAdmin,
-        }}
+    <ConsoleProvider value={consoleValue}>
+      <ConsoleShell
+        activeSection={activeSection}
+        isAdmin={isAdmin}
+        email={session.data?.user?.email}
+        onLogout={handleLogout}
       >
         <Outlet />
-      </ConsoleProvider>
-    </>
+      </ConsoleShell>
+    </ConsoleProvider>
   );
 }

@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, Check, Trash2 } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { apiFetch, formatDate, MachinesResponse } from "./api";
+import { Drawer } from "./drawer";
+import { WorkspaceHead } from "./shell";
 
 type MachineImage = {
   id: string;
@@ -20,6 +22,7 @@ type ImagesResponse = {
 
 export function ImagesView({ token }: { token: string }) {
   const queryClient = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
   const [machineName, setMachineName] = useState("");
   const [imageName, setImageName] = useState("");
   const [notice, setNotice] = useState("");
@@ -39,6 +42,7 @@ export function ImagesView({ token }: { token: string }) {
     }),
     onSuccess: (data) => {
       setImageName("");
+      setAddOpen(false);
       setNotice(`Snapshot ${data.image?.name || "request"} accepted — it is being created and will appear in the list shortly.`);
       void queryClient.invalidateQueries({ queryKey: ["images", token] });
     },
@@ -68,43 +72,22 @@ export function ImagesView({ token }: { token: string }) {
   }
 
   return (
-    <section className="dashboard two-col">
-      <aside className="rail rail-grid">
-        <form className="create-form" onSubmit={submitSnapshot}>
-          <div className="panel-heading small">
-            <span>golden images</span>
-            <h2>Snapshot a box</h2>
-          </div>
-          <label>
-            Machine
-            <select value={machineName} onChange={(event) => setMachineName(event.target.value)} required>
-              <option value="" disabled>Select a box</option>
-              {machineList.map((machine) => (
-                <option value={machine.name} key={machine.name}>{machine.name} ({machine.provider_label || machine.provider || "provider"})</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Image name (optional)
-            <input value={imageName} onChange={(event) => setImageName(event.target.value)} placeholder="dev-tools" />
-          </label>
-          <button className="primary-button" type="submit" disabled={snapshot.isPending || !machineName}>
+    <>
+      <WorkspaceHead
+        eyebrow="admin"
+        title="Images"
+        actions={(
+          <button className="primary-button" type="button" onClick={() => setAddOpen(true)}>
             <Camera size={16} />
-            {snapshot.isPending ? "Snapshotting" : "Create snapshot"}
+            Snapshot a box
           </button>
-          {snapshot.error ? <p className="error">{(snapshot.error as Error).message}</p> : null}
-          {notice ? <p className="hint">{notice}</p> : null}
-        </form>
-        <p className="hint">The active image is used for new boxes on that provider.</p>
-      </aside>
+        )}
+      />
 
-      <div className="panel-stack">
-        <div className="panel">
-          <div className="panel-heading small">
-            <span>admin</span>
-            <h2>Images</h2>
-          </div>
-          {images.error ? <p className="error">{(images.error as Error).message}</p> : null}
+      <div className="workspace-body">
+        {notice ? <p className="hint">{notice}</p> : null}
+        <div className="panel table-panel">
+          {images.error ? <p className="error panel-error">{(images.error as Error).message}</p> : null}
           <table className="data-table">
             <thead>
               <tr>
@@ -163,10 +146,34 @@ export function ImagesView({ token }: { token: string }) {
               <span>{images.isLoading ? "Loading images" : "No golden images yet. Snapshot one of your boxes to create one."}</span>
             </div>
           ) : null}
-          {activate.error ? <p className="error">{(activate.error as Error).message}</p> : null}
-          {deleteImage.error ? <p className="error">{(deleteImage.error as Error).message}</p> : null}
+          {activate.error ? <p className="error panel-error">{(activate.error as Error).message}</p> : null}
+          {deleteImage.error ? <p className="error panel-error">{(deleteImage.error as Error).message}</p> : null}
         </div>
       </div>
-    </section>
+
+      <Drawer open={addOpen} onClose={() => setAddOpen(false)} eyebrow="golden images" title="Snapshot a box">
+        <form className="create-form" onSubmit={submitSnapshot}>
+          <label>
+            Machine
+            <select value={machineName} onChange={(event) => setMachineName(event.target.value)} required>
+              <option value="" disabled>Select a box</option>
+              {machineList.map((machine) => (
+                <option value={machine.name} key={machine.name}>{machine.name} ({machine.provider_label || machine.provider || "provider"})</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Image name (optional)
+            <input value={imageName} onChange={(event) => setImageName(event.target.value)} placeholder="dev-tools" />
+          </label>
+          <button className="primary-button" type="submit" disabled={snapshot.isPending || !machineName}>
+            <Camera size={16} />
+            {snapshot.isPending ? "Snapshotting" : "Create snapshot"}
+          </button>
+          {snapshot.error ? <p className="error">{(snapshot.error as Error).message}</p> : null}
+          <p className="hint">The active image is used for new boxes on that provider.</p>
+        </form>
+      </Drawer>
+    </>
   );
 }

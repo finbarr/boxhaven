@@ -36,10 +36,10 @@ button {
 .github-button,
 .icon-button,
 .segmented button,
-.section-tabs a,
 .landing-path,
 .feature-card,
-.machine-row,
+.rows-clickable tbody tr,
+.side-links a,
 input,
 select {
   transition: background 140ms ease, border-color 140ms ease, box-shadow 200ms ease, transform 200ms ease, color 140ms ease;
@@ -133,11 +133,7 @@ select {
 
 .brand,
 .topbar-actions,
-.provider-pill,
-.machine-row,
-.detail-header,
 .command-block,
-.account,
 .empty {
   display: flex;
   align-items: center;
@@ -167,8 +163,6 @@ select {
 }
 
 .brand strong,
-.account strong,
-.section-heading strong,
 .metric strong {
   display: block;
   overflow: hidden;
@@ -186,13 +180,10 @@ select {
 }
 
 .brand span,
-.account span,
-.section-heading span,
 .metric span,
 .command-block span,
 label,
 .meta dt,
-.machine-row small,
 .panel-heading span {
   color: #6a776f;
   font-size: 12px;
@@ -216,8 +207,7 @@ label,
   padding: 0 14px;
 }
 
-.access-layout,
-.dashboard {
+.access-layout {
   position: relative;
   z-index: 1;
   display: grid;
@@ -259,10 +249,7 @@ label,
 
 .logo-stage,
 .terminal-card,
-.auth-panel,
-.rail,
-.machine-table,
-.detail {
+.auth-panel {
   border: 1px solid rgba(96, 75, 53, 0.16);
   border-radius: 8px;
   background: rgba(255, 252, 243, 0.88);
@@ -324,9 +311,7 @@ pre {
   white-space: pre-wrap;
 }
 
-.auth-panel,
-.rail,
-.detail {
+.auth-panel {
   padding: 18px;
 }
 
@@ -371,8 +356,7 @@ pre {
 .segmented button,
 .icon-button,
 .primary-button,
-.danger-button,
-.machine-row {
+.danger-button {
   border: 0;
   color: #24352f;
 }
@@ -580,89 +564,7 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
-.dashboard {
-  grid-template-columns: 280px minmax(330px, 0.88fr) minmax(420px, 1.12fr);
-}
-
-.rail {
-  align-self: start;
-}
-
-.account {
-  gap: 10px;
-  margin-bottom: 18px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid rgba(96, 75, 53, 0.12);
-}
-
-.account img {
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
-}
-
-.account strong {
-  margin-top: 4px;
-  overflow-wrap: anywhere;
-}
-
-.provider-strip {
-  display: grid;
-  gap: 8px;
-  margin-top: 18px;
-}
-
-.provider-pill {
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid rgba(47, 111, 92, 0.18);
-  border-radius: 7px;
-  color: #2f6f5c;
-  background: rgba(234, 243, 236, 0.82);
-}
-
-.machine-table {
-  min-height: 620px;
-  overflow: hidden;
-}
-
-.section-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid rgba(96, 75, 53, 0.12);
-}
-
-.section-heading strong {
-  color: #22342d;
-  font-size: 28px;
-  line-height: 1;
-}
-
-.rows {
-  display: grid;
-}
-
-.machine-row {
-  width: 100%;
-  min-height: 74px;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(96, 75, 53, 0.09);
-  background: transparent;
-  text-align: left;
-}
-
-.machine-row.selected,
-.machine-row:hover {
-  background: rgba(47, 111, 92, 0.09);
-}
-
-/* Machine rows and a few call-to-action buttons are real <Link> anchors now
-   so cmd-click opens a new tab; strip the default anchor styling. */
-a.machine-row,
+/* Console table rows and CTA buttons are real anchors; strip anchor styling. */
 a.primary-button,
 a.secondary-button {
   text-decoration: none;
@@ -681,83 +583,10 @@ a.secondary-button {
   font-size: 18px;
 }
 
-.machine-status {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  color: #2f6f5c;
-  background: rgba(47, 111, 92, 0.12);
-}
-
-.machine-row span:nth-child(2) {
-  min-width: 0;
-  flex: 1;
-}
-
-.machine-row strong,
-.machine-row small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.machine-row strong {
-  color: #24352f;
-}
-
-.machine-row code {
-  flex: 0 1 190px;
-  min-width: 70px;
-  overflow: hidden;
-  color: #2a6470;
-  font-size: 12px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.machine-id {
-  flex: 1;
-  min-width: 0;
-}
-
 .empty {
   gap: 10px;
   padding: 24px 16px;
   color: #60736a;
-}
-
-.detail {
-  min-height: 620px;
-}
-
-.empty-detail {
-  display: grid;
-  place-items: center;
-  color: #60736a;
-}
-
-.detail-header {
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.detail-header h1 {
-  margin: 3px 0 0;
-  color: #22342d;
-  font-size: 44px;
-  line-height: 1;
-  overflow-wrap: anywhere;
-}
-
-.detail-header span {
-  color: #2f6f5c;
-  text-transform: uppercase;
-  font-size: 12px;
 }
 
 .metrics {
@@ -846,50 +675,6 @@ a.secondary-button {
 
 .move-team .error {
   grid-column: 1 / -1;
-}
-
-.section-tabs {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid rgba(96, 75, 53, 0.16);
-  border-radius: 8px;
-  background: #ebe4d4;
-}
-
-.section-tabs a {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #24352f;
-  text-decoration: none;
-}
-
-.section-tabs a.active {
-  background: #fffaf0;
-  color: #244f43;
-  box-shadow: 0 4px 12px rgba(90, 67, 41, 0.12);
-}
-
-.dashboard.two-col {
-  grid-template-columns: 280px minmax(0, 1fr);
-}
-
-.rail-grid {
-  display: grid;
-  gap: 18px;
-  align-content: start;
-}
-
-.panel-stack {
-  display: grid;
-  gap: 16px;
-  align-content: start;
 }
 
 .panel {
@@ -1019,13 +804,6 @@ a.secondary-button {
   text-transform: none;
 }
 
-.machine-row .badge {
-  flex: 0 0 auto;
-  max-width: 130px;
-  margin-left: 0;
-  overflow: hidden;
-}
-
 .invite-result {
   display: grid;
   gap: 10px;
@@ -1033,6 +811,333 @@ a.secondary-button {
 
 .invite-result .command-block {
   margin-bottom: 0;
+}
+
+/* ---- Authed console: left nav + workspace + drawer ---- */
+.console-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  gap: 18px;
+  max-width: 1280px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+.side-nav {
+  position: sticky;
+  top: 22px;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: calc(100vh - 44px);
+  padding: 16px;
+  border: 1px solid rgba(96, 75, 53, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 252, 243, 0.82);
+  box-shadow: 0 20px 60px rgba(90, 67, 41, 0.12);
+  backdrop-filter: blur(14px);
+}
+
+.side-brand {
+  padding: 4px 6px;
+}
+
+.side-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.side-links a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: #3a4f46;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.side-links a:hover {
+  background: rgba(47, 111, 92, 0.08);
+  color: #244f43;
+}
+
+.side-links a.active {
+  background: #fffaf0;
+  color: #244f43;
+  box-shadow: 0 4px 12px rgba(90, 67, 41, 0.12);
+}
+
+.side-foot {
+  margin-top: auto;
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.side-account {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.side-account span {
+  color: #6a776f;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.side-account strong {
+  display: block;
+  overflow: hidden;
+  color: #22342d;
+  font-size: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.side-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(96, 75, 53, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 252, 243, 0.7);
+  color: #4f625a;
+  font-weight: 600;
+}
+
+.side-logout:hover {
+  border-color: rgba(157, 63, 48, 0.4);
+  color: #9d3f30;
+}
+
+.side-repo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6a776f;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.side-repo:hover {
+  color: #2f6f5c;
+}
+
+.workspace {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.workspace-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.workspace-title span {
+  color: #6a776f;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.workspace-title h1 {
+  margin: 4px 0 0;
+  color: #22342d;
+  font-size: 30px;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.workspace-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.workspace-body {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
+
+.workspace-foot {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding-top: 4px;
+}
+
+.inline-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #60736a;
+}
+
+.inline-select span {
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.inline-select select {
+  width: auto;
+  min-height: 38px;
+}
+
+.table-panel {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.table-panel .panel-heading {
+  padding: 16px 18px 0;
+}
+
+.table-panel .hint {
+  padding: 0 18px;
+}
+
+.table-panel .panel-error {
+  margin: 0;
+  padding: 12px 18px 0;
+}
+
+.table-panel .data-table {
+  margin-top: 6px;
+}
+
+.table-panel .data-table th {
+  padding: 12px 18px;
+}
+
+.table-panel .data-table td {
+  padding: 12px 18px;
+}
+
+.table-panel .empty {
+  padding: 28px 18px;
+}
+
+.rows-clickable tbody tr {
+  cursor: pointer;
+}
+
+.rows-clickable tbody tr:hover {
+  background: rgba(47, 111, 92, 0.07);
+}
+
+.rows-clickable tbody tr.selected {
+  background: rgba(47, 111, 92, 0.12);
+}
+
+.cell-status {
+  width: 22px;
+  color: #2f6f5c;
+}
+
+.cell-chevron {
+  width: 28px;
+  color: #93a097;
+  text-align: right;
+}
+
+/* Drawer */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(36, 53, 47, 0.34);
+  backdrop-filter: blur(2px);
+  animation: drawer-fade 160ms ease;
+}
+
+.drawer-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(440px, 100%);
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px;
+  border-left: 1px solid rgba(96, 75, 53, 0.2);
+  background: #fbf7ec;
+  box-shadow: -30px 0 70px rgba(90, 67, 41, 0.22);
+  animation: drawer-slide 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drawer-body {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.drawer-body .metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
+.drawer-body .command-block {
+  margin-bottom: 0;
+}
+
+.drawer-body .meta {
+  margin: 4px 0 0;
+}
+
+.drawer-foot {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.drawer-foot .danger-button {
+  width: 100%;
+}
+
+@keyframes drawer-slide {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes drawer-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-overlay,
+  .drawer-panel {
+    animation: none;
+  }
 }
 
 .landing-page {
@@ -1446,18 +1551,7 @@ a.secondary-button {
   margin-bottom: 8px;
 }
 
-.billing-layout {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 16px;
-  align-content: start;
-  max-width: 640px;
-  margin: 0 auto;
-  padding-top: min(6vh, 64px);
-}
-
-.billing-layout .badge {
+.billing-body .badge {
   vertical-align: middle;
 }
 
@@ -1581,15 +1675,37 @@ a.secondary-button {
   }
 }
 
-@media (max-width: 1120px) {
-  .dashboard,
-  .dashboard.two-col {
+@media (max-width: 940px) {
+  .console-shell {
     grid-template-columns: 1fr;
   }
 
-  .machine-table,
-  .detail {
-    min-height: auto;
+  .side-nav {
+    position: static;
+    min-height: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+  }
+
+  .side-links {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+
+  .side-foot {
+    margin-top: 0;
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 14px;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .side-account {
+    display: none;
   }
 }
 
@@ -1630,7 +1746,6 @@ a.secondary-button {
   }
 
   .topbar,
-  .detail-header,
   .command-block {
     align-items: stretch;
     flex-direction: column;
@@ -1669,14 +1784,6 @@ a.secondary-button {
 
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .machine-row {
-    align-items: flex-start;
-  }
-
-  .machine-row code {
-    flex-basis: auto;
   }
 
   .command-block span,

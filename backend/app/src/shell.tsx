@@ -1,8 +1,86 @@
 import { Link } from "@tanstack/react-router";
+import { CreditCard, Layers, LogOut, Server, Users } from "lucide-react";
 import { ReactNode } from "react";
 import logoURL from "./assets/boxhaven-logo.png";
 
 export const repoURL = "https://github.com/finbarr/boxhaven";
+
+export type ConsoleSection = "boxes" | "team" | "images" | "billing";
+
+// Authed console frame: a persistent left nav sidebar plus the workspace where
+// each section renders its full-width tables. activeSection drives the
+// highlighted nav item (so /boxes/$name keeps "Boxes" lit).
+export function ConsoleShell({ activeSection, isAdmin, email, onLogout, children }: {
+  activeSection: ConsoleSection;
+  isAdmin: boolean;
+  email?: string;
+  onLogout: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="console-shell">
+      <aside className="side-nav">
+        <Link className="brand side-brand" to="/" aria-label="BoxHaven home">
+          <div className="brand-mark"><img src={logoURL} alt="" /></div>
+          <strong>BoxHaven</strong>
+        </Link>
+        <nav className="side-links">
+          <Link to="/" className={activeSection === "boxes" ? "active" : undefined}>
+            <Server size={17} />
+            Boxes
+          </Link>
+          <Link to="/team" className={activeSection === "team" ? "active" : undefined}>
+            <Users size={17} />
+            Team
+          </Link>
+          {isAdmin ? (
+            <Link to="/images" className={activeSection === "images" ? "active" : undefined}>
+              <Layers size={17} />
+              Images
+            </Link>
+          ) : null}
+          <Link to="/billing" className={activeSection === "billing" ? "active" : undefined}>
+            <CreditCard size={17} />
+            Billing
+          </Link>
+        </nav>
+        <div className="side-foot">
+          <div className="side-account">
+            <span>signed in</span>
+            <strong>{email || "account"}</strong>
+          </div>
+          <button className="side-logout" type="button" onClick={onLogout}>
+            <LogOut size={16} />
+            Log out
+          </button>
+          <a className="side-repo" href={repoURL} target="_blank" rel="noreferrer">
+            <GitHubMark size={14} />
+            GitHub
+          </a>
+        </div>
+      </aside>
+      <div className="workspace">{children}</div>
+    </div>
+  );
+}
+
+// Standard header for a workspace section: eyebrow + title on the left,
+// action buttons (refresh, "+ Add") on the right.
+export function WorkspaceHead({ eyebrow, title, actions }: {
+  eyebrow: string;
+  title: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="workspace-head">
+      <div className="workspace-title">
+        <span>{eyebrow}</span>
+        <h1>{title}</h1>
+      </div>
+      {actions ? <div className="workspace-actions">{actions}</div> : null}
+    </div>
+  );
+}
 
 // lucide dropped brand icons; this is the standard GitHub mark.
 export function GitHubMark({ size = 16 }: { size?: number }) {

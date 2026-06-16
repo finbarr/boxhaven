@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowUpRight, CreditCard } from "lucide-react";
 import { apiFetch, BillingResponse, BillingStatus } from "./api";
 import { useConsole } from "./console-context";
+import { WorkspaceHead } from "./shell";
 
 // teamRef is the /billing/$team path param (slug or id); without it the
 // session's active team (or first team) is shown.
@@ -29,52 +30,54 @@ export function BillingView({ teamRef }: { teamRef?: string }) {
   });
 
   const info = billing.data;
+  const teamSelector = teams.length > 1 ? (
+    <label className="inline-select">
+      <span>Team</span>
+      <select
+        value={selectedTeam}
+        onChange={(event) => void navigate({ to: "/billing/$team", params: { team: event.target.value } })}
+      >
+        {teams.map((option) => (
+          <option value={option.slug || option.id} key={option.id}>{option.name}{option.id === activeTeam?.id ? " (active)" : ""}</option>
+        ))}
+      </select>
+    </label>
+  ) : undefined;
+
   if (info && !info.enabled) {
     return (
-      <section className="billing-layout">
-        <div className="panel">
-          <div className="panel-heading small">
-            <span>billing</span>
-            <h2>Billing is not enabled on this backend</h2>
+      <>
+        <WorkspaceHead eyebrow="billing" title="Billing" actions={teamSelector} />
+        <div className="workspace-body billing-body">
+          <div className="panel">
+            <div className="panel-heading small">
+              <span>billing</span>
+              <h2>Billing is not enabled on this backend</h2>
+            </div>
+            <p className="hint">The operator has not configured Stripe, so boxes are not billed here.</p>
           </div>
-          <p className="hint">The operator has not configured Stripe, so boxes are not billed here.</p>
         </div>
-      </section>
+      </>
     );
   }
 
   return (
-    <section className="billing-layout">
-      {teams.length > 1 ? (
-        <div className="panel">
-          <div className="panel-heading small">
-            <span>billing</span>
-            <h2>Team billing</h2>
-          </div>
+    <>
+      <WorkspaceHead eyebrow="billing" title="Billing" actions={teamSelector} />
+      <div className="workspace-body billing-body">
+        {teams.length > 1 ? (
           <p className="hint">Billing is per team: your personal team carries your free allowance, shared teams subscribe separately.</p>
-          <label>
-            Team
-            <select
-              value={selectedTeam}
-              onChange={(event) => void navigate({ to: "/billing/$team", params: { team: event.target.value } })}
-            >
-              {teams.map((option) => (
-                <option value={option.slug || option.id} key={option.id}>{option.name}{option.id === activeTeam?.id ? " (active)" : ""}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-      ) : null}
+        ) : null}
+        {billing.isLoading ? (
+          <div className="panel"><p className="hint">Loading billing</p></div>
+        ) : null}
+        {billing.error ? (
+          <div className="panel"><p className="error">{(billing.error as Error).message}</p></div>
+        ) : null}
 
-      {billing.isLoading ? (
-        <div className="panel"><p className="hint">Loading billing</p></div>
-      ) : null}
-      {billing.error ? (
-        <div className="panel"><p className="error">{(billing.error as Error).message}</p></div>
-      ) : null}
-
-      {info?.enabled ? <TeamBillingPanel info={info} teamRef={selectedTeam || info.team.slug || info.team.id} checkout={checkout} portal={portal} /> : null}
-    </section>
+        {info?.enabled ? <TeamBillingPanel info={info} teamRef={selectedTeam || info.team.slug || info.team.id} checkout={checkout} portal={portal} /> : null}
+      </div>
+    </>
   );
 }
 

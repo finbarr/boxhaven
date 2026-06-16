@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRightLeft, Cloud, MonitorDot, Plus, RefreshCw, Server, Trash2 } from "lucide-react";
+import { ArrowRightLeft, ChevronRight, MonitorDot, Plus, RefreshCw, Server, Trash2 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { CommandBlock, installCommand } from "./access";
 import {
@@ -13,8 +13,9 @@ import {
   slugName,
   TeamInfo,
 } from "./api";
-import logoURL from "./assets/boxhaven-logo.png";
 import { useConsole } from "./console-context";
+import { Drawer } from "./drawer";
+import { WorkspaceHead } from "./shell";
 
 type ConnectResponse = MachineResponse & {
   connect: {
@@ -32,11 +33,13 @@ const machineTiers: Array<{ value: MachineTier; label: string; detail: string }>
   { value: "large", label: "Large", detail: "8 vCPU / 16 GB" },
 ];
 
-// Boxes dashboard. The selected box lives in the URL (/boxes/$name); "/"
-// renders the dashboard with nothing selected.
+// Boxes section. The selected box lives in the URL (/boxes/$name) and drives
+// the detail drawer; "/" renders the table with no drawer open. The "New box"
+// button opens a create drawer.
 export function Dashboard({ selectedName }: { selectedName?: string }) {
-  const { token, user, teams, activeTeam } = useConsole();
+  const { token, teams, activeTeam } = useConsole();
   const navigate = useNavigate();
+  const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
   const [tier, setTier] = useState<MachineTier>("small");
   const [provider, setProvider] = useState("");
@@ -61,6 +64,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
     }),
     onSuccess: (data) => {
       setName("");
+      setAddOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["machines", token] });
       void navigate({ to: "/boxes/$name", params: { name: data.machine.name } });
     },
@@ -98,20 +102,66 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   }
 
   return (
-    <section className="dashboard">
-      <aside className="rail">
-        <div className="account">
-          <img src={logoURL} alt="" />
-          <div>
-            <span>signed in</span>
-            <strong>{user?.email || "account"}</strong>
+    <>
+      <WorkspaceHead
+        eyebrow="console"
+        title="Boxes"
+        actions={(
+          <>
+            <button className="icon-button" type="button" onClick={() => void machines.refetch()} title="Refresh" aria-label="Refresh boxes">
+              <RefreshCw size={16} />
+            </button>
+            <button className="primary-button" type="button" onClick={() => setAddOpen(true)}>
+              <Plus size={16} />
+              New box
+            </button>
+          </>
+        )}
+      />
+
+      <div className="workspace-body">
+        {machineList.length ? (
+          <div className="panel table-panel">
+            <table className="data-table rows-clickable">
+              <thead>
+                <tr>
+                  <th aria-label="Status" />
+                  <th>Name</th>
+                  <th>Location</th>
+                  <th>Endpoint</th>
+                  <th>Team</th>
+                  <th aria-label="Open" />
+                </tr>
+              </thead>
+              <tbody>
+                {machineList.map((machine) => (
+                  <tr
+                    key={machine.name}
+                    className={machine.name === selectedName ? "selected" : undefined}
+                    onClick={() => void navigate({ to: "/boxes/$name", params: { name: machine.name } })}
+                  >
+                    <td className="cell-status"><MonitorDot size={16} /></td>
+                    <td><strong>{machine.name}</strong></td>
+                    <td>{machine.provider_label || machine.provider || "-"} / {machine.region || "-"}</td>
+                    <td><code title={machine.preview_hostname || machine.public_ipv4 || ""}>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code></td>
+                    <td>{machine.team_name || machine.team_slug || "-"}</td>
+                    <td className="cell-chevron"><ChevronRight size={16} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        ) : machines.isLoading ? (
+          <div className="panel">
+            <div className="empty"><Server size={22} /><span>Loading boxes</span></div>
+          </div>
+        ) : (
+          <div className="panel"><GettingStarted onCreate={() => setAddOpen(true)} /></div>
+        )}
+      </div>
+
+      <Drawer open={addOpen} onClose={() => setAddOpen(false)} eyebrow="new box" title="Create a box">
         <form className="create-form" onSubmit={submit}>
-          <div className="panel-heading small">
-            <span>new box</span>
-            <h2>New box</h2>
-          </div>
           <label>
             Machine name
             <input value={name} onChange={(event) => setName(slugName(event.target.value))} placeholder="porch" required />
@@ -146,7 +196,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
           ) : null}
           <button className="primary-button" type="submit" disabled={createMachine.isPending}>
             <Plus size={16} />
-            {createMachine.isPending ? "Creating" : "Create"}
+            {createMachine.isPending ? "Creating" : "Create box"}
           </button>
           {createError ? (
             <p className="error">
@@ -164,76 +214,27 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
             </p>
           ) : null}
         </form>
-        {providerList.length > 1 ? (
-          <div className="provider-strip">
-            {providerList.map((providerOption) => (
-              <div className="provider-pill" key={providerOption.name}>
-                <Cloud size={16} />
-                <span>{providerOption.label}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </aside>
+      </Drawer>
 
-      <div className="machine-table">
-        <div className="section-heading">
-          <div>
-            <span>boxes</span>
-            <strong>{machineList.length}</strong>
-          </div>
-          <button className="icon-button" type="button" onClick={() => void machines.refetch()} title="Refresh" aria-label="Refresh machines">
-            <RefreshCw size={16} />
-          </button>
-        </div>
-        <div className="rows">
-          {machineList.map((machine) => (
-            <Link
-              className="machine-row"
-              to="/boxes/$name"
-              params={{ name: machine.name }}
-              activeProps={{ className: "selected" }}
-              key={machine.name}
-            >
-              <span className="machine-status"><MonitorDot size={16} /></span>
-              <span className="machine-id">
-                <strong>{machine.name}</strong>
-                <small>{machine.provider_label || machine.provider || "provider"} / {machine.region || "region"}</small>
-              </span>
-              {machine.team_id && activeTeam && machine.team_id !== activeTeam.id ? <span className="badge">{machine.team_slug || machine.team_name}</span> : null}
-              <code title={machine.preview_hostname || machine.public_ipv4 || ""}>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code>
-            </Link>
-          ))}
-          {!machineList.length ? (
-            machines.isLoading ? (
-              <div className="empty">
-                <Server size={24} />
-                <span>Loading boxes</span>
-              </div>
-            ) : (
-              <GettingStarted />
-            )
-          ) : null}
-        </div>
-      </div>
-
-      <MachineDetail
+      <BoxDrawer
+        open={Boolean(selectedName)}
         machine={selectedMachine}
         missingName={missingName}
         teams={teams}
         connect={connect.data}
         loading={machines.isLoading || (Boolean(selectedMachine) && connect.isLoading)}
+        onClose={() => void navigate({ to: "/" })}
         onDestroy={(machineName) => destroyMachine.mutate(machineName)}
         destroying={destroyMachine.isPending}
         onMove={(machineName, targetTeam) => moveMachine.mutate({ machineName, team: targetTeam })}
         moving={moveMachine.isPending}
         moveError={moveMachine.error ? (moveMachine.error as Error).message : ""}
       />
-    </section>
+    </>
   );
 }
 
-function GettingStarted() {
+function GettingStarted({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="getting-started">
       <div className="panel-heading small">
@@ -265,75 +266,78 @@ function GettingStarted() {
         </li>
       </ol>
       <p className="hint">Mid-conversation locally? <code>bh run work claude --continue</code> resumes it on the box.</p>
-      <p className="hint">Prefer clicking? The form on the left creates a box right from the console.</p>
+      <p className="hint">
+        Prefer clicking?{" "}
+        <button className="link-button" type="button" onClick={onCreate}>Create a box from the console</button>.
+      </p>
     </div>
   );
 }
 
-function MachineDetail({ machine, missingName, teams, connect, loading, onDestroy, destroying, onMove, moving, moveError }: {
+function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClose, onDestroy, destroying, onMove, moving, moveError }: {
+  open: boolean;
   machine?: Machine;
   missingName?: string;
   teams: TeamInfo[];
   connect?: ConnectResponse;
   loading: boolean;
+  onClose: () => void;
   onDestroy: (name: string) => void;
   destroying: boolean;
   onMove: (name: string, team: string) => void;
   moving: boolean;
   moveError: string;
 }) {
-  if (!machine) {
-    if (missingName) {
-      return (
-        <div className="detail empty-detail">
-          <div className="detail-notfound">
-            <Server size={32} />
-            <strong>No box named "{missingName}"</strong>
-            <span>It may have been destroyed, renamed, or never existed.</span>
-            <Link className="link-button" to="/">Back to all boxes</Link>
-          </div>
-        </div>
-      );
-    }
+  if (machine) {
     return (
-      <div className="detail empty-detail">
-        <Server size={32} />
-        <span>{loading ? "Loading boxes" : "Create or select a box"}</span>
-      </div>
+      <Drawer
+        open={open}
+        onClose={onClose}
+        eyebrow={connect?.status || "box"}
+        title={machine.name}
+        footer={(
+          <button className="danger-button" type="button" onClick={() => onDestroy(machine.name)} disabled={destroying} title="Destroy box">
+            <Trash2 size={16} />
+            {destroying ? "Destroying" : "Destroy box"}
+          </button>
+        )}
+      >
+        <div className="metrics">
+          <Metric label="Provider" value={machine.provider_label || machine.provider || "-"} />
+          <Metric label="Region" value={machine.region || "-"} />
+          <Metric label="Size" value={machine.size || "-"} />
+          <Metric label="Image" value={machine.image || "-"} />
+        </div>
+        <CommandBlock label="Preview" value={machine.preview_url || ""} />
+        <CommandBlock label="Connect" value={connect?.connect.cli || `bh connect ${machine.name}`} />
+        <CommandBlock label="Run" value={connect?.connect.cli_run || `bh run ${machine.name}`} />
+        <dl className="meta">
+          <div><dt>Team</dt><dd>{machine.team_name || machine.team_slug || "-"}</dd></div>
+          <div><dt>Provider ID</dt><dd>{machine.provider_id || "-"}</dd></div>
+          <div><dt>Project path</dt><dd>{machine.project_path || "/opt/boxhaven/project"}</dd></div>
+          <div><dt>Repo</dt><dd>{machine.repo_url || "-"}</dd></div>
+          <div><dt>Branch</dt><dd>{machine.branch || "-"}</dd></div>
+          <div><dt>Last sync</dt><dd>{formatDate(machine.last_synced_at)}</dd></div>
+          <div><dt>Updated</dt><dd>{formatDate(machine.updated_at)}</dd></div>
+        </dl>
+        <MoveTeamControl key={`${machine.name}:${machine.team_id || ""}`} machine={machine} teams={teams} onMove={onMove} moving={moving} moveError={moveError} />
+      </Drawer>
     );
   }
+
   return (
-    <div className="detail">
-      <div className="detail-header">
-        <div>
-          <span>{connect?.status || "box"}</span>
-          <h1>{machine.name}</h1>
+    <Drawer open={open} onClose={onClose} eyebrow="box" title={missingName || "Box"}>
+      {missingName ? (
+        <div className="detail-notfound">
+          <Server size={32} />
+          <strong>No box named "{missingName}"</strong>
+          <span>It may have been destroyed, renamed, or never existed.</span>
+          <button className="link-button" type="button" onClick={onClose}>Back to all boxes</button>
         </div>
-        <button className="danger-button" type="button" onClick={() => onDestroy(machine.name)} disabled={destroying} title="Destroy machine">
-          <Trash2 size={16} />
-          Destroy
-        </button>
-      </div>
-      <div className="metrics">
-        <Metric label="Provider" value={machine.provider_label || machine.provider || "-"} />
-        <Metric label="Region" value={machine.region || "-"} />
-        <Metric label="Size" value={machine.size || "-"} />
-        <Metric label="Image" value={machine.image || "-"} />
-      </div>
-      <CommandBlock label="Preview" value={machine.preview_url || ""} />
-      <CommandBlock label="Connect" value={connect?.connect.cli || `bh connect ${machine.name}`} />
-      <CommandBlock label="Run" value={connect?.connect.cli_run || `bh run ${machine.name}`} />
-      <dl className="meta">
-        <div><dt>Team</dt><dd>{machine.team_name || machine.team_slug || "-"}</dd></div>
-        <div><dt>Provider ID</dt><dd>{machine.provider_id || "-"}</dd></div>
-        <div><dt>Project path</dt><dd>{machine.project_path || "/opt/boxhaven/project"}</dd></div>
-        <div><dt>Repo</dt><dd>{machine.repo_url || "-"}</dd></div>
-        <div><dt>Branch</dt><dd>{machine.branch || "-"}</dd></div>
-        <div><dt>Last sync</dt><dd>{formatDate(machine.last_synced_at)}</dd></div>
-        <div><dt>Updated</dt><dd>{formatDate(machine.updated_at)}</dd></div>
-      </dl>
-      <MoveTeamControl key={`${machine.name}:${machine.team_id || ""}`} machine={machine} teams={teams} onMove={onMove} moving={moving} moveError={moveError} />
-    </div>
+      ) : (
+        <div className="empty"><Server size={22} /><span>{loading ? "Loading box" : "Select a box"}</span></div>
+      )}
+    </Drawer>
   );
 }
 
