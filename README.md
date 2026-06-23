@@ -43,7 +43,9 @@ syncs the current project into `/opt/boxhaven/project`. After that the box
 owns its copy: `bh run` does not mirror local files, so nothing an agent does
 on the box is ever overwritten by a routine command — `bh sync up` pushes
 local changes explicitly (mirroring deletions) and `bh sync down` retrieves
-the box's work.
+the box's work. Project sync excludes common dependency/cache directories such
+as `node_modules/`, `.next/`, and `.venv/` by default. Add a `.boxhavenignore`
+file at the project root for additional rsync-style exclude patterns.
 
 When you start `claude` or `codex` with `bh run`, bh forwards your newest
 local sessions for the project, so `claude --continue` on the box picks up

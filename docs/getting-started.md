@@ -146,7 +146,10 @@ SSH.
 `bh run` never touches the project files on the box: the project syncs when
 the box is created and when you run `bh sync up` (which mirrors deletions).
 Work done by agents on the box stays put until you pull it back with
-`bh sync down`. Pass `--sync` to a run to mirror local files first.
+`bh sync down`. Pass `--sync` to a run to mirror local files first. Sync
+excludes common dependency/cache directories such as `node_modules/`, `.next/`,
+and `.venv/` by default; add `.boxhavenignore` at the project root for
+additional rsync-style exclude patterns.
 
 ## Resume Your Local Agent Session
 
@@ -174,6 +177,9 @@ Pull remote changes back to the local checkout:
 ```bash
 bh sync down work --force
 ```
+
+Excluded paths are not deleted by sync, so dependency directories installed on
+the box can stay warm across later `bh sync up` runs.
 
 `sync down` overwrites local files by design, so it requires `--force`.
 

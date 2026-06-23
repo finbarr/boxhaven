@@ -488,6 +488,49 @@ func TestRemoteCommandNeedsTTYShellWithArgs(t *testing.T) {
 	}
 }
 
+func TestRemoteSyncIgnoresIncludeDefaultsAndProjectFile(t *testing.T) {
+	project := t.TempDir()
+	mustWriteFile(t, filepath.Join(project, remoteSyncIgnoreFile), `
+# comments and blanks are ignored
+docs/.vitepress/dist/
+backend/dist-app/
+
+`)
+
+	ignores, err := remoteSyncIgnores(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ignores.ProjectPatternCount != 2 {
+		t.Fatalf("ProjectPatternCount = %d, want 2", ignores.ProjectPatternCount)
+	}
+	patterns := map[string]bool{}
+	for _, pattern := range ignores.Patterns {
+		patterns[pattern] = true
+	}
+	for _, want := range []string{"node_modules/", ".next/", "__pycache__/", "docs/.vitepress/dist/", "backend/dist-app/"} {
+		if !patterns[want] {
+			t.Fatalf("sync ignore patterns missing %q: %#v", want, ignores.Patterns)
+		}
+	}
+}
+
+func TestAppendRsyncExcludeArgs(t *testing.T) {
+	args := appendRsyncExcludeArgs([]string{"-az", "--delete"}, []string{"node_modules/", "", "docs/.vitepress/dist/"})
+	got := strings.Join(args, "\x00")
+	for _, want := range []string{
+		"--exclude\x00node_modules/",
+		"--exclude\x00docs/.vitepress/dist/",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rsync args missing %q: %#v", want, args)
+		}
+	}
+	if strings.Contains(got, "--exclude\x00\x00") {
+		t.Fatalf("rsync args included empty exclude: %#v", args)
+	}
+}
+
 func TestRemoteMachineStatusLabel(t *testing.T) {
 	now := time.Now()
 	cases := []struct {

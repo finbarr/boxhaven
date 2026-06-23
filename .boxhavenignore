@@ -1,0 +1,10 @@
+# Project-local build output. Dependency/cache directories such as
+# node_modules are excluded by bh's built-in sync defaults.
+/.env
+/.boxhaven.local.toml
+/deploy/digitalocean/.env.production
+backend/dist/
+backend/dist-app/
+backend/.artifacts/
+docs/.vitepress/dist/
+docs/.vitepress/cache/

@@ -24,7 +24,27 @@ const (
 	remoteKnownHostsFileName = "remote_known_hosts"
 	remoteSessionEnvFile     = "/run/boxhaven/session.env"
 	maxRemoteAuthFileBytes   = 1024 * 1024
+	remoteSyncIgnoreFile     = ".boxhavenignore"
 )
+
+var defaultRemoteSyncExcludePatterns = []string{
+	"node_modules/",
+	".next/",
+	".nuxt/",
+	".svelte-kit/",
+	".vite/",
+	".turbo/",
+	".cache/",
+	".parcel-cache/",
+	".pytest_cache/",
+	".mypy_cache/",
+	".ruff_cache/",
+	"__pycache__/",
+	".venv/",
+	"venv/",
+	".tox/",
+	"coverage/",
+}
 
 type remoteMachine struct {
 	Name               string    `json:"name"`
@@ -122,6 +142,9 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  --ssh-user <user>    SSH user for create")
 	fmt.Fprintln(os.Stderr, "  --backend-url <url>  Remote backend API URL for create")
 	fmt.Fprintln(os.Stderr, "  --force              Skip destructive confirmation prompts")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "SYNC:")
+	fmt.Fprintln(os.Stderr, "  Project sync excludes dependency/cache directories by default and reads .boxhavenignore")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "EXAMPLES:")
 	fmt.Fprintln(os.Stderr, "  bh login")
@@ -843,18 +866,24 @@ func remoteWorkPath(machine remoteMachine) string {
 func rsyncPathToRemote(machine remoteMachine, projectPath string, sourcePath string) error {
 	source := sourcePath + string(os.PathSeparator)
 	target := machine.sshTarget() + ":" + projectPath + "/"
+	ignores, err := remoteSyncIgnores(sourcePath)
+	if err != nil {
+		return err
+	}
+	if ignores.ProjectPatternCount > 0 {
+		info("Using %d project sync ignore pattern(s) from %s", ignores.ProjectPatternCount, remoteSyncIgnoreFile)
+	}
 	args := []string{
 		"-az",
 		"--delete",
-		"--human-readable",
-		source,
-		target,
 	}
+	args = appendRsyncExcludeArgs(args, ignores.Patterns)
+	args = append(args, source, target)
 	sshCommand, err := remoteSSHCommand(machine, false)
 	if err != nil {
 		return err
 	}
-	args = append(args[:3], append([]string{"-e", sshCommand}, args[3:]...)...)
+	args = append(args[:2], append([]string{"-e", sshCommand}, args[2:]...)...)
 	cmd := exec.Command("rsync", args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -865,23 +894,80 @@ func rsyncPathToRemote(machine remoteMachine, projectPath string, sourcePath str
 func rsyncPathFromRemote(machine remoteMachine, projectPath string, destinationPath string) error {
 	source := machine.sshTarget() + ":" + projectPath + "/"
 	target := destinationPath + string(os.PathSeparator)
+	ignores, err := remoteSyncIgnores(destinationPath)
+	if err != nil {
+		return err
+	}
+	if ignores.ProjectPatternCount > 0 {
+		info("Using %d project sync ignore pattern(s) from %s", ignores.ProjectPatternCount, remoteSyncIgnoreFile)
+	}
 	args := []string{
 		"-az",
 		"--delete",
-		"--human-readable",
-		source,
-		target,
 	}
+	args = appendRsyncExcludeArgs(args, ignores.Patterns)
+	args = append(args, source, target)
 	sshCommand, err := remoteSSHCommand(machine, false)
 	if err != nil {
 		return err
 	}
-	args = append(args[:3], append([]string{"-e", sshCommand}, args[3:]...)...)
+	args = append(args[:2], append([]string{"-e", sshCommand}, args[2:]...)...)
 	cmd := exec.Command("rsync", args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+type remoteSyncIgnoreConfig struct {
+	Patterns            []string
+	ProjectPatternCount int
+}
+
+func remoteSyncIgnores(projectDir string) (remoteSyncIgnoreConfig, error) {
+	patterns := append([]string{}, defaultRemoteSyncExcludePatterns...)
+	projectPatterns, err := readRemoteSyncIgnoreFile(filepath.Join(projectDir, remoteSyncIgnoreFile))
+	if err != nil {
+		return remoteSyncIgnoreConfig{}, err
+	}
+	patterns = append(patterns, projectPatterns...)
+	return remoteSyncIgnoreConfig{
+		Patterns:            patterns,
+		ProjectPatternCount: len(projectPatterns),
+	}, nil
+}
+
+func readRemoteSyncIgnoreFile(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read %s: %w", remoteSyncIgnoreFile, err)
+	}
+	return parseRemoteSyncIgnorePatterns(string(data)), nil
+}
+
+func parseRemoteSyncIgnorePatterns(contents string) []string {
+	var patterns []string
+	for _, line := range strings.Split(contents, "\n") {
+		pattern := strings.TrimSpace(line)
+		if pattern == "" || strings.HasPrefix(pattern, "#") {
+			continue
+		}
+		patterns = append(patterns, pattern)
+	}
+	return patterns
+}
+
+func appendRsyncExcludeArgs(args []string, patterns []string) []string {
+	for _, pattern := range patterns {
+		if strings.TrimSpace(pattern) == "" {
+			continue
+		}
+		args = append(args, "--exclude", pattern)
+	}
+	return args
 }
 
 func runRemoteMachineCommand(cfg Config, machine remoteMachine, commandArgs []string, projectDir string) error {
