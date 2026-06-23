@@ -1297,7 +1297,6 @@ async function ensureMachineSSHCertificateTrust(
   const caPublicKey = await options.sshCA.publicKey();
   const principalPath = `/etc/ssh/auth_principals/${user}`;
   const command = [
-    "if command -v cloud-init >/dev/null 2>&1; then cloud-init status --wait >/dev/null 2>&1 || true; fi",
     ensureSudoUserCommand(user),
     "install -d -m 0755 /run/sshd /etc/ssh/auth_principals /etc/ssh/sshd_config.d",
     `printf '%s\\n' ${shellQuote(caPublicKey)} > /etc/ssh/boxhaven_user_ca_keys`,

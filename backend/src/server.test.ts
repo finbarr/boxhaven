@@ -216,7 +216,7 @@ test("backend waits for a created machine to trust SSH certificates before retur
   const setupRPC = JSON.parse((await nextWSMessage(agent)).toString());
   assert.equal(setupRPC.type, "rpc");
   assert.equal(setupRPC.action, "run_setup");
-  assert.match(setupRPC.payload.commands[0], /cloud-init status --wait/);
+  assert.doesNotMatch(setupRPC.payload.commands[0], /cloud-init status --wait/);
   assert.match(setupRPC.payload.commands[0], /TrustedUserCAKeys \/etc\/ssh\/boxhaven_user_ca_keys/);
   assert.match(setupRPC.payload.commands[0], /AuthorizedPrincipalsFile \/etc\/ssh\/auth_principals\/%u/);
   assert.match(setupRPC.payload.commands[0], /boxhaven:foo-/);
