@@ -50,6 +50,17 @@ type TeamMachine = RemoteMachine & {
   team_name?: string;
 };
 
+type MachineCreateTimings = {
+  total_ms?: number;
+  ssh_ca_public_key_ms?: number;
+  provider_sync_ms?: number;
+  provider_create_ms?: number;
+  store_machine_ms?: number;
+  agent_wait_ms?: number;
+  ssh_trust_ms?: number;
+  preview_tls_warmup_ms?: number;
+};
+
 type PreviewOptions = {
   baseDomain: string;
   targetPort: number;
@@ -740,6 +751,9 @@ async function createMachine(
   teams: TeamInfo[],
   reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
 ) {
+  const timings: MachineCreateTimings = {};
+  const totalStarted = Date.now();
+
   body.provider_name = providerMachineName(auth.userID, body.name);
   const agentBackendURL = (options.apiPublicURL || "").trim().replace(/\/+$/, "");
   if (!agentBackendURL) {
@@ -749,10 +763,14 @@ async function createMachine(
   const sshPrincipal = sshPrincipalForMachine({ name: body.name, user_id: auth.userID, provider_name: body.provider_name });
   body.agent_token = agentToken;
   body.agent_backend_url = agentBackendURL;
+  let phaseStarted = Date.now();
   body.ssh_user_ca_public_key = await options.sshCA.publicKey();
+  recordMachineCreateTiming(timings, "ssh_ca_public_key_ms", phaseStarted);
   body.ssh_authorized_principal = sshPrincipal;
 
+  phaseStarted = Date.now();
   await syncProviderMachines(options, auth);
+  recordMachineCreateTiming(timings, "provider_sync_ms", phaseStarted);
   const existing = await options.store.getMachine(auth.userID, body.name);
   if (existing) {
     return reply.code(409).send(machineNameConflict(body.name));
@@ -760,8 +778,11 @@ async function createMachine(
 
   let provisioned: { machine: RemoteMachine; status?: string };
   try {
+    phaseStarted = Date.now();
     provisioned = await provider.createMachine(body);
+    recordMachineCreateTiming(timings, "provider_create_ms", phaseStarted);
   } catch (err) {
+    recordMachineCreateTiming(timings, "provider_create_ms", phaseStarted);
     if ((err as Error).message.includes("already exists")) {
       return reply.code(409).send(machineNameConflict(body.name));
     }
@@ -780,19 +801,56 @@ async function createMachine(
     agent_token_hash: hashAgentToken(agentToken),
     ssh_principal: sshPrincipal,
   });
+  phaseStarted = Date.now();
   await options.store.putMachine(machine);
+  recordMachineCreateTiming(timings, "store_machine_ms", phaseStarted);
   let ready: RemoteMachine;
   try {
-    ready = await waitForCreatedMachineReady(options, agents, machine);
+    ready = await waitForCreatedMachineReady(options, agents, machine, timings);
   } catch (err) {
     if (err instanceof AgentRPCError) {
-      return reply.code(504).send({ id: err.code, message: err.message, machine: decorateTeam(publicMachine(machine), teams) });
+      recordMachineCreateTiming(timings, "total_ms", totalStarted);
+      logMachineCreateTimings(body.name, timings, "timed out");
+      return reply.code(504).send({ id: err.code, message: err.message, machine: decorateTeam(publicMachine(machine), teams), timings });
     }
     throw err;
   }
   const readyPublic = publicMachine({ ...ready, org_id: ready.org_id || orgID || undefined });
+  phaseStarted = Date.now();
   await warmMachinePreviewTLS(options, readyPublic);
-  return reply.code(201).send({ machine: decorateTeam(readyPublic, teams), status: provisioned.status || "created" });
+  recordMachineCreateTiming(timings, "preview_tls_warmup_ms", phaseStarted);
+  recordMachineCreateTiming(timings, "total_ms", totalStarted);
+  logMachineCreateTimings(body.name, timings);
+  return reply.code(201).send({ machine: decorateTeam(readyPublic, teams), status: provisioned.status || "created", timings });
+}
+
+function recordMachineCreateTiming(timings: MachineCreateTimings, key: keyof MachineCreateTimings, startedAt: number): void {
+  timings[key] = Math.max(0, Date.now() - startedAt);
+}
+
+function addMachineCreateTiming(timings: MachineCreateTimings | undefined, key: keyof MachineCreateTimings, ms: number): void {
+  if (!timings) return;
+  timings[key] = (timings[key] || 0) + Math.max(0, ms);
+}
+
+function logMachineCreateTimings(machineName: string, timings: MachineCreateTimings, status = "created"): void {
+  console.info(`machine ${machineName} ${status}; create timings: ${formatMachineCreateTimings(timings)}`);
+}
+
+function formatMachineCreateTimings(timings: MachineCreateTimings): string {
+  return [
+    ["total", timings.total_ms],
+    ["provider_create", timings.provider_create_ms],
+    ["agent_wait", timings.agent_wait_ms],
+    ["ssh_trust", timings.ssh_trust_ms],
+    ["preview_tls", timings.preview_tls_warmup_ms],
+    ["provider_sync", timings.provider_sync_ms],
+    ["ssh_ca_public_key", timings.ssh_ca_public_key_ms],
+    ["store_machine", timings.store_machine_ms],
+  ]
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .map(([label, ms]) => `${label}=${ms}ms`)
+    .join(" ");
 }
 
 async function syncProviderMachines(options: BackendOptions, auth: AuthContext): Promise<void> {
@@ -1187,17 +1245,31 @@ async function waitForCreatedMachineReady(
   options: BackendOptions,
   agents: Map<string, AgentConnection>,
   machine: RemoteMachine,
+  timings?: MachineCreateTimings,
 ): Promise<RemoteMachine> {
   const timeout = options.machineReadyTimeoutMs ?? 5 * 60_000;
-  if (timeout <= 0) return machine;
+  if (timeout <= 0) {
+    if (timings) {
+      timings.agent_wait_ms = 0;
+      timings.ssh_trust_ms = 0;
+    }
+    return machine;
+  }
+  const waitStarted = Date.now();
   const deadline = Date.now() + timeout;
   while (Date.now() <= deadline) {
     const agent = connectedAgent(agents, machine);
     if (agent) {
+      if (timings && timings.agent_wait_ms === undefined) {
+        timings.agent_wait_ms = Math.max(0, Date.now() - waitStarted);
+      }
+      const trustStarted = Date.now();
       try {
         await ensureMachineSSHCertificateTrust(options, agent.machine, agent, Math.max(1000, deadline - Date.now()));
+        addMachineCreateTiming(timings, "ssh_trust_ms", Date.now() - trustStarted);
         return normalizeMachine(options, agent.machine);
       } catch (err) {
+        addMachineCreateTiming(timings, "ssh_trust_ms", Date.now() - trustStarted);
         if (err instanceof AgentRPCError && err.code === "agent_disconnected") {
           await new Promise((resolve) => setTimeout(resolve, 1000));
           continue;
@@ -1206,6 +1278,9 @@ async function waitForCreatedMachineReady(
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  if (timings && timings.agent_wait_ms === undefined) {
+    timings.agent_wait_ms = Math.max(0, Date.now() - waitStarted);
   }
   throw new AgentRPCError("remote machine was created, but SSH certificate trust was not ready before the readiness timeout", "agent_timeout");
 }

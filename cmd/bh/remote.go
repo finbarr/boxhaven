@@ -627,16 +627,20 @@ func createRemoteMachine(cfg Config, projectDir string, opts remoteProvisionOpti
 		cfg.Remote.BackendURL = strings.TrimRight(strings.TrimSpace(opts.BackendURL), "/")
 	}
 	var machine remoteMachine
+	var timings remoteBackendProvisionTimings
 	if err := runWithSpinner(
 		fmt.Sprintf("Creating remote %s via backend", opts.Name),
 		fmt.Sprintf("Remote %s created", opts.Name),
 		func() error {
 			var err error
-			machine, err = createRemoteBackendMachine(cfg, projectDir, opts)
+			machine, timings, err = createRemoteBackendMachine(cfg, projectDir, opts)
 			return err
 		},
 	); err != nil {
 		return remoteMachine{}, err
+	}
+	if summary := formatRemoteProvisionTimings(timings); summary != "" {
+		info("Create timing: %s", summary)
 	}
 	if syncProject {
 		cleanup, err := attachRemoteSSHCertificate(cfg, &machine)
@@ -1095,6 +1099,25 @@ func formatElapsedDuration(d time.Duration) string {
 		return d.Round(time.Millisecond).String()
 	}
 	return d.Round(100 * time.Millisecond).String()
+}
+
+func formatRemoteProvisionTimings(timings remoteBackendProvisionTimings) string {
+	parts := []string{}
+	appendTiming := func(label string, ms int64) {
+		if ms <= 0 {
+			return
+		}
+		parts = append(parts, fmt.Sprintf("%s %s", label, formatElapsedDuration(time.Duration(ms)*time.Millisecond)))
+	}
+	appendTiming("total", timings.TotalMS)
+	appendTiming("provider create", timings.ProviderCreateMS)
+	appendTiming("agent wait", timings.AgentWaitMS)
+	appendTiming("SSH trust", timings.SSHTrustMS)
+	appendTiming("preview TLS", timings.PreviewTLSWarmupMS)
+	appendTiming("provider sync", timings.ProviderSyncMS)
+	appendTiming("SSH CA", timings.SSHCaPublicKeyMS)
+	appendTiming("store", timings.StoreMachineMS)
+	return strings.Join(parts, "; ")
 }
 
 func rsyncCommandError(operation string, err error, output []byte) error {

@@ -40,8 +40,20 @@ type remoteBackendCreateRequest struct {
 }
 
 type remoteBackendMachineResponse struct {
-	Machine remoteMachine `json:"machine"`
-	Status  string        `json:"status,omitempty"`
+	Machine remoteMachine                 `json:"machine"`
+	Status  string                        `json:"status,omitempty"`
+	Timings remoteBackendProvisionTimings `json:"timings,omitempty"`
+}
+
+type remoteBackendProvisionTimings struct {
+	TotalMS            int64 `json:"total_ms,omitempty"`
+	SSHCaPublicKeyMS   int64 `json:"ssh_ca_public_key_ms,omitempty"`
+	ProviderSyncMS     int64 `json:"provider_sync_ms,omitempty"`
+	ProviderCreateMS   int64 `json:"provider_create_ms,omitempty"`
+	StoreMachineMS     int64 `json:"store_machine_ms,omitempty"`
+	AgentWaitMS        int64 `json:"agent_wait_ms,omitempty"`
+	SSHTrustMS         int64 `json:"ssh_trust_ms,omitempty"`
+	PreviewTLSWarmupMS int64 `json:"preview_tls_warmup_ms,omitempty"`
 }
 
 type remoteBackendListResponse struct {
@@ -104,10 +116,10 @@ type remoteBackendAgentResponse struct {
 	Result  remoteBackendAgentResult `json:"result,omitempty"`
 }
 
-func createRemoteBackendMachine(cfg Config, projectDir string, opts remoteProvisionOptions) (remoteMachine, error) {
+func createRemoteBackendMachine(cfg Config, projectDir string, opts remoteProvisionOptions) (remoteMachine, remoteBackendProvisionTimings, error) {
 	sourcePath, err := normalizedProjectPath(projectDir)
 	if err != nil {
-		return remoteMachine{}, err
+		return remoteMachine{}, remoteBackendProvisionTimings{}, err
 	}
 	repo := currentGitRepo(sourcePath)
 	req := remoteBackendCreateRequest{
@@ -124,7 +136,7 @@ func createRemoteBackendMachine(cfg Config, projectDir string, opts remoteProvis
 	}
 	var response remoteBackendMachineResponse
 	if err := remoteBackendRequestWithTimeout(cfg, http.MethodPost, "/v1/machines", req, &response, remoteBackendProvisionTimeout); err != nil {
-		return remoteMachine{}, err
+		return remoteMachine{}, remoteBackendProvisionTimings{}, err
 	}
 	machine := response.Machine
 	machine.Name = opts.Name
@@ -141,7 +153,7 @@ func createRemoteBackendMachine(cfg Config, projectDir string, opts remoteProvis
 		machine.CreatedAt = time.Now().UTC()
 	}
 	machine.UpdatedAt = time.Now().UTC()
-	return machine, nil
+	return machine, response.Timings, nil
 }
 
 func getRemoteBackendMachine(cfg Config, name string) (remoteMachine, string, error) {

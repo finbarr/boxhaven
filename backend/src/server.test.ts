@@ -120,6 +120,11 @@ test("backend creates, records, lists, and releases one machine", async () => {
   assert.equal(createBody.machine.project_path, "/opt/boxhaven/project");
   assert.equal(createBody.machine.agent_token_hash, undefined);
   assert.match(createBody.machine.ssh_principal, /^boxhaven:foo-[a-f0-9]{10}$/);
+  assert.equal(typeof createBody.timings.total_ms, "number");
+  assert.equal(typeof createBody.timings.provider_sync_ms, "number");
+  assert.equal(typeof createBody.timings.provider_create_ms, "number");
+  assert.equal(createBody.timings.agent_wait_ms, 0);
+  assert.equal(createBody.timings.ssh_trust_ms, 0);
   assert.equal(provider.created.length, 1);
   assert.equal(provider.created[0].tier, "medium");
   assert.match(provider.created[0].agent_token || "", /^[A-Za-z0-9_-]{64}$/);
@@ -224,6 +229,8 @@ test("backend waits for a created machine to trust SSH certificates before retur
   const created = await create;
   assert.equal(created.statusCode, 201, created.body);
   assert.equal(typeof created.json().machine.agent_last_seen_at, "string");
+  assert.equal(typeof created.json().timings.agent_wait_ms, "number");
+  assert.equal(typeof created.json().timings.ssh_trust_ms, "number");
   agent.terminate();
 });
 
@@ -617,6 +624,7 @@ test("backend warms preview TLS before returning created machines", async () => 
   });
   assert.equal(created.statusCode, 201, created.body);
   assert.deepEqual(warmed, [created.json().machine.preview_url]);
+  assert.equal(typeof created.json().timings.preview_tls_warmup_ms, "number");
 });
 
 test("backend login and logout are handled by Better Auth", async () => {

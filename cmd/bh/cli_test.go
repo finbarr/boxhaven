@@ -184,6 +184,33 @@ func TestRemoteVMInstallSupportsGhosttyTerminfo(t *testing.T) {
 	}
 }
 
+func TestFormatRemoteProvisionTimings(t *testing.T) {
+	got := formatRemoteProvisionTimings(remoteBackendProvisionTimings{
+		TotalMS:            1234,
+		ProviderCreateMS:   2000,
+		AgentWaitMS:        3000,
+		SSHTrustMS:         456,
+		PreviewTLSWarmupMS: 789,
+	})
+	for _, want := range []string{
+		"total 1.2s",
+		"provider create 2s",
+		"agent wait 3s",
+		"SSH trust 456ms",
+		"preview TLS 789ms",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("formatRemoteProvisionTimings() = %q, want %q", got, want)
+		}
+	}
+}
+
+func TestFormatRemoteProvisionTimingsEmpty(t *testing.T) {
+	if got := formatRemoteProvisionTimings(remoteBackendProvisionTimings{}); got != "" {
+		t.Fatalf("formatRemoteProvisionTimings(empty) = %q, want empty", got)
+	}
+}
+
 func TestConfirmDestructiveActionRequiresForceWithoutTTY(t *testing.T) {
 	if err := confirmDestructiveAction("Destroy test", true); err != nil {
 		t.Fatal(err)
