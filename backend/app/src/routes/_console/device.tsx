@@ -2,7 +2,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Check, ShieldCheck, XCircle } from "lucide-react";
 import { apiFetch, AuthUser, formatUserCode } from "../../api";
-import logoURL from "../../assets/boxhaven-logo.png";
 import { useConsole } from "../../console-context";
 
 type DeviceStatusResponse = {
@@ -67,21 +66,7 @@ function DeviceGrantPanel({ token, user, userCode, onDone }: {
   const blocked = verify.isLoading || verify.isError || finished || approve.isPending || deny.isPending;
 
   return (
-    <section className="access-layout grant-layout">
-      <div className="welcome-panel compact">
-        <div className="logo-stage"><img src={logoURL} alt="BoxHaven logo" /></div>
-        <div className="terminal-card">
-          <div className="terminal-title">
-            <span />
-            <span />
-            <span />
-          </div>
-          <pre>{`$ bh login
-browser grant requested
-account: ${user?.email || "signed-in user"}
-code: ${formatUserCode(userCode)}`}</pre>
-        </div>
-      </div>
+    <section className="narrow-layout grant-layout">
       <div className="auth-panel grant-panel">
         <div className="grant-icon"><ShieldCheck size={28} /></div>
         <div className="panel-heading">

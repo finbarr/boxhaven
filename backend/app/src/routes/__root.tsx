@@ -1,4 +1,4 @@
-import { createRootRoute, HeadContent, Link, Outlet } from "@tanstack/react-router";
+import { createRootRoute, HeadContent, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
 import { Compass } from "lucide-react";
 import { GitHubMark, repoURL, TopBar } from "../shell";
 
@@ -12,6 +12,9 @@ export const Route = createRootRoute({
 });
 
 function RootShell() {
+  const matchRoute = useMatchRoute();
+  const onDevice = Boolean(matchRoute({ to: "/device" }));
+
   return (
     <>
       <HeadContent />
@@ -20,15 +23,17 @@ function RootShell() {
         <div className="console-body">
           <Outlet />
         </div>
-        <footer className="site-footer">
-          <span>© 2026 BoxHaven</span>
-          <nav>
-            <a href="https://docs.boxhaven.dev" target="_blank" rel="noreferrer">Docs</a>
-            <a href={repoURL} target="_blank" rel="noreferrer"><GitHubMark size={13} /> GitHub</a>
-            <a href={`${repoURL}/blob/master/CHANGELOG.md`} target="_blank" rel="noreferrer">Changelog</a>
-            <a href={`${repoURL}/blob/master/SECURITY.md`} target="_blank" rel="noreferrer">Security</a>
-          </nav>
-        </footer>
+        {onDevice ? null : (
+          <footer className="site-footer">
+            <span>© 2026 BoxHaven</span>
+            <nav>
+              <a href="https://docs.boxhaven.dev" target="_blank" rel="noreferrer">Docs</a>
+              <a href={repoURL} target="_blank" rel="noreferrer"><GitHubMark size={13} /> GitHub</a>
+              <a href={`${repoURL}/blob/master/CHANGELOG.md`} target="_blank" rel="noreferrer">Changelog</a>
+              <a href={`${repoURL}/blob/master/SECURITY.md`} target="_blank" rel="noreferrer">Security</a>
+            </nav>
+          </footer>
+        )}
       </main>
     </>
   );

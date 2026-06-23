@@ -31,7 +31,7 @@ let vite;
 let browser;
 
 try {
-  const { app, token } = await startSeededBackend();
+  const { app, token, deviceUserCode } = await startSeededBackend();
   backend = app;
   vite = await startViteApp();
   browser = await chromium.launch({
@@ -45,6 +45,7 @@ try {
   }, token);
   const page = await context.newPage();
 
+  const deviceFacts = await checkDevicePage(page, deviceUserCode);
   const membersFacts = await checkMembersPage(page);
   const teamsFacts = await checkTeamsPage(page);
   const imagesFacts = await checkImagesPage(page);
@@ -58,6 +59,7 @@ try {
     appURL,
     outDir,
     screenshots: {
+      device: join(outDir, "device.png"),
       members: join(outDir, "members.png"),
       teams: join(outDir, "teams.png"),
       teamEditor: join(outDir, "team-editor.png"),
@@ -66,6 +68,7 @@ try {
       billing: join(outDir, "billing.png"),
       mobileTeams: join(outDir, "mobile-teams.png"),
     },
+    deviceFacts,
     membersFacts,
     teamsFacts,
     imagesFacts,
@@ -169,8 +172,18 @@ async function startSeededBackend() {
     created_at: "2026-06-01T12:00:00.000Z",
     bootstrapped: true,
   });
+  const device = await app.inject({
+    method: "POST",
+    url: "/v1/auth/device/code",
+    payload: {
+      client_id: "boxhaven-cli",
+      scope: "remote",
+    },
+  });
+  assert.equal(device.statusCode, 200, device.body);
+  assert.equal(typeof device.json().user_code, "string");
   await app.listen({ host: "127.0.0.1", port: apiPort });
-  return { app, token };
+  return { app, token, deviceUserCode: device.json().user_code };
 }
 
 async function signUp(app, email, password = "password123") {
@@ -209,6 +222,35 @@ async function startViteApp() {
   });
   await server.listen();
   return server;
+}
+
+async function checkDevicePage(page, userCode) {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto(`${appURL}/device?user_code=${encodeURIComponent(userCode)}`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Allow" }).waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(outDir, "device.png"), fullPage: true });
+  const facts = await page.evaluate(() => {
+    const allowButton = [...document.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Allow"));
+    const allowRect = allowButton?.getBoundingClientRect();
+    return {
+      title: document.querySelector(".panel-heading h1")?.textContent?.trim(),
+      topbarPresent: Boolean(document.querySelector(".topbar")),
+      footerPresent: Boolean(document.querySelector(".site-footer")),
+      welcomePanelPresent: Boolean(document.querySelector(".welcome-panel, .terminal-card, .logo-stage")),
+      viewportHeight: window.innerHeight,
+      scrollY: window.scrollY,
+      allowButtonBottom: allowRect ? Math.round(allowRect.bottom) : null,
+    };
+  });
+  assert.equal(facts.title, "Allow BoxHaven CLI?");
+  assert.equal(facts.topbarPresent, false);
+  assert.equal(facts.footerPresent, false);
+  assert.equal(facts.welcomePanelPresent, false);
+  assert.equal(facts.scrollY, 0);
+  assert.ok(facts.allowButtonBottom !== null && facts.allowButtonBottom <= facts.viewportHeight, `Allow button below fold: ${facts.allowButtonBottom} > ${facts.viewportHeight}`);
+  return facts;
 }
 
 async function checkMembersPage(page) {

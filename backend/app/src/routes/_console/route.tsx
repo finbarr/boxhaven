@@ -121,12 +121,9 @@ function ConsoleLayout() {
   // the nav shell so nothing competes with the approve/deny choice.
   if (onDevice) {
     return (
-      <>
-        <TopBar subtitle="remote dev boxes" />
-        <ConsoleProvider value={consoleValue}>
-          <Outlet />
-        </ConsoleProvider>
-      </>
+      <ConsoleProvider value={consoleValue}>
+        <Outlet />
+      </ConsoleProvider>
     );
   }
 
