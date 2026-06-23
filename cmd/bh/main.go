@@ -104,6 +104,9 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  Project: .boxhaven.toml")
 	fmt.Fprintln(os.Stderr, "  Env:     BOXHAVEN_BACKEND_URL, BOXHAVEN_TOKEN, GH_TOKEN, GITHUB_TOKEN")
 	fmt.Fprintln(os.Stderr, "  GitHub:  GH_TOKEN/GITHUB_TOKEN or local `gh auth login` for HTTPS repo pushes")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintf(os.Stderr, "%sSYNC:%s\n", colorBold, colorReset)
+	fmt.Fprintln(os.Stderr, "  Excludes dependency/cache directories by default, reads .boxhavenignore, and reports elapsed transfer stats")
 }
 
 func printVersion() {

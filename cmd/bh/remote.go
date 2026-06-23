@@ -145,6 +145,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "SYNC:")
 	fmt.Fprintln(os.Stderr, "  Project sync excludes dependency/cache directories by default and reads .boxhavenignore")
+	fmt.Fprintln(os.Stderr, "  Sync completion reports elapsed time, network bytes, changed bytes, and file counts")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "EXAMPLES:")
 	fmt.Fprintln(os.Stderr, "  bh login")
@@ -809,11 +810,18 @@ func syncRemoteProject(machine *remoteMachine, cfg Config, projectDir string) er
 	}
 
 	info("Copying %s to %s:%s...", sourcePath, machine.Name, machine.ProjectPath)
-	if err := rsyncPathToRemote(*machine, machine.ProjectPath, sourcePath); err != nil {
+	syncStarted := time.Now()
+	syncStats, err := rsyncPathToRemote(*machine, machine.ProjectPath, sourcePath)
+	if err != nil {
 		return err
 	}
-	if err := runRemoteBackendSetup(cfg, *machine, cfg.Remote.Setup); err != nil {
-		return err
+	info("Project upload completed in %s%s", formatElapsedDuration(time.Since(syncStarted)), syncStats.summary())
+	if len(cfg.Remote.Setup) > 0 {
+		setupStarted := time.Now()
+		if err := runRemoteBackendSetup(cfg, *machine, cfg.Remote.Setup); err != nil {
+			return err
+		}
+		info("Project setup completed in %s", formatElapsedDuration(time.Since(setupStarted)))
 	}
 	machine.LastSyncedAt = time.Now().UTC()
 	machine.UpdatedAt = machine.LastSyncedAt
@@ -833,7 +841,13 @@ func syncRemoteProjectDown(machine remoteMachine, projectDir string) error {
 		machine.ProjectPath = remoteProjectPath()
 	}
 	info("Copying %s:%s back to %s...", machine.Name, machine.ProjectPath, sourcePath)
-	return rsyncPathFromRemote(machine, machine.ProjectPath, sourcePath)
+	syncStarted := time.Now()
+	syncStats, err := rsyncPathFromRemote(machine, machine.ProjectPath, sourcePath)
+	if err != nil {
+		return err
+	}
+	info("Project download completed in %s%s", formatElapsedDuration(time.Since(syncStarted)), syncStats.summary())
+	return nil
 }
 
 func normalizedProjectPath(projectDir string) (string, error) {
@@ -863,12 +877,12 @@ func remoteWorkPath(machine remoteMachine) string {
 	return cleaned
 }
 
-func rsyncPathToRemote(machine remoteMachine, projectPath string, sourcePath string) error {
+func rsyncPathToRemote(machine remoteMachine, projectPath string, sourcePath string) (rsyncTransferStats, error) {
 	source := sourcePath + string(os.PathSeparator)
 	target := machine.sshTarget() + ":" + projectPath + "/"
 	ignores, err := remoteSyncIgnores(sourcePath)
 	if err != nil {
-		return err
+		return rsyncTransferStats{}, err
 	}
 	if ignores.ProjectPatternCount > 0 {
 		info("Using %d project sync ignore pattern(s) from %s", ignores.ProjectPatternCount, remoteSyncIgnoreFile)
@@ -876,27 +890,31 @@ func rsyncPathToRemote(machine remoteMachine, projectPath string, sourcePath str
 	args := []string{
 		"-az",
 		"--delete",
+		"--stats",
 	}
 	args = appendRsyncExcludeArgs(args, ignores.Patterns)
 	args = append(args, source, target)
 	sshCommand, err := remoteSSHCommand(machine, false)
 	if err != nil {
-		return err
+		return rsyncTransferStats{}, err
 	}
-	args = append(args[:2], append([]string{"-e", sshCommand}, args[2:]...)...)
+	args = append(args[:3], append([]string{"-e", sshCommand}, args[3:]...)...)
 	cmd := exec.Command("rsync", args...)
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	stats := parseRsyncTransferStats(string(output))
+	if err != nil {
+		return stats, rsyncCommandError("upload project", err, output)
+	}
+	return stats, nil
 }
 
-func rsyncPathFromRemote(machine remoteMachine, projectPath string, destinationPath string) error {
+func rsyncPathFromRemote(machine remoteMachine, projectPath string, destinationPath string) (rsyncTransferStats, error) {
 	source := machine.sshTarget() + ":" + projectPath + "/"
 	target := destinationPath + string(os.PathSeparator)
 	ignores, err := remoteSyncIgnores(destinationPath)
 	if err != nil {
-		return err
+		return rsyncTransferStats{}, err
 	}
 	if ignores.ProjectPatternCount > 0 {
 		info("Using %d project sync ignore pattern(s) from %s", ignores.ProjectPatternCount, remoteSyncIgnoreFile)
@@ -904,19 +922,187 @@ func rsyncPathFromRemote(machine remoteMachine, projectPath string, destinationP
 	args := []string{
 		"-az",
 		"--delete",
+		"--stats",
 	}
 	args = appendRsyncExcludeArgs(args, ignores.Patterns)
 	args = append(args, source, target)
 	sshCommand, err := remoteSSHCommand(machine, false)
 	if err != nil {
-		return err
+		return rsyncTransferStats{}, err
 	}
-	args = append(args[:2], append([]string{"-e", sshCommand}, args[2:]...)...)
+	args = append(args[:3], append([]string{"-e", sshCommand}, args[3:]...)...)
 	cmd := exec.Command("rsync", args...)
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	stats := parseRsyncTransferStats(string(output))
+	if err != nil {
+		return stats, rsyncCommandError("download project", err, output)
+	}
+	return stats, nil
+}
+
+type rsyncTransferStats struct {
+	FilesTotal             int64
+	FilesTransferred       int64
+	TotalFileSize          int64
+	TransferredFileSize    int64
+	SentBytes              int64
+	ReceivedBytes          int64
+	HasFilesTotal          bool
+	HasFilesTransferred    bool
+	HasTotalFileSize       bool
+	HasTransferredFileSize bool
+	HasSentBytes           bool
+	HasReceivedBytes       bool
+}
+
+func (stats rsyncTransferStats) summary() string {
+	var parts []string
+	if stats.HasSentBytes || stats.HasReceivedBytes {
+		parts = append(parts, formatByteSize(stats.SentBytes+stats.ReceivedBytes)+" network")
+	}
+	if stats.HasTransferredFileSize {
+		parts = append(parts, formatByteSize(stats.TransferredFileSize)+" changed")
+	}
+	if stats.HasFilesTransferred {
+		if stats.HasFilesTotal {
+			parts = append(parts, fmt.Sprintf("%d/%d files transferred", stats.FilesTransferred, stats.FilesTotal))
+		} else {
+			parts = append(parts, fmt.Sprintf("%d files transferred", stats.FilesTransferred))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
+}
+
+func parseRsyncTransferStats(output string) rsyncTransferStats {
+	var stats rsyncTransferStats
+	for _, line := range strings.Split(output, "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		key = strings.ToLower(strings.TrimSpace(key))
+		value = strings.TrimSpace(value)
+		switch key {
+		case "number of files":
+			if n, ok := parseRsyncStatInt(value); ok {
+				stats.FilesTotal = n
+				stats.HasFilesTotal = true
+			}
+		case "number of files transferred", "number of regular files transferred":
+			if n, ok := parseRsyncStatInt(value); ok {
+				stats.FilesTransferred = n
+				stats.HasFilesTransferred = true
+			}
+		case "total file size":
+			if n, ok := parseRsyncStatSize(value); ok {
+				stats.TotalFileSize = n
+				stats.HasTotalFileSize = true
+			}
+		case "total transferred file size":
+			if n, ok := parseRsyncStatSize(value); ok {
+				stats.TransferredFileSize = n
+				stats.HasTransferredFileSize = true
+			}
+		case "total sent", "total bytes sent":
+			if n, ok := parseRsyncStatSize(value); ok {
+				stats.SentBytes = n
+				stats.HasSentBytes = true
+			}
+		case "total received", "total bytes received":
+			if n, ok := parseRsyncStatSize(value); ok {
+				stats.ReceivedBytes = n
+				stats.HasReceivedBytes = true
+			}
+		}
+	}
+	return stats
+}
+
+func parseRsyncStatInt(value string) (int64, bool) {
+	var digits strings.Builder
+	for _, r := range strings.TrimSpace(value) {
+		if r >= '0' && r <= '9' {
+			digits.WriteRune(r)
+			continue
+		}
+		if r == ',' {
+			continue
+		}
+		break
+	}
+	if digits.Len() == 0 {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(digits.String(), 10, 64)
+	return n, err == nil
+}
+
+func parseRsyncStatSize(value string) (int64, bool) {
+	fields := strings.Fields(strings.TrimSpace(value))
+	if len(fields) == 0 {
+		return 0, false
+	}
+	number, unit := splitRsyncSizeToken(strings.ReplaceAll(fields[0], ",", ""))
+	if unit == "" && len(fields) > 1 {
+		unit = fields[1]
+	}
+	if number == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseFloat(number, 64)
+	if err != nil {
+		return 0, false
+	}
+	multiplier := rsyncSizeMultiplier(unit)
+	return int64(n*multiplier + 0.5), true
+}
+
+func splitRsyncSizeToken(token string) (string, string) {
+	for i, r := range token {
+		if (r >= '0' && r <= '9') || r == '.' {
+			continue
+		}
+		return token[:i], token[i:]
+	}
+	return token, ""
+}
+
+func rsyncSizeMultiplier(unit string) float64 {
+	unit = strings.ToLower(strings.TrimSpace(unit))
+	unit = strings.TrimSuffix(unit, "s")
+	switch unit {
+	case "", "b", "byte":
+		return 1
+	case "k", "kb", "kbyte":
+		return 1 << 10
+	case "m", "mb", "mbyte":
+		return 1 << 20
+	case "g", "gb", "gbyte":
+		return 1 << 30
+	case "t", "tb", "tbyte":
+		return 1 << 40
+	default:
+		return 1
+	}
+}
+
+func formatElapsedDuration(d time.Duration) string {
+	if d < time.Second {
+		return d.Round(time.Millisecond).String()
+	}
+	return d.Round(100 * time.Millisecond).String()
+}
+
+func rsyncCommandError(operation string, err error, output []byte) error {
+	message := strings.TrimSpace(string(output))
+	if message == "" {
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+	return fmt.Errorf("%s: %w: %s", operation, err, message)
 }
 
 type remoteSyncIgnoreConfig struct {

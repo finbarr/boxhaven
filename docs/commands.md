@@ -91,7 +91,8 @@ it overwrites local files by design, so it requires `--force`. Sync excludes
 common dependency/cache directories such as `node_modules/`, `.next/`, and
 `.venv/` by default and reads additional rsync-style exclude patterns from
 `.boxhavenignore` at the project root. Excluded paths are preserved on the
-receiver even when sync mirrors deletions.
+receiver even when sync mirrors deletions. Sync completion reports elapsed time,
+network bytes, changed bytes, and file counts.
 
 ## bh list
 

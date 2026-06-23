@@ -45,7 +45,8 @@ on the box is ever overwritten by a routine command — `bh sync up` pushes
 local changes explicitly (mirroring deletions) and `bh sync down` retrieves
 the box's work. Project sync excludes common dependency/cache directories such
 as `node_modules/`, `.next/`, and `.venv/` by default. Add a `.boxhavenignore`
-file at the project root for additional rsync-style exclude patterns.
+file at the project root for additional rsync-style exclude patterns. Sync
+completion reports elapsed time, network bytes, changed bytes, and file counts.
 
 When you start `claude` or `codex` with `bh run`, bh forwards your newest
 local sessions for the project, so `claude --continue` on the box picks up

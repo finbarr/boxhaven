@@ -179,7 +179,8 @@ bh sync down work --force
 ```
 
 Excluded paths are not deleted by sync, so dependency directories installed on
-the box can stay warm across later `bh sync up` runs.
+the box can stay warm across later `bh sync up` runs. Sync completion reports
+elapsed time, network bytes, changed bytes, and file counts.
 
 `sync down` overwrites local files by design, so it requires `--force`.
 

@@ -333,7 +333,8 @@ owner. The CLI uses the returned OpenSSH certificate with local `ssh` and
 `rsync` directly against the VM public IP. User SSH bytes do not flow through the
 backend. CLI-side host-key pinning lives in `~/.boxhaven/remote_known_hosts`.
 Project sync excludes common dependency/cache directories by default and reads
-additional rsync-style exclude patterns from `.boxhavenignore`.
+additional rsync-style exclude patterns from `.boxhavenignore`. Sync completion
+reports elapsed time, network bytes, changed bytes, and file counts.
 
 The remote image also includes a GitHub HTTPS credential helper. When the CLI
 detects a GitHub project, it writes GitHub auth over direct SSH to

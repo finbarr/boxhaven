@@ -292,6 +292,11 @@ func TestTopLevelHelpMentionsBHCommands(t *testing.T) {
 			t.Fatalf("help output missing %q:\n%s", want, output)
 		}
 	}
+	for _, want := range []string{".boxhavenignore", "reports elapsed transfer stats"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("help output missing sync note %q:\n%s", want, output)
+		}
+	}
 }
 
 func TestTeamUsageMentionsSwitchAndStatus(t *testing.T) {
@@ -528,6 +533,67 @@ func TestAppendRsyncExcludeArgs(t *testing.T) {
 	}
 	if strings.Contains(got, "--exclude\x00\x00") {
 		t.Fatalf("rsync args included empty exclude: %#v", args)
+	}
+}
+
+func TestParseRsyncTransferStatsOpenRsync(t *testing.T) {
+	stats := parseRsyncTransferStats(`Number of files: 2
+Number of files transferred: 1
+Total file size: 5 B
+Total transferred file size: 5 B
+Unmatched data: 5 B
+Matched data: 0 B
+File list size: 91 B
+File list generation time: 0.001 seconds
+File list transfer time: 0.001 seconds
+Total sent: 159 B
+Total received: 42 B
+
+sent 159 bytes  received 42 bytes  182727 bytes/sec
+total size is 5  speedup is 0.02
+`)
+	if stats.FilesTotal != 2 || !stats.HasFilesTotal {
+		t.Fatalf("FilesTotal = %d, has=%v, want 2 true", stats.FilesTotal, stats.HasFilesTotal)
+	}
+	if stats.FilesTransferred != 1 || !stats.HasFilesTransferred {
+		t.Fatalf("FilesTransferred = %d, has=%v, want 1 true", stats.FilesTransferred, stats.HasFilesTransferred)
+	}
+	if stats.TransferredFileSize != 5 || !stats.HasTransferredFileSize {
+		t.Fatalf("TransferredFileSize = %d, has=%v, want 5 true", stats.TransferredFileSize, stats.HasTransferredFileSize)
+	}
+	if stats.SentBytes != 159 || stats.ReceivedBytes != 42 {
+		t.Fatalf("network bytes = sent %d received %d, want 159 42", stats.SentBytes, stats.ReceivedBytes)
+	}
+	if got, want := stats.summary(), " (201B network, 5B changed, 1/2 files transferred)"; got != want {
+		t.Fatalf("summary = %q, want %q", got, want)
+	}
+}
+
+func TestParseRsyncTransferStatsGNU(t *testing.T) {
+	stats := parseRsyncTransferStats(`Number of files: 1,234 (reg: 1,200, dir: 34)
+Number of regular files transferred: 12
+Total file size: 1,048,576 bytes
+Total transferred file size: 2.5K bytes
+Literal data: 2.5K bytes
+Matched data: 0 bytes
+File list size: 12.3K
+Total bytes sent: 6,144 bytes
+Total bytes received: 512 bytes
+`)
+	if stats.FilesTotal != 1234 {
+		t.Fatalf("FilesTotal = %d, want 1234", stats.FilesTotal)
+	}
+	if stats.FilesTransferred != 12 {
+		t.Fatalf("FilesTransferred = %d, want 12", stats.FilesTransferred)
+	}
+	if stats.TotalFileSize != 1048576 {
+		t.Fatalf("TotalFileSize = %d, want 1048576", stats.TotalFileSize)
+	}
+	if stats.TransferredFileSize != 2560 {
+		t.Fatalf("TransferredFileSize = %d, want 2560", stats.TransferredFileSize)
+	}
+	if stats.SentBytes != 6144 || stats.ReceivedBytes != 512 {
+		t.Fatalf("network bytes = sent %d received %d, want 6144 512", stats.SentBytes, stats.ReceivedBytes)
 	}
 }
 
