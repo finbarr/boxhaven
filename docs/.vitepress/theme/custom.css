@@ -165,30 +165,6 @@ body {
   color: var(--bhv-ink-muted);
 }
 
-/* ---------- Landing Page ---------- */
-
-.landing-page .VPDoc {
-  padding: 0 !important;
-}
-
-.landing-page .container,
-.landing-page .content,
-.landing-page .content-container {
-  max-width: none !important;
-}
-
-.landing-page .content-container {
-  padding: 0 !important;
-}
-
-.landing-page .vp-doc {
-  padding: 0 !important;
-}
-
-.landing-page .vp-doc > div:first-child {
-  margin-top: 0 !important;
-}
-
 /* ---------- Code Blocks: dark terminal cards ---------- */
 
 div[class*='language-'] {

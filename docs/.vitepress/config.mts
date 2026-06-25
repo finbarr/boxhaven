@@ -1,15 +1,15 @@
 import { defineConfig } from 'vitepress'
 
 const SITE_URL = 'https://docs.boxhaven.dev'
-const SITE_NAME = 'BoxHaven'
-const SITE_DESCRIPTION = 'Remote dev boxes for AI coding agents. Create a box, resume your agent session on it, disconnect, let it work.'
+const SITE_NAME = 'BoxHaven Docs'
+const SITE_DESCRIPTION = 'Documentation for installing BoxHaven, running remote boxes, operating teams and images, and self-hosting the backend.'
 const SOCIAL_IMAGE_URL = `${SITE_URL}/logo.png`
 const SOCIAL_IMAGE_ALT = 'The BoxHaven logo: a cozy wooden house sheltering three friendly server boxes.'
 
 const pageSeo: Record<string, { title: string, description: string, noindex?: boolean }> = {
   '/': {
-    title: 'Remote Dev Boxes for AI Coding Agents',
-    description: 'Create a named remote box, resume your local Claude or Codex session on it, disconnect, and let the agent keep working in a managed tmux session.',
+    title: 'Documentation',
+    description: 'Install BoxHaven, run remote boxes, manage teams and images, and self-host the backend.',
   },
   '/getting-started': {
     title: 'Installation and First Box',
@@ -55,7 +55,7 @@ const pageSeo: Record<string, { title: string, description: string, noindex?: bo
   },
   '/404': {
     title: 'Page Not Found',
-    description: 'The requested page could not be found on docs.boxhaven.dev.',
+    description: 'The requested BoxHaven documentation page could not be found.',
     noindex: true,
   },
 }
@@ -168,14 +168,15 @@ export default defineConfig({
   },
 
   themeConfig: {
-    siteTitle: 'BoxHaven',
+    siteTitle: 'BoxHaven Docs',
     logo: '/logo.png',
 
     nav: [
       { text: 'Get Started', link: '/getting-started' },
       { text: 'Commands', link: '/commands' },
       { text: 'Self-Hosting', link: '/self-hosting' },
-      { text: 'Security', link: '/security' },
+      { text: 'Website', link: 'https://boxhaven.dev' },
+      { text: 'Console', link: 'https://app.boxhaven.dev' },
     ],
 
     sidebar: [
@@ -216,7 +217,7 @@ export default defineConfig({
     },
 
     footer: {
-      message: 'Released under the MIT License.',
+      message: 'BoxHaven documentation. The hosted service website is at boxhaven.dev.',
       copyright: 'Copyright 2026 Finbarr Taylor'
     },
 

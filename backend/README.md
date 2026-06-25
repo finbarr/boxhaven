@@ -8,13 +8,14 @@ their own provider credentials.
 
 The browser app is built with TanStack Router and TanStack Query. It is the
 console/auth surface only: login, signup, CLI device approval, invitations,
-and authenticated box/team/image/billing views. Public website and docs content
-lives in the repository's `docs/` site instead of this app bundle, so a
+and authenticated box/team/image/billing views. The paid-service website lives
+in the separate `website/` artifact, and documentation lives in `docs/`, so a
 self-hosted backend does not serve the marketing site.
 
-In production the intended split is `app.boxhaven.dev` for the console/auth app
-and `api.boxhaven.dev` for this API. The API also serves the built console app
-from `dist-app` for simple self-hosted deployments.
+In production the intended split is `boxhaven.dev` for the paid-service
+website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for the
+console/auth app, and `api.boxhaven.dev` for this API. The API also serves the
+built console app from `dist-app` for simple self-hosted deployments.
 
 ## Run Locally
 
@@ -92,8 +93,10 @@ hosted split:
 
 - `app.boxhaven.dev` for the browser console/auth app
 - `api.boxhaven.dev` for API and Better Auth routes
+- `docs.boxhaven.dev` for the static documentation site
 - `*.at.boxhaven.dev` for generated machine preview URLs
 - Caddy-managed TLS in front of the backend container
+- a Caddy file-server mount for the built `docs/.vitepress/dist` artifact
 - host-mounted backend and Caddy data under `/opt/boxhaven/data`
 - a systemd timer that writes daily archives to `/opt/boxhaven/backups`
 
@@ -108,12 +111,13 @@ Deploy the hosted production stack from the repository root:
 npm run deploy:app
 ```
 
-`npm run deploy:production` is a compatibility alias for the same fast app/API
-deploy. By default the command SSHes to `root@app.boxhaven.dev`, fast-forwards
-`/opt/boxhaven/app` on `master`, runs the Compose deploy on the Droplet, and
-checks both public health endpoints. It forwards your SSH agent so the Droplet
-can fetch the private GitHub repo without storing a GitHub token. On the Droplet
-itself, use `npm run deploy:production:local`.
+`npm run deploy:production` is a compatibility alias for the same fast
+app/API/docs deploy. By default the command SSHes to `root@app.boxhaven.dev`,
+fast-forwards `/opt/boxhaven/app` on `master`, builds the docs site, runs the
+Compose deploy on the Droplet, and checks the public app, API, and docs health
+endpoints. It forwards your SSH agent so the Droplet can fetch the private
+GitHub repo without storing a GitHub token. On the Droplet itself, use
+`npm run deploy:production:local`.
 
 Then sign up or sign in from another shell. The CLI prints a browser URL, tries
 to open it, and waits for the web app to grant access:

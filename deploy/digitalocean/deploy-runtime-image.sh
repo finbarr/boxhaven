@@ -8,8 +8,8 @@ Usage:
   deploy/digitalocean/deploy-runtime-image.sh [options] [-- build-image-options...]
 
 Build, activate, and verify the remote VM image. This is intentionally separate
-from the normal app/API deploy because it creates and snapshots a temporary
-DigitalOcean builder Droplet.
+from the normal app/API/docs deploy because it creates and snapshots a
+temporary DigitalOcean builder Droplet.
 
 Options:
   --local          Run in this checkout instead of SSHing to the production host.

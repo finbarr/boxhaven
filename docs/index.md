@@ -1,10 +1,27 @@
 ---
-layout: page
-pageClass: landing-page
-title: false
-sidebar: false
-aside: false
-outline: false
+title: Documentation
+description: Install BoxHaven, run remote boxes, manage teams and images, and self-host the backend.
 ---
 
-<HomeContent />
+# BoxHaven Documentation
+
+BoxHaven runs remote development boxes for AI coding agents. Use these docs to
+install the CLI, connect to a hosted or self-hosted backend, create boxes, run
+agents inside persistent sessions, and operate the backend.
+
+## Start here
+
+- [Getting started](/getting-started): install `bh`, log in, create a box, run an agent, disconnect, and reattach.
+- [CLI reference](/commands): every command and flag for boxes, sync, teams, images, auth, and config.
+- [Self-hosting](/self-hosting): run the Fastify/Better Auth control plane with your own provider credentials.
+
+## Operate boxes
+
+- [Teams](/teams): team-owned boxes, roles, invitations, and moving boxes between teams.
+- [Golden images](/images): create, snapshot, activate, and remove VM runtime images.
+- [Cloud providers](/providers): configure DigitalOcean and Hetzner Cloud provider settings.
+
+## Security and billing
+
+- [Security model](/security): short-lived SSH certificates, the backend user CA, and forwarded credentials.
+- [Billing](/billing): how hosted BoxHaven billing is modeled for teams.

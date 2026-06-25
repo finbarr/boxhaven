@@ -1,15 +1,18 @@
 # DigitalOcean deployment
 
-This bundle runs the BoxHaven console/auth app and API on a single
-DigitalOcean Droplet. Caddy terminates TLS for `app.boxhaven.dev`,
-`api.boxhaven.dev`, and generated preview hostnames under `at.boxhaven.dev`,
-then proxies those hostnames to the backend container. Backend state is stored
-on the host under `/opt/boxhaven/data/backend` so it can be backed up outside
-Docker.
+This bundle runs the BoxHaven console/auth app, API, and documentation site on
+a single DigitalOcean Droplet. Caddy terminates TLS for `app.boxhaven.dev`,
+`api.boxhaven.dev`, `docs.boxhaven.dev`, and generated preview hostnames under
+`at.boxhaven.dev`. App and API hostnames proxy to the backend container. The
+docs hostname serves the static `docs/.vitepress/dist` artifact. Backend state
+is stored on the host under `/opt/boxhaven/data/backend` so it can be backed up
+outside Docker.
 
 The backend-served app is intentionally not the public website. It contains
 only login/signup, CLI device approval, invitations, and the authenticated
-console. Public website and documentation content lives in the docs site.
+console. The paid-service website is a separate `website/` artifact published
+to `boxhaven.dev`; documentation is a separate `docs/` artifact that can be
+hosted internally or served by this Caddy bundle.
 
 ## Provision
 
@@ -21,6 +24,7 @@ Required DNS records:
 ```text
 app.boxhaven.dev.  A  <droplet-ip>
 api.boxhaven.dev.  A  <droplet-ip>
+docs.boxhaven.dev. A  <droplet-ip>
 *.at.boxhaven.dev.  A  <droplet-ip>
 ```
 
@@ -41,7 +45,8 @@ then deletes the account key. Cloud-init configures VMs to trust short-lived
 boxhaven SSH certificates instead. The backend SSH user CA is stored at
 `/opt/boxhaven/data/backend/ssh_ca_ed25519` and is included in the backend data
 backups.
-Set `BOXHAVEN_PREVIEW_BASE_DOMAIN` to the wildcard domain above. The default
+Set `BOXHAVEN_DOCS_HOST` to the documentation hostname and
+`BOXHAVEN_PREVIEW_BASE_DOMAIN` to the wildcard domain above. The default
 preview target is port `80` on each remote machine; change
 `BOXHAVEN_PREVIEW_TARGET_PORT` if the machine runtime should receive preview
 traffic somewhere else.
@@ -68,10 +73,11 @@ npm run deploy:app
 ```
 
 `npm run deploy:production` is kept as a compatibility alias for the same fast
-app/API deploy. These commands SSH to `root@app.boxhaven.dev`, fast-forward
-`/opt/boxhaven/app` on `master`, run the Docker Compose deploy on the Droplet,
-and check `https://api.boxhaven.dev/healthz` plus
-`https://app.boxhaven.dev/healthz`. They do not rebuild the remote VM image.
+app/API/docs deploy. These commands SSH to `root@app.boxhaven.dev`,
+fast-forward `/opt/boxhaven/app` on `master`, build the docs site, run the
+Docker Compose deploy on the Droplet, and check
+`https://api.boxhaven.dev/healthz`, `https://app.boxhaven.dev/healthz`, and
+`https://docs.boxhaven.dev/`. They do not rebuild the remote VM image.
 
 After changing the VM runtime or image-builder code, explicitly rebuild and
 publish the remote VM image:
@@ -95,6 +101,7 @@ BOXHAVEN_DEPLOY_TARGET=root@<control-plane-ip> \
 BOXHAVEN_DEPLOY_DIR=/opt/boxhaven/app \
 BOXHAVEN_PRODUCTION_API_HEALTH_URL=https://api.example.com/healthz \
 BOXHAVEN_PRODUCTION_APP_HEALTH_URL=https://app.example.com/healthz \
+BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL=https://docs.example.com/ \
 npm run deploy:production
 ```
 

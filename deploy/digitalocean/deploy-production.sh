@@ -24,6 +24,7 @@ Environment:
                                        Default: deploy/digitalocean/.env.production.
   BOXHAVEN_PRODUCTION_API_HEALTH_URL   Default: https://api.boxhaven.dev/healthz.
   BOXHAVEN_PRODUCTION_APP_HEALTH_URL   Default: https://app.boxhaven.dev/healthz.
+  BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL  Default: https://docs.boxhaven.dev/.
 
 Remote deploys use SSH agent forwarding so the Droplet can fetch private GitHub
 repositories without storing a long-lived GitHub token on the host.
@@ -94,7 +95,8 @@ if [ "$local_mode" -ne 1 ]; then
     "$remote_verify_arg" \
     "${BOXHAVEN_PRODUCTION_ENV_FILE:-}" \
     "${BOXHAVEN_PRODUCTION_API_HEALTH_URL:-}" \
-    "${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-}" <<'REMOTE'
+    "${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-}" \
+    "${BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL:-}" <<'REMOTE'
 set -euo pipefail
 
 deploy_dir="$1"
@@ -103,10 +105,12 @@ verify_arg="${3:-}"
 env_file="${4:-}"
 api_health_url="${5:-}"
 app_health_url="${6:-}"
+docs_health_url="${7:-}"
 
 [ -z "$env_file" ] || export BOXHAVEN_PRODUCTION_ENV_FILE="$env_file"
 [ -z "$api_health_url" ] || export BOXHAVEN_PRODUCTION_API_HEALTH_URL="$api_health_url"
 [ -z "$app_health_url" ] || export BOXHAVEN_PRODUCTION_APP_HEALTH_URL="$app_health_url"
+[ -z "$docs_health_url" ] || export BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL="$docs_health_url"
 
 cd "$deploy_dir"
 
@@ -142,6 +146,7 @@ compose_file="deploy/digitalocean/docker-compose.yml"
 env_file="${BOXHAVEN_PRODUCTION_ENV_FILE:-deploy/digitalocean/.env.production}"
 api_health_url="${BOXHAVEN_PRODUCTION_API_HEALTH_URL:-https://api.boxhaven.dev/healthz}"
 app_health_url="${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-https://app.boxhaven.dev/healthz}"
+docs_health_url="${BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL:-https://docs.boxhaven.dev/}"
 
 [ -f "$compose_file" ] || die "missing ${compose_file}"
 [ -f "$env_file" ] || die "missing ${env_file}; copy deploy/digitalocean/env.production.example and fill in production secrets"
@@ -149,6 +154,30 @@ command -v docker >/dev/null 2>&1 || die "docker is required"
 command -v curl >/dev/null 2>&1 || die "curl is required"
 
 if [ "$verify_only" -ne 1 ]; then
+  echo "Building docs site"
+  docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -e npm_config_cache=/tmp/npm-cache \
+    -v "${repo_root}:/work" \
+    -w /tmp \
+    node:22-alpine \
+    sh -c '
+      set -eu
+      mkdir -p /tmp/docs
+      tar -C /work/docs \
+        --exclude ./node_modules \
+        --exclude ./.vitepress/dist \
+        --exclude ./.vitepress/cache \
+        -cf - . | tar -C /tmp/docs -xf -
+      cd /tmp/docs
+      npm ci
+      npm run docs:build
+      rm -rf /work/docs/.vitepress/dist
+      mkdir -p /work/docs/.vitepress
+      cp -R /tmp/docs/.vitepress/dist /work/docs/.vitepress/dist
+    '
+
   echo "Building and starting production containers"
   docker compose --env-file "$env_file" -f "$compose_file" up -d --build --remove-orphans
   echo "Recreating Caddy to apply mounted configuration"
@@ -163,5 +192,8 @@ curl -fsS "$api_health_url" >/dev/null
 
 echo "Checking ${app_health_url}"
 curl -fsS "$app_health_url" >/dev/null
+
+echo "Checking ${docs_health_url}"
+curl -fsS "$docs_health_url" >/dev/null
 
 echo "Production deploy verified"

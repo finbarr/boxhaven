@@ -7,13 +7,16 @@ credentials and no built-in limits.
 
 The browser app is built with TanStack Router and TanStack Query. It is the
 console/auth surface only: login, signup, CLI device approval, invitations,
-and authenticated box/team/image/billing views. Public website and
-documentation content lives in the docs site, not in the backend-served app,
-so a self-hosted server can run with only the login and console UI.
+and authenticated box/team/image/billing views. The paid-service website lives
+in the separate `website/` artifact, and documentation lives in `docs/`, so a
+self-hosted server can run with only the login and console UI. Teams that want
+internal documentation can host the `docs/` static build without hosting the
+marketing website.
 
-In production the intended split is `app.boxhaven.dev` for the console/auth
-app and `api.boxhaven.dev` for the API. The API also serves the built console
-app from `dist-app` for simple self-hosted deployments.
+In production the intended split is `boxhaven.dev` for the paid-service
+website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for the
+console/auth app, and `api.boxhaven.dev` for the API. The API also serves the
+built console app from `dist-app` for simple self-hosted deployments.
 
 ## Run Locally
 
@@ -92,8 +95,10 @@ hosted split:
 
 - `app.boxhaven.dev` for the browser console/auth app
 - `api.boxhaven.dev` for API and Better Auth routes
+- `docs.boxhaven.dev` for the static documentation site
 - `*.at.boxhaven.dev` for generated machine preview URLs
 - Caddy-managed TLS in front of the backend container
+- a Caddy file-server mount for the built `docs/.vitepress/dist` artifact
 - host-mounted backend and Caddy data under `/opt/boxhaven/data`
 - a systemd timer that writes daily archives to `/opt/boxhaven/backups`
 
@@ -107,6 +112,7 @@ Required DNS records:
 ```text
 app.boxhaven.dev.  A  <droplet-ip>
 api.boxhaven.dev.  A  <droplet-ip>
+docs.boxhaven.dev. A  <droplet-ip>
 *.at.boxhaven.dev.  A  <droplet-ip>
 ```
 
@@ -123,6 +129,7 @@ cp deploy/digitalocean/env.production.example deploy/digitalocean/.env.productio
 `DIGITALOCEAN_ACCESS_TOKEN` so it can create remote VMs for users. The
 backend SSH user CA is stored at `/opt/boxhaven/data/backend/ssh_ca_ed25519`
 and is included in the backend data backups. Set
+`BOXHAVEN_DOCS_HOST` to the documentation hostname and
 `BOXHAVEN_PREVIEW_BASE_DOMAIN` to the wildcard domain above.
 
 ### Deploy
@@ -134,11 +141,11 @@ npm run deploy:app
 ```
 
 `npm run deploy:production` is a compatibility alias for the same fast
-app/API deploy. By default the command SSHes to `root@app.boxhaven.dev`,
-fast-forwards `/opt/boxhaven/app` on `master`, runs the Compose deploy on the
-Droplet, and checks both public health endpoints. It forwards your SSH agent
-so the Droplet can fetch the private GitHub repo without storing a GitHub
-token. Override the SSH target with
+app/API/docs deploy. By default the command SSHes to `root@app.boxhaven.dev`,
+fast-forwards `/opt/boxhaven/app` on `master`, builds the docs site, runs the
+Compose deploy on the Droplet, and checks the public app, API, and docs health
+endpoints. It forwards your SSH agent so the Droplet can fetch the private
+GitHub repo without storing a GitHub token. Override the SSH target with
 `BOXHAVEN_DEPLOY_TARGET=root@<control-plane-ip>` or `-- --target user@host`
 for self-hosted installs. On the Droplet itself, use
 `npm run deploy:production:local`.

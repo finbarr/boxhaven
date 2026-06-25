@@ -63,11 +63,13 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL}
       BOXHAVEN_APP_HOST: ${BOXHAVEN_APP_HOST:?set BOXHAVEN_APP_HOST}
       BOXHAVEN_API_HOST: ${BOXHAVEN_API_HOST:?set BOXHAVEN_API_HOST}
+      BOXHAVEN_DOCS_HOST: ${BOXHAVEN_DOCS_HOST:-docs.boxhaven.dev}
       BOXHAVEN_PREVIEW_BASE_DOMAIN: ${BOXHAVEN_PREVIEW_BASE_DOMAIN:?set BOXHAVEN_PREVIEW_BASE_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../docs/.vitepress/dist:/srv/docs:ro
       - /opt/boxhaven/data/caddy/data:/data
       - /opt/boxhaven/data/caddy/config:/config

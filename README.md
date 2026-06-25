@@ -11,10 +11,12 @@ remote dev boxes for individual developers, persistent agent sessions, direct
 SSH access, project sync, GitHub pushes from the box, and a self-hostable
 control plane.
 
-The backend-served browser app is intentionally just login, CLI device
-approval, and the authenticated console. Public website and documentation
-content lives in [docs](docs), so a self-hosted BoxHaven server does not need
-to ship the marketing site.
+The hosted product has four separate surfaces: `boxhaven.dev` for the paid
+service website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for
+login/device approval/the authenticated console, and `api.boxhaven.dev` for the
+API. Self-hosted BoxHaven servers run only the console/auth app and API; they
+do not ship the paid-service marketing website. The documentation site lives in
+[docs](docs) and can be hosted separately when teams want internal docs.
 
 The CLI is intentionally small, and the workflow is agent-first: copy your
 project to a box once, start Claude or Codex inside the box's tmux session —
@@ -331,10 +333,10 @@ npm run deploy:app
 ```
 
 `npm run deploy:production` is kept as a compatibility alias for the same fast
-app/API deploy. These commands SSH to `root@app.boxhaven.dev`, fast-forward
-`/opt/boxhaven/app` on `master`, run the DigitalOcean Compose deploy, and check
-the production app and API health endpoints. They do not rebuild the remote VM
-snapshot.
+app/API/docs deploy. These commands SSH to `root@app.boxhaven.dev`,
+fast-forward `/opt/boxhaven/app` on `master`, build the docs site, run the
+DigitalOcean Compose deploy, and check the production app, API, and docs health
+endpoints. They do not rebuild the remote VM snapshot.
 
 After changing the VM runtime or image-builder code, explicitly rebuild and
 publish the remote VM image:
