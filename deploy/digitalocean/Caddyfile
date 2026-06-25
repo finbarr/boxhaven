@@ -18,7 +18,7 @@
 {$BOXHAVEN_DOCS_HOST} {
 	encode zstd gzip
 	root * /srv/docs
-	try_files {path} {path}.html =404
+	try_files {path} {path}/index.html {path}.html =404
 	file_server
 	handle_errors {
 		rewrite * /404.html
