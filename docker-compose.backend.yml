@@ -2,6 +2,9 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        VITE_BOXHAVEN_API_URL: ${BOXHAVEN_API_URL:-}
+        VITE_BOXHAVEN_DOCS_URL: ${BOXHAVEN_DOCS_URL:-}
     image: boxhaven-backend:dev
     environment:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET to a long random value}
@@ -9,6 +12,7 @@ services:
       BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-http://127.0.0.1:8787,http://127.0.0.1:5173,http://localhost:5173,https://app.boxhaven.dev}
       BOXHAVEN_APP_URL: ${BOXHAVEN_APP_URL:-http://127.0.0.1:8787}
       BOXHAVEN_API_URL: ${BOXHAVEN_API_URL:-http://127.0.0.1:8787}
+      BOXHAVEN_DOCS_URL: ${BOXHAVEN_DOCS_URL:-}
       BOXHAVEN_BACKEND_CORS_ORIGINS: ${BOXHAVEN_BACKEND_CORS_ORIGINS:-http://127.0.0.1:8787,http://127.0.0.1:5173,http://localhost:5173,https://app.boxhaven.dev}
       BOXHAVEN_PREVIEW_BASE_DOMAIN: ${BOXHAVEN_PREVIEW_BASE_DOMAIN:-}
       BOXHAVEN_PREVIEW_TARGET_PORT: ${BOXHAVEN_PREVIEW_TARGET_PORT:-80}

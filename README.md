@@ -16,7 +16,9 @@ service website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for
 login/device approval/the authenticated console, and `api.boxhaven.dev` for the
 API. Self-hosted BoxHaven servers run only the console/auth app and API; they
 do not ship the paid-service marketing website. The documentation site lives in
-[docs](docs) and can be hosted separately when teams want internal docs.
+[docs](docs) and can be hosted separately when teams want internal docs. Set
+`BOXHAVEN_DOCS_URL` when building the console app if its footer should link to
+an internal documentation site instead of the hosted docs.
 
 The CLI is intentionally small, and the workflow is agent-first: copy your
 project to a box once, start Claude or Codex inside the box's tmux session —

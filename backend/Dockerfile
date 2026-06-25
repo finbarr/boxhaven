@@ -12,6 +12,11 @@ RUN npm ci
 COPY tsconfig.json vite.config.ts ./
 COPY src ./src
 COPY app ./app
+
+ARG VITE_BOXHAVEN_API_URL
+ARG VITE_BOXHAVEN_DOCS_URL
+ENV VITE_BOXHAVEN_API_URL=$VITE_BOXHAVEN_API_URL \
+  VITE_BOXHAVEN_DOCS_URL=$VITE_BOXHAVEN_DOCS_URL
 RUN npm run build \
   && npm prune --omit=dev
 

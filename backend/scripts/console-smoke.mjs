@@ -217,6 +217,7 @@ async function createOrganization(app, headers, name, slug) {
 
 async function startViteApp() {
   process.env.VITE_BOXHAVEN_API_URL = apiURL;
+  process.env.VITE_BOXHAVEN_DOCS_URL = "https://docs.console-smoke.test/custom/";
   const server = await createViteServer({
     configFile: join(backendDir, "vite.config.ts"),
     clearScreen: false,
@@ -242,12 +243,16 @@ async function checkAccessPage(page) {
     landingPresent: Boolean(document.querySelector(".landing-page, .landing-hero, .landing-paths")),
     marketingCopyPresent: Boolean(document.body.textContent?.includes("Dev boxes that keep working")),
     authModes: [...document.querySelectorAll(".segmented button")].map((button) => button.textContent?.trim()),
+    docsHref: [...document.querySelectorAll(".site-footer a")]
+      .find((link) => link.textContent?.trim() === "Docs")
+      ?.getAttribute("href"),
   }));
   assert.equal(facts.title, "Create a BoxHaven account");
   assert.equal(facts.topbarSubtitle, "console access");
   assert.equal(facts.landingPresent, false);
   assert.equal(facts.marketingCopyPresent, false);
   assert.deepEqual(facts.authModes, ["Sign up", "Sign in"]);
+  assert.equal(facts.docsHref, "https://docs.console-smoke.test/custom");
   return facts;
 }
 

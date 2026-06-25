@@ -5,6 +5,7 @@ import { TeamInfo } from "./api";
 import logoURL from "./assets/boxhaven-logo.png";
 
 export const repoURL = "https://github.com/finbarr/boxhaven";
+export const docsURL = (import.meta.env.VITE_BOXHAVEN_DOCS_URL || "https://docs.boxhaven.dev").replace(/\/+$/, "");
 
 export type ConsoleSection = "boxes" | "team" | "teams" | "images" | "billing";
 

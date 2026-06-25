@@ -24,7 +24,7 @@ Required DNS records:
 ```text
 app.boxhaven.dev.  A  <droplet-ip>
 api.boxhaven.dev.  A  <droplet-ip>
-docs.boxhaven.dev. A  <droplet-ip>
+docs.boxhaven.dev. CNAME app.boxhaven.dev.
 *.at.boxhaven.dev.  A  <droplet-ip>
 ```
 
@@ -45,7 +45,8 @@ then deletes the account key. Cloud-init configures VMs to trust short-lived
 boxhaven SSH certificates instead. The backend SSH user CA is stored at
 `/opt/boxhaven/data/backend/ssh_ca_ed25519` and is included in the backend data
 backups.
-Set `BOXHAVEN_DOCS_HOST` to the documentation hostname and
+Set `BOXHAVEN_DOCS_HOST` to the documentation hostname, `BOXHAVEN_DOCS_URL`
+to the public URL the console should link to, and
 `BOXHAVEN_PREVIEW_BASE_DOMAIN` to the wildcard domain above. The default
 preview target is port `80` on each remote machine; change
 `BOXHAVEN_PREVIEW_TARGET_PORT` if the machine runtime should receive preview

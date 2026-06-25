@@ -74,6 +74,7 @@ export BOXHAVEN_BACKEND_PORT=127.0.0.1:8877
 export BETTER_AUTH_URL=http://127.0.0.1:8877/v1/auth
 export BOXHAVEN_APP_URL=http://127.0.0.1:8877
 export BOXHAVEN_API_URL=http://127.0.0.1:8877
+export BOXHAVEN_DOCS_URL=https://docs.example.internal
 
 docker compose -f docker-compose.backend.yml up -d --build
 docker compose -f docker-compose.backend.yml ps
@@ -133,6 +134,7 @@ Environment:
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated trusted browser origins.
 - `BOXHAVEN_APP_URL`: public console/auth app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_API_URL`: public API URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
+- `BOXHAVEN_DOCS_URL`: public documentation URL used by console footer links in Docker builds. Set this when self-hosting internal docs; otherwise the app links to `https://docs.boxhaven.dev`.
 - `BOXHAVEN_BACKEND_CORS_ORIGINS`: comma-separated browser origins allowed to call the API.
 - `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.boxhaven.dev`.
 - `BOXHAVEN_PREVIEW_TARGET_PORT`: machine port that preview hosts proxy to, default `80`.

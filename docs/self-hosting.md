@@ -60,7 +60,9 @@ backend state in the `boxhaven-backend-data` Docker volume. Override the host
 bind with `BOXHAVEN_BACKEND_PORT`, for example
 `BOXHAVEN_BACKEND_PORT=127.0.0.1:8877`. When the public URL changes, also set
 `BETTER_AUTH_URL`, `BOXHAVEN_APP_URL`, and `BOXHAVEN_API_URL` so browser
-login links point at the reachable host.
+login links point at the reachable host. Set `BOXHAVEN_DOCS_URL` before
+`docker compose ... up --build` if the console footer should link to an
+internal docs site instead of `https://docs.boxhaven.dev`.
 
 A dummy `DIGITALOCEAN_ACCESS_TOKEN` is enough for build, startup, health, and
 read-only API checks. Creating boxes from this stack still requires a real
@@ -73,6 +75,7 @@ DigitalOcean token and a CLI login token for the local backend.
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated trusted browser origins.
 - `BOXHAVEN_APP_URL`: public console/auth app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_API_URL`: public API URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
+- `BOXHAVEN_DOCS_URL`: public documentation URL used by console footer links in Docker builds. Set this when self-hosting internal docs; otherwise the app links to `https://docs.boxhaven.dev`.
 - `BOXHAVEN_BACKEND_CORS_ORIGINS`: comma-separated browser origins allowed to call the API.
 - `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.boxhaven.dev`.
 - `BOXHAVEN_PREVIEW_TARGET_PORT`: machine port that preview hosts proxy to, default `80`.
@@ -112,7 +115,7 @@ Required DNS records:
 ```text
 app.boxhaven.dev.  A  <droplet-ip>
 api.boxhaven.dev.  A  <droplet-ip>
-docs.boxhaven.dev. A  <droplet-ip>
+docs.boxhaven.dev. CNAME app.boxhaven.dev.
 *.at.boxhaven.dev.  A  <droplet-ip>
 ```
 
@@ -129,8 +132,9 @@ cp deploy/digitalocean/env.production.example deploy/digitalocean/.env.productio
 `DIGITALOCEAN_ACCESS_TOKEN` so it can create remote VMs for users. The
 backend SSH user CA is stored at `/opt/boxhaven/data/backend/ssh_ca_ed25519`
 and is included in the backend data backups. Set
-`BOXHAVEN_DOCS_HOST` to the documentation hostname and
-`BOXHAVEN_PREVIEW_BASE_DOMAIN` to the wildcard domain above.
+`BOXHAVEN_DOCS_HOST` to the documentation hostname, `BOXHAVEN_DOCS_URL` to
+the public URL the console should link to, and `BOXHAVEN_PREVIEW_BASE_DOMAIN`
+to the wildcard domain above.
 
 ### Deploy
 
