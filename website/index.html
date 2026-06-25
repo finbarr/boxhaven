@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>BoxHaven | Remote Dev Boxes for AI Coding Agents</title>
-    <meta name="description" content="Remote dev boxes for AI coding agents. Create a box, resume your agent session on it, disconnect, let it work.">
+    <title>BoxHaven - Open-source devbox management</title>
+    <meta name="description" content="Spin up full Linux VMs with root access and run coding agents 24/7 in tmux sessions you can reconnect to from anywhere. Hosted or self-hosted from the same open-source code.">
     <link rel="canonical" href="https://boxhaven.dev/">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="BoxHaven">
-    <meta property="og:title" content="BoxHaven | Remote Dev Boxes for AI Coding Agents">
-    <meta property="og:description" content="Create a named remote box, resume your local Claude or Codex session on it, disconnect, and let the agent keep working in a managed tmux session.">
+    <meta property="og:title" content="BoxHaven - Open-source devbox management">
+    <meta property="og:description" content="Dev boxes that keep working after you disconnect. Hosted or self-hosted from the same open-source code.">
     <meta property="og:url" content="https://boxhaven.dev/">
     <meta property="og:image" content="https://boxhaven.dev/assets/logo.png">
     <meta property="og:image:secure_url" content="https://boxhaven.dev/assets/logo.png">
@@ -20,160 +20,238 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:url" content="https://boxhaven.dev/">
     <meta name="twitter:domain" content="boxhaven.dev">
-    <meta name="twitter:title" content="BoxHaven | Remote Dev Boxes for AI Coding Agents">
-    <meta name="twitter:description" content="Create a named remote box, resume your local Claude or Codex session on it, disconnect, and let the agent keep working in a managed tmux session.">
+    <meta name="twitter:title" content="BoxHaven - Open-source devbox management">
+    <meta name="twitter:description" content="Dev boxes that keep working after you disconnect. Hosted or self-hosted from the same open-source code.">
     <meta name="twitter:image" content="https://boxhaven.dev/assets/logo.png">
     <meta name="twitter:image:alt" content="The BoxHaven logo: a cozy wooden house sheltering three friendly server boxes.">
     <link rel="icon" type="image/png" href="/assets/favicon.png">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <header class="site-header">
-      <a class="brand" href="/" aria-label="BoxHaven home">
-        <img src="/assets/logo.png" alt="" width="30" height="30">
-        <span>BoxHaven</span>
-      </a>
-      <nav class="nav-links" aria-label="Primary navigation">
-        <a href="https://docs.boxhaven.dev/getting-started">Get Started</a>
-        <a href="https://docs.boxhaven.dev/commands">Commands</a>
-        <a href="https://docs.boxhaven.dev/self-hosting">Self-Hosting</a>
-        <a href="https://docs.boxhaven.dev/security">Security</a>
-        <a href="https://app.boxhaven.dev/">Console</a>
-        <a href="https://github.com/finbarr/boxhaven" aria-label="BoxHaven on GitHub">GitHub</a>
-      </nav>
-    </header>
-
-    <main class="home-content">
-      <section class="home-section masthead-section">
-        <div class="section-inner masthead-inner">
-          <img class="masthead-logo" src="/assets/logo.png" alt="The BoxHaven logo: a cozy wooden house sheltering three friendly server boxes." width="180" height="180">
-          <div class="masthead-copy">
-            <h1 class="masthead-title">BoxHaven</h1>
-            <p class="masthead-tagline">
-              Remote dev boxes for AI coding agents. Create a box, resume your
-              agent session on it, disconnect, let it work.
-            </p>
-            <div class="install-line">
-              <code>curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh</code>
-            </div>
+    <main class="console">
+      <div class="backdrop"></div>
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="BoxHaven home">
+          <div class="brand-mark"><img src="/assets/logo.png" alt=""></div>
+          <div>
+            <strong>BoxHaven</strong>
+            <span>remote dev boxes</span>
+          </div>
+        </a>
+        <div class="topbar-actions">
+          <a class="icon-button" href="https://github.com/finbarr/boxhaven" target="_blank" rel="noreferrer" title="BoxHaven on GitHub" aria-label="BoxHaven on GitHub">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
+            </svg>
+          </a>
+          <div class="auth-cta">
+            <a class="secondary-button" href="https://app.boxhaven.dev/signup?mode=signin">Sign in</a>
+            <a class="primary-button" href="https://app.boxhaven.dev/signup">Sign up</a>
           </div>
         </div>
-      </section>
+      </header>
 
-      <section class="home-section workflow-section">
-        <div class="section-inner">
-          <div class="section-label">The Workflow</div>
-          <h2 class="section-title">Close the laptop. The agent keeps cooking.</h2>
-          <p class="section-desc">
-            Copy your project to a box once, start Claude or Codex inside the
-            box's tmux session - resuming your local conversation if you like -
-            then disconnect and let it work.
-          </p>
-          <div class="workflow-terminal">
-            <div class="term">
-              <div class="term-header">
-                <span class="dot dot-ember"></span>
-                <span class="dot dot-lantern"></span>
-                <span class="dot dot-leaf"></span>
-                <span class="term-title">bh</span>
+      <div class="console-body">
+        <section class="access-layout">
+          <div class="landing-page">
+            <section class="landing-hero">
+              <div class="landing-hero-copy">
+                <div class="landing-kicker">Open-source devbox management</div>
+                <h1>Dev boxes that <span class="accent">keep working</span> after you disconnect.</h1>
+                <p>
+                  Spin up full Linux VMs with root access — real machines you keep, not throwaway sandboxes —
+                  and run coding agents 24/7 in tmux sessions you can reconnect to from anywhere. Hosted or
+                  self-hosted from the same open-source code.
+                </p>
+                <div class="landing-actions">
+                  <a class="primary-button" href="https://app.boxhaven.dev/signup">
+                    <svg class="button-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polygon points="6 3 20 12 6 21 6 3"></polygon>
+                    </svg>
+                    Sign up for hosted
+                  </a>
+                  <a class="secondary-button" href="https://github.com/finbarr/boxhaven" target="_blank" rel="noreferrer">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
+                    </svg>
+                    View source
+                  </a>
+                </div>
               </div>
-              <div class="term-body">
-                <div class="term-line"><span class="prompt">$</span> bh create work <span class="comment"># provisions the box and syncs this project once</span></div>
-                <div class="term-line"><span class="prompt">$</span> bh run work claude <span class="comment"># claude starts in the box's tmux session</span></div>
-                <div class="term-line"><span class="output">Claude&gt; On it.</span></div>
-                <div class="term-line"><span class="prompt">$</span> <span class="comment"># close the laptop - the agent keeps working</span></div>
-                <div class="term-line"><span class="prompt">$</span> bh connect work <span class="comment"># reattach any time</span></div>
+              <div class="landing-hero-logo" aria-hidden="true">
+                <img src="/assets/logo.png" alt="">
               </div>
-            </div>
-          </div>
-          <div class="quickstart-cta">
-            <a href="https://docs.boxhaven.dev/getting-started" class="cta-docs">Get started</a>
-          </div>
-        </div>
-      </section>
+            </section>
 
-      <section class="home-section features-section">
-        <div class="section-inner">
-          <div class="section-label">What You Get</div>
-          <h2 class="section-title">Everything teams keep rebuilding by hand</h2>
-          <div class="feature-grid">
-            <div class="feature-card">
-              <div class="feature-icon">📦</div>
-              <h3>Sessions that survive disconnect</h3>
-              <p>Each box keeps a managed tmux session for long-running Claude, Codex, Gemini, or shell work. Boxes stay alive while laptops sleep.</p>
-            </div>
-            <div class="feature-card">
-              <div class="feature-icon">💬</div>
-              <h3>Resume your local conversation</h3>
-              <p>Starting claude or codex forwards your newest local sessions for the project, so claude --continue on the box picks up exactly where your laptop left off.</p>
-            </div>
-            <div class="feature-card">
-              <div class="feature-icon">🏠</div>
-              <h3>Team-owned boxes</h3>
-              <p>Every box belongs to a team with owner, admin, and member roles, shareable invite links, and per-team visibility.</p>
-            </div>
-            <div class="feature-card">
-              <div class="feature-icon">🖼️</div>
-              <h3>Golden images</h3>
-              <p>Boxes boot from a prebuilt snapshot with the agent runtime already installed. Admins snapshot a prepared box and activate it for the whole backend.</p>
-            </div>
-            <div class="feature-card">
-              <div class="feature-icon">☁️</div>
-              <h3>Multi-provider</h3>
-              <p>One backend serves DigitalOcean and Hetzner Cloud at once. Pick a provider, region, and image per create, or rely on the backend default.</p>
-            </div>
-            <div class="feature-card">
-              <div class="feature-icon">🔧</div>
-              <h3>Self-hostable</h3>
-              <p>The open-source Fastify/Better Auth control plane runs with your own provider credentials and no built-in limits.</p>
-            </div>
-          </div>
-        </div>
-      </section>
+            <section class="landing-proof">
+              <div class="landing-proof-copy">
+                <span>Workflow</span>
+                <h2>Your agents keep running while you're away.</h2>
+                <ul>
+                  <li>
+                    <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21.8 10A10 10 0 1 1 17 3.3"></path>
+                      <path d="m9 11 3 3L22 4"></path>
+                    </svg>
+                    <span>Sync a project into a named dev box.</span>
+                  </li>
+                  <li>
+                    <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21.8 10A10 10 0 1 1 17 3.3"></path>
+                      <path d="m9 11 3 3L22 4"></path>
+                    </svg>
+                    <span>Start Claude, Codex, or a shell in a managed tmux session.</span>
+                  </li>
+                  <li>
+                    <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21.8 10A10 10 0 1 1 17 3.3"></path>
+                      <path d="m9 11 3 3L22 4"></path>
+                    </svg>
+                    <span>Reconnect later with SSH, tmux history, and GitHub auth ready.</span>
+                  </li>
+                </ul>
+              </div>
+              <div class="terminal-card">
+                <div class="terminal-title">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <pre>$ bh login
+$ bh create work
+box "work" ready
+$ bh run work claude
+claude is running in tmux
+# disconnect; the agent keeps running
+$ bh connect work
+attached to "work"</pre>
+              </div>
+            </section>
 
-      <section class="home-section guide-section">
-        <div class="section-inner">
-          <div class="section-label">Find the Right Page</div>
-          <h2 class="section-title">Start with the task you are trying to solve</h2>
-          <div class="guide-grid">
-            <a href="https://docs.boxhaven.dev/getting-started" class="guide-card">
-              <div class="guide-kicker">Install</div>
-              <h3>Get running fast</h3>
-              <p>Install the bh CLI, log in, create your first box, and resume an agent session on it.</p>
-            </a>
-            <a href="https://docs.boxhaven.dev/commands" class="guide-card">
-              <div class="guide-kicker">Reference</div>
-              <h3>Find the exact command</h3>
-              <p>Every bh command and flag: create, run, connect, sync, image, team, and more.</p>
-            </a>
-            <a href="https://docs.boxhaven.dev/teams" class="guide-card">
-              <div class="guide-kicker">Collaborate</div>
-              <h3>Share boxes with a team</h3>
-              <p>Create teams, send invite links, control roles, and move boxes between teams.</p>
-            </a>
-            <a href="https://docs.boxhaven.dev/providers" class="guide-card">
-              <div class="guide-kicker">Providers</div>
-              <h3>Pick your cloud</h3>
-              <p>Configure DigitalOcean and Hetzner Cloud credentials, regions, sizes, and tiers.</p>
-            </a>
-            <a href="https://docs.boxhaven.dev/self-hosting" class="guide-card">
-              <div class="guide-kicker">Operate</div>
-              <h3>Run your own backend</h3>
-              <p>Local dev, Docker Compose, environment variables, production deploy, and backups.</p>
-            </a>
-            <a href="https://docs.boxhaven.dev/security" class="guide-card">
-              <div class="guide-kicker">Security</div>
-              <h3>Understand the boundary</h3>
-              <p>Short-lived SSH certificates, the backend user CA, and exactly what gets forwarded to a box.</p>
-            </a>
+            <section class="landing-features" aria-label="Features">
+              <div class="landing-section-head">
+                <span>Features</span>
+                <h2>Everything a long-running dev box should do.</h2>
+              </div>
+              <div class="feature-grid">
+                <div class="feature-card">
+                  <div class="feature-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <line x1="22" x2="2" y1="12" y2="12"></line>
+                      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+                      <line x1="6" x2="6.01" y1="16" y2="16"></line>
+                      <line x1="10" x2="10.01" y1="16" y2="16"></line>
+                    </svg>
+                  </div>
+                  <h3>Persistent disk and state</h3>
+                  <p>Your files, tools, Docker images, and tmux history live on the box — nothing is wiped between sessions or disconnects.</p>
+                </div>
+                <div class="feature-card">
+                  <div class="feature-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+                      <path d="M2 12h20"></path>
+                    </svg>
+                  </div>
+                  <h3>Public preview URLs</h3>
+                  <p>Every box gets a persistent HTTPS URL. Share a running web app or preview with anyone — no tunnels or port forwarding.</p>
+                </div>
+                <div class="feature-card">
+                  <div class="feature-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                  </div>
+                  <h3>Teams and shared boxes</h3>
+                  <p>Create a team, invite teammates, and share boxes with owner, admin, and member roles.</p>
+                </div>
+                <div class="feature-card">
+                  <div class="feature-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                      <path d="M3 3v5h5"></path>
+                      <path d="M12 7v5l4 2"></path>
+                    </svg>
+                  </div>
+                  <h3>Bring your agent's context</h3>
+                  <p>Forward a local Claude or Codex session to a box and resume the conversation right where you left off.</p>
+                </div>
+                <div class="feature-card">
+                  <div class="feature-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="4 17 10 11 4 5"></polyline>
+                      <line x1="12" x2="20" y1="19" y2="19"></line>
+                    </svg>
+                  </div>
+                  <h3>SSH-native access</h3>
+                  <p>Connect with plain ssh, rsync, and scp — backed by short-lived certificates instead of reusable keys.</p>
+                </div>
+                <div class="feature-card">
+                  <div class="feature-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect width="20" height="8" x="2" y="2" rx="2" ry="2"></rect>
+                      <rect width="20" height="8" x="2" y="14" rx="2" ry="2"></rect>
+                      <line x1="6" x2="6.01" y1="6" y2="6"></line>
+                      <line x1="6" x2="6.01" y1="18" y2="18"></line>
+                    </svg>
+                  </div>
+                  <h3>Full root on real VMs</h3>
+                  <p>Real VPS instances on DigitalOcean or Hetzner with full root — install anything, run Docker, no proprietary runtime or lock-in.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="landing-paths" aria-label="Hosted and self-hosted options">
+              <div class="landing-path landing-path--hosted">
+                <span>Hosted</span>
+                <h2>Create your first box in seconds.</h2>
+                <p>We run the control plane and the cloud account. Sign up and start working with no backend to operate.</p>
+                <div class="landing-path-actions">
+                  <a class="primary-button" href="https://app.boxhaven.dev/signup">
+                    <svg class="button-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polygon points="6 3 20 12 6 21 6 3"></polygon>
+                    </svg>
+                    Sign up for hosted
+                  </a>
+                </div>
+              </div>
+              <div class="landing-path">
+                <span>Self-hosted</span>
+                <h2>Bring your own infrastructure.</h2>
+                <p>Backend, CLI, VM runtime, and deploy scripts are all open source. Plug in your DigitalOcean or Hetzner credentials.</p>
+                <div class="landing-path-actions">
+                  <a class="secondary-button" href="https://docs.boxhaven.dev/self-hosting" target="_blank" rel="noreferrer">
+                    Read self-hosting docs
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M7 7h10v10"></path>
+                      <path d="M7 17 17 7"></path>
+                    </svg>
+                  </a>
+                </div>
+              </div>
+            </section>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
+
+      <footer class="site-footer">
+        <span>&copy; 2026 BoxHaven</span>
+        <nav>
+          <a href="https://docs.boxhaven.dev" target="_blank" rel="noreferrer">Docs</a>
+          <a href="https://github.com/finbarr/boxhaven" target="_blank" rel="noreferrer">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
+            </svg>
+            GitHub
+          </a>
+          <a href="https://github.com/finbarr/boxhaven/blob/master/CHANGELOG.md" target="_blank" rel="noreferrer">Changelog</a>
+          <a href="https://github.com/finbarr/boxhaven/blob/master/SECURITY.md" target="_blank" rel="noreferrer">Security</a>
+        </nav>
+      </footer>
     </main>
-
-    <footer class="site-footer">
-      <p>Released under the MIT License.</p>
-      <p>Copyright 2026 Finbarr Taylor</p>
-    </footer>
   </body>
 </html>
