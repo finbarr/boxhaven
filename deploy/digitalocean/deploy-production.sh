@@ -83,16 +83,16 @@ done
 if [ "$local_mode" -ne 1 ]; then
   [ -n "$deploy_target" ] || die "set BOXHAVEN_DEPLOY_TARGET, pass --target, or use --local on the Droplet"
 
-  remote_verify_arg=""
+  remote_mode_arg="--deploy"
   if [ "$verify_only" -eq 1 ]; then
-    remote_verify_arg="--verify-only"
+    remote_mode_arg="--verify-only"
   fi
 
   echo "Deploying ${deploy_branch} to ${deploy_target}:${deploy_dir}"
   ssh -A "$deploy_target" "bash -s" -- \
     "$deploy_dir" \
     "$deploy_branch" \
-    "$remote_verify_arg" \
+    "$remote_mode_arg" \
     "${BOXHAVEN_PRODUCTION_ENV_FILE:-}" \
     "${BOXHAVEN_PRODUCTION_API_HEALTH_URL:-}" \
     "${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-}" \
@@ -101,11 +101,20 @@ set -euo pipefail
 
 deploy_dir="$1"
 deploy_branch="$2"
-verify_arg="${3:-}"
+mode_arg="${3:-}"
 env_file="${4:-}"
 api_health_url="${5:-}"
 app_health_url="${6:-}"
 docs_health_url="${7:-}"
+
+case "$mode_arg" in
+  --deploy|--verify-only)
+    ;;
+  *)
+    echo "deploy-production: unexpected remote mode: ${mode_arg:-<empty>}" >&2
+    exit 1
+    ;;
+esac
 
 [ -z "$env_file" ] || export BOXHAVEN_PRODUCTION_ENV_FILE="$env_file"
 [ -z "$api_health_url" ] || export BOXHAVEN_PRODUCTION_API_HEALTH_URL="$api_health_url"
@@ -114,7 +123,7 @@ docs_health_url="${7:-}"
 
 cd "$deploy_dir"
 
-if [ -z "$verify_arg" ]; then
+if [ "$mode_arg" = "--deploy" ]; then
   if [ -n "$(git status --porcelain)" ]; then
     echo "remote checkout has uncommitted changes:" >&2
     git status --short >&2
@@ -131,8 +140,8 @@ if [ -z "$verify_arg" ]; then
   git merge --ff-only "origin/${deploy_branch}"
 fi
 
-if [ -n "$verify_arg" ]; then
-  exec ./deploy/digitalocean/deploy-production.sh --local "$verify_arg"
+if [ "$mode_arg" = "--verify-only" ]; then
+  exec ./deploy/digitalocean/deploy-production.sh --local --verify-only
 fi
 
 exec ./deploy/digitalocean/deploy-production.sh --local
