@@ -87,16 +87,17 @@ if [ "$local_mode" -ne 1 ]; then
   if [ "$verify_only" -eq 1 ]; then
     remote_mode_arg="--verify-only"
   fi
+  unset_arg="__boxhaven_unset__"
 
   echo "Deploying ${deploy_branch} to ${deploy_target}:${deploy_dir}"
   ssh -A "$deploy_target" "bash -s" -- \
     "$deploy_dir" \
     "$deploy_branch" \
     "$remote_mode_arg" \
-    "${BOXHAVEN_PRODUCTION_ENV_FILE:-}" \
-    "${BOXHAVEN_PRODUCTION_API_HEALTH_URL:-}" \
-    "${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-}" \
-    "${BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL:-}" <<'REMOTE'
+    "${BOXHAVEN_PRODUCTION_ENV_FILE:-$unset_arg}" \
+    "${BOXHAVEN_PRODUCTION_API_HEALTH_URL:-$unset_arg}" \
+    "${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-$unset_arg}" \
+    "${BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL:-$unset_arg}" <<'REMOTE'
 set -euo pipefail
 
 deploy_dir="$1"
@@ -106,6 +107,7 @@ env_file="${4:-}"
 api_health_url="${5:-}"
 app_health_url="${6:-}"
 docs_health_url="${7:-}"
+unset_arg="__boxhaven_unset__"
 
 case "$mode_arg" in
   --deploy|--verify-only)
@@ -116,10 +118,10 @@ case "$mode_arg" in
     ;;
 esac
 
-[ -z "$env_file" ] || export BOXHAVEN_PRODUCTION_ENV_FILE="$env_file"
-[ -z "$api_health_url" ] || export BOXHAVEN_PRODUCTION_API_HEALTH_URL="$api_health_url"
-[ -z "$app_health_url" ] || export BOXHAVEN_PRODUCTION_APP_HEALTH_URL="$app_health_url"
-[ -z "$docs_health_url" ] || export BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL="$docs_health_url"
+[ "$env_file" = "$unset_arg" ] || export BOXHAVEN_PRODUCTION_ENV_FILE="$env_file"
+[ "$api_health_url" = "$unset_arg" ] || export BOXHAVEN_PRODUCTION_API_HEALTH_URL="$api_health_url"
+[ "$app_health_url" = "$unset_arg" ] || export BOXHAVEN_PRODUCTION_APP_HEALTH_URL="$app_health_url"
+[ "$docs_health_url" = "$unset_arg" ] || export BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL="$docs_health_url"
 
 cd "$deploy_dir"
 
