@@ -39,6 +39,11 @@ try {
     headless: !process.argv.includes("--headed"),
   });
 
+  const publicContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+  const publicPage = await publicContext.newPage();
+  const accessFacts = await checkAccessPage(publicPage);
+  await publicContext.close();
+
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
   await context.addInitScript((value) => {
     localStorage.setItem("boxhaven.backend.token", value);
@@ -59,6 +64,7 @@ try {
     appURL,
     outDir,
     screenshots: {
+      access: join(outDir, "access.png"),
       device: join(outDir, "device.png"),
       members: join(outDir, "members.png"),
       teams: join(outDir, "teams.png"),
@@ -68,6 +74,7 @@ try {
       billing: join(outDir, "billing.png"),
       mobileTeams: join(outDir, "mobile-teams.png"),
     },
+    accessFacts,
     deviceFacts,
     membersFacts,
     teamsFacts,
@@ -222,6 +229,26 @@ async function startViteApp() {
   });
   await server.listen();
   return server;
+}
+
+async function checkAccessPage(page) {
+  await page.goto(appURL, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { name: "Create a BoxHaven account" }).waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(outDir, "access.png"), fullPage: true });
+  const facts = await page.evaluate(() => ({
+    title: document.querySelector(".panel-heading h1")?.textContent?.trim(),
+    topbarSubtitle: document.querySelector(".brand span")?.textContent?.trim(),
+    landingPresent: Boolean(document.querySelector(".landing-page, .landing-hero, .landing-paths")),
+    marketingCopyPresent: Boolean(document.body.textContent?.includes("Dev boxes that keep working")),
+    authModes: [...document.querySelectorAll(".segmented button")].map((button) => button.textContent?.trim()),
+  }));
+  assert.equal(facts.title, "Create a BoxHaven account");
+  assert.equal(facts.topbarSubtitle, "console access");
+  assert.equal(facts.landingPresent, false);
+  assert.equal(facts.marketingCopyPresent, false);
+  assert.deepEqual(facts.authModes, ["Sign up", "Sign in"]);
+  return facts;
 }
 
 async function checkDevicePage(page, userCode) {

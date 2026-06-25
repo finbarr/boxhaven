@@ -36,8 +36,6 @@ button {
 .github-button,
 .icon-button,
 .segmented button,
-.landing-path,
-.feature-card,
 .rows-clickable tbody tr,
 .side-links a,
 input,
@@ -195,120 +193,18 @@ label,
   gap: 10px;
 }
 
-.auth-cta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.auth-cta .secondary-button,
-.auth-cta .primary-button {
-  min-height: 38px;
-  padding: 0 14px;
-}
-
-.access-layout {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  max-width: 1280px;
-  margin: 0 auto;
-  gap: 16px;
-}
-
-.access-layout {
-  grid-template-columns: minmax(0, 1fr);
-  max-width: 1120px;
-  gap: 22px;
-  align-items: start;
-  padding-top: min(5vh, 54px);
-}
-
 /* Long one-line commands must scroll inside their blocks, never widen the
    column: grid/flex items need min-width 0 for that to work. */
-.access-layout > *,
-.welcome-panel > *,
-.landing-page,
-.landing-page > *,
-.terminal-card,
 .auth-panel {
   min-width: 0;
 }
 
-.welcome-panel {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.72fr) minmax(320px, 1fr);
-  gap: 16px;
-  align-items: stretch;
-  min-height: 440px;
-}
-
-.welcome-panel.compact {
-  min-height: 360px;
-}
-
-.logo-stage,
-.terminal-card,
 .auth-panel {
   border: 1px solid rgba(96, 75, 53, 0.16);
   border-radius: 8px;
   background: rgba(255, 252, 243, 0.88);
   box-shadow: 0 20px 60px rgba(90, 67, 41, 0.14);
   backdrop-filter: blur(18px);
-}
-
-.logo-stage {
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  min-height: 260px;
-  background:
-    linear-gradient(180deg, rgba(255, 248, 231, 0.92), rgba(234, 243, 236, 0.9)),
-    repeating-linear-gradient(90deg, rgba(101, 80, 57, 0.06), rgba(101, 80, 57, 0.06) 1px, transparent 1px, transparent 22px);
-}
-
-.logo-stage img {
-  width: min(92%, 420px);
-  max-height: 92%;
-  object-fit: contain;
-  filter: drop-shadow(0 16px 20px rgba(71, 44, 24, 0.18));
-}
-
-.terminal-card {
-  overflow: hidden;
-  background: #26352f;
-  color: #f6f0df;
-}
-
-.terminal-title {
-  display: flex;
-  gap: 8px;
-  padding: 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.terminal-title span {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: #e1664c;
-}
-
-.terminal-title span:nth-child(2) {
-  background: #e0b24b;
-}
-
-.terminal-title span:nth-child(3) {
-  background: #63b88b;
-}
-
-pre {
-  margin: 0;
-  padding: 32px;
-  color: #d9f6dd;
-  font-size: 20px;
-  line-height: 1.55;
-  white-space: pre-wrap;
 }
 
 .auth-panel {
@@ -741,32 +637,6 @@ a.secondary-button {
 .signup-page {
   max-width: 540px;
   padding-top: min(8vh, 72px);
-}
-
-.signup-self-host {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 7px 10px;
-  margin-top: 14px;
-  color: #4f625a;
-  font-size: 14px;
-  line-height: 1.4;
-  text-align: center;
-}
-
-.signup-self-host span {
-  font-weight: 600;
-}
-
-.signup-self-host a {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: #2f6f5c;
-  font-weight: 700;
-  text-decoration: underline;
 }
 
 .data-table {
@@ -1212,358 +1082,6 @@ a.secondary-button {
   }
 }
 
-.landing-page {
-  display: grid;
-  gap: 28px;
-}
-
-.landing-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
-  align-items: center;
-  gap: clamp(24px, 6vw, 72px);
-  padding: 10px 2px 6px;
-}
-
-.landing-hero-copy {
-  display: grid;
-  gap: 18px;
-  min-width: 0;
-}
-
-.landing-hero-logo {
-  display: grid;
-  place-items: center;
-  justify-self: end;
-  width: min(100%, 420px);
-  aspect-ratio: 1;
-}
-
-.landing-hero-logo img {
-  width: min(100%, 400px);
-  height: auto;
-  object-fit: contain;
-  filter: drop-shadow(0 26px 34px rgba(71, 44, 24, 0.16));
-}
-
-.landing-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  justify-self: start;
-  padding: 6px 12px 6px 11px;
-  border: 1px solid rgba(47, 111, 92, 0.22);
-  border-radius: 999px;
-  background: rgba(47, 111, 92, 0.08);
-  color: #2f6f5c;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
-.landing-kicker::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #2f6f5c;
-  box-shadow: 0 0 0 3px rgba(47, 111, 92, 0.18);
-}
-
-.landing-hero h1 {
-  max-width: 18ch;
-  margin: 0;
-  color: #22342d;
-  font-size: 52px;
-  font-weight: 800;
-  line-height: 1.02;
-}
-
-.landing-hero h1 .accent {
-  color: #2f6f5c;
-}
-
-.landing-hero p {
-  max-width: 760px;
-  margin: 0;
-  color: #4f625a;
-  font-size: 19px;
-  line-height: 1.5;
-}
-
-.landing-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.landing-actions .primary-button,
-.landing-actions .secondary-button {
-  min-height: 44px;
-  padding: 0 16px;
-}
-
-.landing-actions .primary-button:hover,
-.landing-actions .secondary-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 26px rgba(47, 111, 92, 0.22);
-}
-
-.landing-paths {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.landing-path {
-  position: relative;
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  padding: 20px;
-  border: 1px solid rgba(96, 75, 53, 0.16);
-  border-radius: 8px;
-  background: rgba(255, 252, 243, 0.82);
-}
-
-.landing-path:hover {
-  border-color: rgba(47, 111, 92, 0.32);
-  box-shadow: 0 18px 44px rgba(90, 67, 41, 0.13);
-  transform: translateY(-2px);
-}
-
-.landing-path--hosted {
-  border-color: rgba(47, 111, 92, 0.3);
-  background: linear-gradient(180deg, rgba(47, 111, 92, 0.1), rgba(255, 252, 243, 0.82) 70%);
-}
-
-.landing-path--hosted::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  border-radius: 8px 0 0 8px;
-  background: #2f6f5c;
-}
-
-.landing-path span,
-.landing-proof-copy span {
-  color: #6a776f;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
-.landing-path h2,
-.landing-proof-copy h2 {
-  margin: 0;
-  color: #22342d;
-  line-height: 1.12;
-}
-
-.landing-path h2 {
-  font-size: 22px;
-}
-
-.landing-path p,
-.landing-proof-copy p {
-  margin: 0;
-  color: #4f625a;
-  line-height: 1.5;
-}
-
-.landing-path-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.landing-path-actions .primary-button,
-.landing-path-actions .secondary-button {
-  min-height: 42px;
-}
-
-.landing-proof {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
-  gap: 16px;
-  align-items: stretch;
-}
-
-.landing-proof-copy {
-  display: grid;
-  align-content: center;
-  gap: 12px;
-  padding: 20px;
-  border: 1px solid rgba(96, 75, 53, 0.16);
-  border-radius: 8px;
-  background: rgba(234, 243, 236, 0.72);
-}
-
-.landing-proof-copy h2 {
-  max-width: 17ch;
-  font-size: 30px;
-}
-
-.landing-proof-copy ul {
-  display: grid;
-  gap: 10px;
-  margin: 2px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.landing-proof-copy li {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 9px;
-  align-items: start;
-  color: #354b42;
-  line-height: 1.42;
-}
-
-.landing-proof-copy li svg {
-  margin-top: 2px;
-  color: #2f6f5c;
-}
-
-.landing-proof .terminal-card pre {
-  padding: 22px;
-  font-size: 16px;
-}
-
-.landing-features {
-  display: grid;
-  gap: 18px;
-}
-
-.landing-section-head {
-  display: grid;
-  gap: 6px;
-}
-
-.landing-section-head span {
-  color: #6a776f;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
-.landing-section-head h2 {
-  margin: 0;
-  color: #22342d;
-  font-size: 30px;
-  line-height: 1.1;
-}
-
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.feature-card {
-  display: grid;
-  align-content: start;
-  gap: 11px;
-  padding: 20px;
-  border: 1px solid rgba(96, 75, 53, 0.16);
-  border-radius: 8px;
-  background: rgba(255, 252, 243, 0.82);
-}
-
-.feature-card:hover {
-  border-color: rgba(47, 111, 92, 0.32);
-  box-shadow: 0 18px 44px rgba(90, 67, 41, 0.13);
-  transform: translateY(-2px);
-}
-
-.feature-icon {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(47, 111, 92, 0.2);
-  border-radius: 10px;
-  color: #2f6f5c;
-  background: rgba(47, 111, 92, 0.1);
-}
-
-.feature-card h3 {
-  margin: 0;
-  color: #22342d;
-  font-size: 18px;
-  line-height: 1.2;
-}
-
-.feature-card p {
-  margin: 0;
-  color: #4f625a;
-  font-size: 15px;
-  line-height: 1.5;
-}
-
-.landing-install {
-  display: grid;
-  gap: 14px;
-  width: min(100%, 720px);
-  margin: 4px auto 0;
-  padding: 22px;
-  border: 1px solid rgba(96, 75, 53, 0.16);
-  border-radius: 8px;
-  background: rgba(244, 240, 229, 0.66);
-}
-
-.landing-install-lead {
-  display: grid;
-  gap: 5px;
-}
-
-.landing-install-lead span {
-  color: #6a776f;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
-.landing-install-lead p {
-  margin: 0;
-  color: #4f625a;
-  line-height: 1.5;
-}
-
-.landing-install .command-block {
-  margin-bottom: 0;
-}
-
-.landing-install .command-block code {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.landing-install-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-}
-
-.landing-docs {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  justify-self: start;
-  color: #2f6f5c;
-  font-size: 15px;
-  font-weight: 700;
-  text-decoration: underline;
-}
-
 .signup-panel {
   width: 100%;
   margin: 0;
@@ -1737,16 +1255,6 @@ a.secondary-button {
   color: #6e4e12;
 }
 
-@media (max-width: 1180px) {
-  .welcome-panel {
-    min-height: auto;
-  }
-
-  .logo-stage {
-    min-height: 200px;
-  }
-}
-
 @media (max-width: 940px) {
   .console-shell {
     grid-template-columns: 1fr;
@@ -1787,37 +1295,6 @@ a.secondary-button {
   }
 }
 
-@media (max-width: 900px) {
-  .access-layout,
-  .welcome-panel,
-  .landing-hero,
-  .landing-paths,
-  .landing-proof {
-    grid-template-columns: 1fr;
-  }
-
-  .access-layout {
-    padding-top: 24px;
-  }
-
-  .welcome-panel {
-    min-height: auto;
-  }
-
-  .logo-stage {
-    min-height: 240px;
-  }
-
-  .landing-hero-logo {
-    justify-self: start;
-    width: min(62vw, 260px);
-  }
-
-  .feature-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 640px) {
   .console {
     padding: 14px;
@@ -1836,28 +1313,6 @@ a.secondary-button {
 
   .panel-heading h1 {
     font-size: 30px;
-  }
-
-  .landing-hero h1 {
-    font-size: 36px;
-  }
-
-  .landing-hero p {
-    font-size: 17px;
-  }
-
-  .landing-hero-logo {
-    display: none;
-  }
-
-  .feature-grid {
-    grid-template-columns: 1fr;
-  }
-
-  pre,
-  .landing-proof .terminal-card pre {
-    padding: 22px;
-    font-size: 15px;
   }
 
   .metrics {

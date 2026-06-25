@@ -11,6 +11,11 @@ remote dev boxes for individual developers, persistent agent sessions, direct
 SSH access, project sync, GitHub pushes from the box, and a self-hostable
 control plane.
 
+The backend-served browser app is intentionally just login, CLI device
+approval, and the authenticated console. Public website and documentation
+content lives in [docs](docs), so a self-hosted BoxHaven server does not need
+to ship the marketing site.
+
 The CLI is intentionally small, and the workflow is agent-first: copy your
 project to a box once, start Claude or Codex inside the box's tmux session —
 resuming your local conversation if you like — then disconnect and let it
@@ -296,7 +301,7 @@ The open-source backend in [backend](backend) provides:
 - admin-managed golden images per provider
 - backend-signed short-lived SSH certificates
 - VM agent RPC for setup commands and tmux session lifecycle
-- generated preview hostnames and a browser console
+- generated preview hostnames and a browser console/auth app
 
 Run it locally:
 

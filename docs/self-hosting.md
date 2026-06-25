@@ -5,10 +5,15 @@ a backend; it does not provision cloud machines locally. The same backend
 that powers the hosted `app.boxhaven.dev` self-hosts with your own provider
 credentials and no built-in limits.
 
-The browser app is built with TanStack Router and TanStack Query. In
-production the intended split is `app.boxhaven.dev` for the console and
-`api.boxhaven.dev` for the API. The API also serves the built app from
-`dist-app` for simple self-hosted deployments.
+The browser app is built with TanStack Router and TanStack Query. It is the
+console/auth surface only: login, signup, CLI device approval, invitations,
+and authenticated box/team/image/billing views. Public website and
+documentation content lives in the docs site, not in the backend-served app,
+so a self-hosted server can run with only the login and console UI.
+
+In production the intended split is `app.boxhaven.dev` for the console/auth
+app and `api.boxhaven.dev` for the API. The API also serves the built console
+app from `dist-app` for simple self-hosted deployments.
 
 ## Run Locally
 
@@ -63,7 +68,7 @@ DigitalOcean token and a CLI login token for the local backend.
 - `BETTER_AUTH_SECRET`: required signing secret for Better Auth sessions.
 - `BETTER_AUTH_URL`: public auth base URL, default `http://<listen>/v1/auth`.
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated trusted browser origins.
-- `BOXHAVEN_APP_URL`: public app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
+- `BOXHAVEN_APP_URL`: public console/auth app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_API_URL`: public API URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_BACKEND_CORS_ORIGINS`: comma-separated browser origins allowed to call the API.
 - `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.boxhaven.dev`.
@@ -85,7 +90,7 @@ Provider credentials and image variables (`DIGITALOCEAN_*`, `HCLOUD_TOKEN`,
 The repository includes a production bundle in `deploy/digitalocean/` for the
 hosted split:
 
-- `app.boxhaven.dev` for the browser console
+- `app.boxhaven.dev` for the browser console/auth app
 - `api.boxhaven.dev` for API and Better Auth routes
 - `*.at.boxhaven.dev` for generated machine preview URLs
 - Caddy-managed TLS in front of the backend container

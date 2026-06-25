@@ -1,10 +1,15 @@
 # DigitalOcean deployment
 
-This bundle runs the BoxHaven console and API on a single DigitalOcean
-Droplet. Caddy terminates TLS for `app.boxhaven.dev`, `api.boxhaven.dev`, and
-generated preview hostnames under `at.boxhaven.dev`, then proxies those
-hostnames to the backend container. Backend state is stored on the host under
-`/opt/boxhaven/data/backend` so it can be backed up outside Docker.
+This bundle runs the BoxHaven console/auth app and API on a single
+DigitalOcean Droplet. Caddy terminates TLS for `app.boxhaven.dev`,
+`api.boxhaven.dev`, and generated preview hostnames under `at.boxhaven.dev`,
+then proxies those hostnames to the backend container. Backend state is stored
+on the host under `/opt/boxhaven/data/backend` so it can be backed up outside
+Docker.
+
+The backend-served app is intentionally not the public website. It contains
+only login/signup, CLI device approval, invitations, and the authenticated
+console. Public website and documentation content lives in the docs site.
 
 ## Provision
 

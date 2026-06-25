@@ -1,15 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useMatchRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
-import { AccessPanel, LandingPage } from "../../access";
+import { AccessPanel } from "../../access";
 import { apiFetch, tokenKey, WhoamiResponse } from "../../api";
 import { ConsoleProvider } from "../../console-context";
 import { ConsoleSection, ConsoleShell, TopBar } from "../../shell";
 
 // Pathless authed layout: owns the localStorage token, the whoami session
-// query, the topbar and section nav. Unauthenticated visitors get the
-// Unauthenticated visitors see the public landing page at `/`; deep console
-// links render the auth form in place so the requested route survives sign-in.
+// query, the topbar and section nav. Unauthenticated routes render the same
+// focused access panel so self-hosted backends do not carry the public website.
 export const Route = createFileRoute("/_console")({
   component: ConsoleLayout,
 });
@@ -95,16 +94,8 @@ function ConsoleLayout() {
   if (!authenticated) {
     return (
       <>
-        <TopBar
-          subtitle="remote dev boxes"
-          actions={onHome ? (
-            <div className="auth-cta">
-              <Link className="secondary-button" to="/signup" search={{ mode: "signin" }}>Sign in</Link>
-              <Link className="primary-button" to="/signup">Sign up</Link>
-            </div>
-          ) : undefined}
-        />
-        {onHome ? <LandingPage /> : <AccessPanel onToken={handleToken} deviceUserCode={deviceUserCode} />}
+        <TopBar subtitle="console access" />
+        <AccessPanel onToken={handleToken} deviceUserCode={deviceUserCode} />
       </>
     );
   }

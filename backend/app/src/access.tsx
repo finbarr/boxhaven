@@ -1,9 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
-import { ArrowUpRight, CheckCircle2, Copy, Globe, HardDrive, History, KeyRound, Play, Send, Server, Terminal, Users } from "lucide-react";
+import { Copy, KeyRound, Play, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { apiFetch, formatUserCode, LoginResponse } from "./api";
-import logoURL from "./assets/boxhaven-logo.png";
-import { GitHubMark, repoURL } from "./shell";
+import { GitHubMark } from "./shell";
 
 export const installCommand = "curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh";
 
@@ -15,14 +14,6 @@ export function AccessPanel({ onToken, deviceUserCode, notice }: {
   return (
     <section className="narrow-layout signup-page">
       <AuthFormPanel onToken={onToken} deviceUserCode={deviceUserCode} notice={notice} />
-    </section>
-  );
-}
-
-export function LandingPage() {
-  return (
-    <section className="access-layout">
-      <LandingIntro />
     </section>
   );
 }
@@ -74,9 +65,8 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
       ) : (
         <form id="signup" className="auth-panel signup-panel" onSubmit={submit}>
           <div className="panel-heading">
-            <span>{mode === "signup" ? "hosted beta" : "welcome back"}</span>
-            <h1>{mode === "signup" ? "Sign up for hosted BoxHaven" : "Open the console"}</h1>
-            {mode === "signup" ? <p>Start on the managed control plane now. Self-host the same open-source code whenever you want.</p> : null}
+            <span>{mode === "signup" ? "create account" : "welcome back"}</span>
+            <h1>{mode === "signup" ? "Create a BoxHaven account" : "Open the console"}</h1>
           </div>
           {notice ? <p className="hint">{notice}</p> : null}
           <div className="segmented">
@@ -115,138 +105,6 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
         </form>
       )}
     </>
-  );
-}
-
-const FEATURES = [
-  {
-    icon: <HardDrive size={20} />,
-    title: "Persistent disk and state",
-    body: "Your files, tools, Docker images, and tmux history live on the box — nothing is wiped between sessions or disconnects.",
-  },
-  {
-    icon: <Globe size={20} />,
-    title: "Public preview URLs",
-    body: "Every box gets a persistent HTTPS URL. Share a running web app or preview with anyone — no tunnels or port forwarding.",
-  },
-  {
-    icon: <Users size={20} />,
-    title: "Teams and shared boxes",
-    body: "Create a team, invite teammates, and share boxes with owner, admin, and member roles.",
-  },
-  {
-    icon: <History size={20} />,
-    title: "Bring your agent's context",
-    body: "Forward a local Claude or Codex session to a box and resume the conversation right where you left off.",
-  },
-  {
-    icon: <Terminal size={20} />,
-    title: "SSH-native access",
-    body: "Connect with plain ssh, rsync, and scp — backed by short-lived certificates instead of reusable keys.",
-  },
-  {
-    icon: <Server size={20} />,
-    title: "Full root on real VMs",
-    body: "Real VPS instances on DigitalOcean or Hetzner with full root — install anything, run Docker, no proprietary runtime or lock-in.",
-  },
-];
-
-function LandingIntro() {
-  return (
-    <div className="landing-page">
-      <section className="landing-hero">
-        <div className="landing-hero-copy">
-          <div className="landing-kicker">Open-source devbox management</div>
-          <h1>Dev boxes that <span className="accent">keep working</span> after you disconnect.</h1>
-          <p>
-            Spin up full Linux VMs with root access — real machines you keep, not throwaway sandboxes —
-            and run coding agents 24/7 in tmux sessions you can reconnect to from anywhere. Hosted or
-            self-hosted from the same open-source code.
-          </p>
-          <div className="landing-actions">
-            <a className="primary-button" href="/signup">
-              <Play size={16} />
-              Sign up for hosted
-            </a>
-            <a className="secondary-button" href={repoURL} target="_blank" rel="noreferrer">
-              <GitHubMark size={16} />
-              View source
-            </a>
-          </div>
-        </div>
-        <div className="landing-hero-logo" aria-hidden="true">
-          <img src={logoURL} alt="" />
-        </div>
-      </section>
-
-      <section className="landing-proof">
-        <div className="landing-proof-copy">
-          <span>Workflow</span>
-          <h2>Your agents keep running while you're away.</h2>
-          <ul>
-            <li><CheckCircle2 size={16} /> Sync a project into a named dev box.</li>
-            <li><CheckCircle2 size={16} /> Start Claude, Codex, or a shell in a managed tmux session.</li>
-            <li><CheckCircle2 size={16} /> Reconnect later with SSH, tmux history, and GitHub auth ready.</li>
-          </ul>
-        </div>
-        <div className="terminal-card">
-          <div className="terminal-title">
-            <span />
-            <span />
-            <span />
-          </div>
-          <pre>{`$ bh login
-$ bh create work
-box "work" ready
-$ bh run work claude
-claude is running in tmux
-# disconnect; the agent keeps running
-$ bh connect work
-attached to "work"`}</pre>
-        </div>
-      </section>
-
-      <section className="landing-features" aria-label="Features">
-        <div className="landing-section-head">
-          <span>Features</span>
-          <h2>Everything a long-running dev box should do.</h2>
-        </div>
-        <div className="feature-grid">
-          {FEATURES.map((feature) => (
-            <div className="feature-card" key={feature.title}>
-              <div className="feature-icon">{feature.icon}</div>
-              <h3>{feature.title}</h3>
-              <p>{feature.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="landing-paths" aria-label="Hosted and self-hosted options">
-        <div className="landing-path landing-path--hosted">
-          <span>Hosted</span>
-          <h2>Create your first box in seconds.</h2>
-          <p>We run the control plane and the cloud account. Sign up and start working with no backend to operate.</p>
-          <div className="landing-path-actions">
-            <a className="primary-button" href="/signup">
-              <Play size={16} />
-              Sign up for hosted
-            </a>
-          </div>
-        </div>
-        <div className="landing-path">
-          <span>Self-hosted</span>
-          <h2>Bring your own infrastructure.</h2>
-          <p>Backend, CLI, VM runtime, and deploy scripts are all open source. Plug in your DigitalOcean or Hetzner credentials.</p>
-          <div className="landing-path-actions">
-            <a className="secondary-button" href="https://docs.boxhaven.dev/self-hosting" target="_blank" rel="noreferrer">
-              Read self-hosting docs
-              <ArrowUpRight size={15} />
-            </a>
-          </div>
-        </div>
-      </section>
-    </div>
   );
 }
 

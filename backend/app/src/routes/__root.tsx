@@ -5,7 +5,7 @@ import { GitHubMark, repoURL, TopBar } from "../shell";
 // App shell only: backdrop + topbar slot. Auth lives in the _console layout.
 export const Route = createRootRoute({
   head: () => ({
-    meta: [{ title: "BoxHaven - Open-source devbox management" }],
+    meta: [{ title: "BoxHaven Console" }],
   }),
   component: RootShell,
   notFoundComponent: NotFound,
@@ -49,7 +49,7 @@ function NotFound() {
           <div className="panel-heading">
             <span>404</span>
             <h1>No such room</h1>
-            <p>The page you are looking for does not exist in this haven.</p>
+            <p>The page you are looking for does not exist in this console.</p>
           </div>
           <Link className="primary-button" to="/">Back to the console</Link>
         </div>

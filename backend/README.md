@@ -6,10 +6,15 @@ account/control-plane layer, let users attach their own cloud credentials, and
 gate BoxHaven-owned VMs behind paid plans. Self-hosters can run this package with
 their own provider credentials.
 
-The browser app is built with TanStack Router and TanStack Query. In production
-the intended split is `app.boxhaven.dev` for the console and `api.boxhaven.dev`
-for this API. The API also serves the built app from `dist-app` for simple
-self-hosted deployments.
+The browser app is built with TanStack Router and TanStack Query. It is the
+console/auth surface only: login, signup, CLI device approval, invitations,
+and authenticated box/team/image/billing views. Public website and docs content
+lives in the repository's `docs/` site instead of this app bundle, so a
+self-hosted backend does not serve the marketing site.
+
+In production the intended split is `app.boxhaven.dev` for the console/auth app
+and `api.boxhaven.dev` for this API. The API also serves the built console app
+from `dist-app` for simple self-hosted deployments.
 
 ## Run Locally
 
@@ -38,8 +43,9 @@ npm run smoke:console
 
 It starts a temporary fake-provider backend and Vite app, seeds teams, drives
 Chrome with Playwright, saves screenshots under `backend/.artifacts/`, and fails
-on expected navigation, Members, Teams, or mobile-overflow regressions. Set
-`BOXHAVEN_PLAYWRIGHT_EXECUTABLE` if Chrome is not in a standard location.
+on expected access-page, navigation, Members, Teams, or mobile-overflow
+regressions. Set `BOXHAVEN_PLAYWRIGHT_EXECUTABLE` if Chrome is not in a
+standard location.
 
 ## Run With Docker Compose
 
@@ -84,7 +90,7 @@ DigitalOcean token and a CLI login token for the local backend.
 The repository includes a production bundle in `deploy/digitalocean/` for the
 hosted split:
 
-- `app.boxhaven.dev` for the browser console
+- `app.boxhaven.dev` for the browser console/auth app
 - `api.boxhaven.dev` for API and Better Auth routes
 - `*.at.boxhaven.dev` for generated machine preview URLs
 - Caddy-managed TLS in front of the backend container
@@ -121,7 +127,7 @@ Environment:
 - `BETTER_AUTH_SECRET`: required signing secret for Better Auth sessions.
 - `BETTER_AUTH_URL`: public auth base URL, default `http://<listen>/v1/auth`.
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated trusted browser origins.
-- `BOXHAVEN_APP_URL`: public app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
+- `BOXHAVEN_APP_URL`: public console/auth app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_API_URL`: public API URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_BACKEND_CORS_ORIGINS`: comma-separated browser origins allowed to call the API.
 - `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.boxhaven.dev`.
