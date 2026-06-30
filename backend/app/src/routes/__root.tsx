@@ -29,6 +29,7 @@ function RootShell() {
             <nav>
               <a href={docsURL} target="_blank" rel="noreferrer">Docs</a>
               <a href={repoURL} target="_blank" rel="noreferrer"><GitHubMark size={13} /> GitHub</a>
+              <a href={`${repoURL}/blob/master/LICENSE`} target="_blank" rel="noreferrer">AGPL-3.0</a>
               <a href={`${repoURL}/blob/master/CHANGELOG.md`} target="_blank" rel="noreferrer">Changelog</a>
               <a href={`${repoURL}/blob/master/SECURITY.md`} target="_blank" rel="noreferrer">Security</a>
             </nav>

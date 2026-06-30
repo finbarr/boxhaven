@@ -25,3 +25,9 @@ agents inside persistent sessions, and operate the backend.
 
 - [Security model](/security): short-lived SSH certificates, the backend user CA, and forwarded credentials.
 - [Billing](/billing): how hosted BoxHaven billing is modeled for teams.
+
+## Source and license
+
+BoxHaven is open source under the GNU Affero General Public License v3.0 only
+(`AGPL-3.0-only`). The source code, copyright notice, and full license text
+live in the [BoxHaven GitHub repository](https://github.com/finbarr/boxhaven).

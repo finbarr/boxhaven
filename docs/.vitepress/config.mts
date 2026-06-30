@@ -217,7 +217,7 @@ export default defineConfig({
     },
 
     footer: {
-      message: 'BoxHaven documentation. The hosted service website is at boxhaven.dev.',
+      message: 'BoxHaven documentation. Source and AGPL-3.0 license text are on GitHub.',
       copyright: 'Copyright 2026 Finbarr Taylor'
     },
 

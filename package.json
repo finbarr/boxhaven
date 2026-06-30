@@ -1,5 +1,6 @@
 {
   "name": "boxhaven",
+  "license": "AGPL-3.0-only",
   "private": true,
   "scripts": {
     "deploy:app": "deploy/digitalocean/deploy-production.sh",

@@ -84,6 +84,12 @@ over direct SSH.
 - [Getting Started](docs/getting-started.md)
 - [Operations](docs/operations.md)
 
+## License
+
+BoxHaven is open source under the GNU Affero General Public License v3.0 only
+(`AGPL-3.0-only`). See [NOTICE](NOTICE) and [LICENSE](LICENSE) for the
+copyright notice and full license text.
+
 ## Hosted And Self-Hosted
 
 `app.boxhaven.dev` is the hosted control plane run by the BoxHaven operators.
