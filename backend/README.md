@@ -9,8 +9,8 @@ their own provider credentials.
 The browser app is built with TanStack Router and TanStack Query. It is the
 console/auth surface only: login, signup, CLI device approval, invitations,
 and authenticated box/team/image/billing views. The paid-service website lives
-in the separate `website/` artifact, and documentation lives in `docs/`, so a
-self-hosted backend does not serve the marketing site.
+outside this repository, and documentation lives in `docs/`, so a self-hosted
+backend does not serve the marketing site.
 
 In production the intended split is `boxhaven.dev` for the paid-service
 website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for the

@@ -8,8 +8,8 @@ credentials and no built-in limits.
 The browser app is built with TanStack Router and TanStack Query. It is the
 console/auth surface only: login, signup, CLI device approval, invitations,
 and authenticated box/team/image/billing views. The paid-service website lives
-in the separate `website/` artifact, and documentation lives in `docs/`, so a
-self-hosted server can run with only the login and console UI. Teams that want
+outside this repository, and documentation lives in `docs/`, so a self-hosted
+server can run with only the login and console UI. Teams that want
 internal documentation can host the `docs/` static build without hosting the
 marketing website.
 

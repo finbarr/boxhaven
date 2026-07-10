@@ -10,9 +10,9 @@ outside Docker.
 
 The backend-served app is intentionally not the public website. It contains
 only login/signup, CLI device approval, invitations, and the authenticated
-console. The paid-service website is a separate `website/` artifact published
-to `boxhaven.dev`; documentation is a separate `docs/` artifact that can be
-hosted internally or served by this Caddy bundle.
+console. The paid-service website is maintained outside this repository and
+published to `boxhaven.dev`; documentation is a separate `docs/` artifact that
+can be hosted internally or served by this Caddy bundle.
 
 ## Provision
 
