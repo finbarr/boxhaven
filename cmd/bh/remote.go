@@ -1401,11 +1401,21 @@ func shouldForwardSSHAgent(repoURL string) bool {
 func syncRemoteAuthState(machine remoteMachine, projectDir string) error {
 	var script strings.Builder
 	script.WriteString("set -euo pipefail\numask 077\n")
+	script.WriteString(remoteAuthSyncLockScript())
 	script.WriteString(remoteSessionEnvScript(remoteGitAuthEnv(machine.RepoURL)))
 	script.WriteString(remoteGitIdentityScript(currentGitIdentity(projectDir)))
 	script.WriteString(remoteAuthFilesScript(machine, localRemoteAuthFiles(machine.SSHUser)))
 	info("Syncing session auth to remote %s", machine.Name)
 	return runSSHCommand(machine, "bash -s", false, false, strings.NewReader(script.String()))
+}
+
+func remoteAuthSyncLockScript() string {
+	return strings.Join([]string{
+		"bh_auth_lock_dir=${HOME:-/tmp}/.cache/boxhaven",
+		"mkdir -p \"$bh_auth_lock_dir\"",
+		"exec 9>\"$bh_auth_lock_dir/session-auth.lock\"",
+		"flock -x 9",
+	}, "\n") + "\n"
 }
 
 func remoteSessionEnvScript(env map[string]string) string {

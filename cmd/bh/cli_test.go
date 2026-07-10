@@ -449,6 +449,19 @@ func TestRemoteGitIdentityScript(t *testing.T) {
 	}
 }
 
+func TestRemoteAuthSyncLockScriptSerializesRemoteUpdates(t *testing.T) {
+	script := remoteAuthSyncLockScript()
+	for _, want := range []string{
+		`mkdir -p "$bh_auth_lock_dir"`,
+		`exec 9>"$bh_auth_lock_dir/session-auth.lock"`,
+		"flock -x 9",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("auth sync lock script missing %q:\n%s", want, script)
+		}
+	}
+}
+
 func mustWriteFile(t *testing.T, path string, contents string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
