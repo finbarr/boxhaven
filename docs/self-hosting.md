@@ -161,6 +161,14 @@ GitHub repo without storing a GitHub token. Override the SSH target with
 for self-hosted installs. On the Droplet itself, use
 `npm run deploy:production:local`.
 
+Deployments that run an external policy service in the same Compose project
+must set `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and may set
+`BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE`. The corresponding flags are
+`--compose-overlay` and `--compose-overlay-env-file`. The deploy script refuses
+to run Compose when `BOXHAVEN_COMMERCIAL_POLICY_URL` is set without an overlay,
+preventing `--remove-orphans` from deleting the external service. Public
+self-hosted deployments with no external policy need no extra settings.
+
 ### Health Checks And Backups
 
 ```bash

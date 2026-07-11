@@ -118,6 +118,14 @@ endpoints. It forwards your SSH agent so the Droplet can fetch the private
 GitHub repo without storing a GitHub token. On the Droplet itself, use
 `npm run deploy:production:local`.
 
+When `BOXHAVEN_COMMERCIAL_POLICY_URL` points at a service in the same Compose
+project, pass its additional Compose file through
+`BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` or `--compose-overlay`, plus an
+optional `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE` or
+`--compose-overlay-env-file`. The canonical deploy refuses to invoke Compose
+with a configured policy URL and no overlay, so `--remove-orphans` cannot
+remove that service.
+
 Then sign up or sign in from another shell. The CLI prints a browser URL, tries
 to open it, and waits for the web app to grant access:
 

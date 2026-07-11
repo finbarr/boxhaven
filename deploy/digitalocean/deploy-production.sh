@@ -17,11 +17,19 @@ Options:
                    Default: BOXHAVEN_DEPLOY_DIR or /opt/boxhaven/app.
   --branch NAME    Branch to fast-forward on the remote checkout.
                    Default: BOXHAVEN_DEPLOY_BRANCH or master.
+  --compose-overlay FILE
+                   Additional Docker Compose file for externally managed services.
+  --compose-overlay-env-file FILE
+                   Additional Compose env file used with the overlay.
   -h, --help       Show this help.
 
 Environment:
   BOXHAVEN_PRODUCTION_ENV_FILE         Compose env file for --local mode.
                                        Default: deploy/digitalocean/.env.production.
+  BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE
+                                       Additional Docker Compose file.
+  BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE
+                                       Additional env file used with the overlay.
   BOXHAVEN_PRODUCTION_API_HEALTH_URL   Default: https://api.boxhaven.dev/healthz.
   BOXHAVEN_PRODUCTION_APP_HEALTH_URL   Default: https://app.boxhaven.dev/healthz.
   BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL  Default: https://docs.boxhaven.dev/.
@@ -36,6 +44,27 @@ die() {
   exit 1
 }
 
+env_file_value() {
+  local key="$1"
+  local file="$2"
+  awk -v key="$key" '
+    {
+      line = $0
+      sub(/\r$/, "", line)
+    }
+    line ~ "^[[:space:]]*(export[[:space:]]+)?" key "[[:space:]]*=" {
+      sub("^[[:space:]]*(export[[:space:]]+)?" key "[[:space:]]*=[[:space:]]*", "", line)
+      sub(/[[:space:]]+$/, "", line)
+      if ((substr(line, 1, 1) == "\"" && substr(line, length(line), 1) == "\"") ||
+          (substr(line, 1, 1) == "\047" && substr(line, length(line), 1) == "\047")) {
+        line = substr(line, 2, length(line) - 2)
+      }
+      value = line
+    }
+    END { print value }
+  ' "$file"
+}
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 
@@ -44,6 +73,8 @@ verify_only=0
 deploy_target="${BOXHAVEN_DEPLOY_TARGET:-root@app.boxhaven.dev}"
 deploy_dir="${BOXHAVEN_DEPLOY_DIR:-/opt/boxhaven/app}"
 deploy_branch="${BOXHAVEN_DEPLOY_BRANCH:-master}"
+compose_overlay_file="${BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE:-}"
+compose_overlay_env_file="${BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE:-}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -68,6 +99,16 @@ while [ "$#" -gt 0 ]; do
     --branch|--ref)
       [ "$#" -ge 2 ] || die "$1 requires a value"
       deploy_branch="$2"
+      shift 2
+      ;;
+    --compose-overlay)
+      [ "$#" -ge 2 ] || die "--compose-overlay requires a value"
+      compose_overlay_file="$2"
+      shift 2
+      ;;
+    --compose-overlay-env-file)
+      [ "$#" -ge 2 ] || die "--compose-overlay-env-file requires a value"
+      compose_overlay_env_file="$2"
       shift 2
       ;;
     -h|--help)
@@ -97,7 +138,9 @@ if [ "$local_mode" -ne 1 ]; then
     "${BOXHAVEN_PRODUCTION_ENV_FILE:-$unset_arg}" \
     "${BOXHAVEN_PRODUCTION_API_HEALTH_URL:-$unset_arg}" \
     "${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-$unset_arg}" \
-    "${BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL:-$unset_arg}" <<'REMOTE'
+    "${BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL:-$unset_arg}" \
+    "${compose_overlay_file:-$unset_arg}" \
+    "${compose_overlay_env_file:-$unset_arg}" <<'REMOTE'
 set -euo pipefail
 
 deploy_dir="$1"
@@ -107,6 +150,8 @@ env_file="${4:-}"
 api_health_url="${5:-}"
 app_health_url="${6:-}"
 docs_health_url="${7:-}"
+compose_overlay_file="${8:-}"
+compose_overlay_env_file="${9:-}"
 unset_arg="__boxhaven_unset__"
 
 case "$mode_arg" in
@@ -122,6 +167,8 @@ esac
 [ "$api_health_url" = "$unset_arg" ] || export BOXHAVEN_PRODUCTION_API_HEALTH_URL="$api_health_url"
 [ "$app_health_url" = "$unset_arg" ] || export BOXHAVEN_PRODUCTION_APP_HEALTH_URL="$app_health_url"
 [ "$docs_health_url" = "$unset_arg" ] || export BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL="$docs_health_url"
+[ "$compose_overlay_file" = "$unset_arg" ] || export BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE="$compose_overlay_file"
+[ "$compose_overlay_env_file" = "$unset_arg" ] || export BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE="$compose_overlay_env_file"
 
 cd "$deploy_dir"
 
@@ -159,10 +206,33 @@ api_health_url="${BOXHAVEN_PRODUCTION_API_HEALTH_URL:-https://api.boxhaven.dev/h
 app_health_url="${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-https://app.boxhaven.dev/healthz}"
 docs_health_url="${BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL:-https://docs.boxhaven.dev/}"
 
+if [ -n "$compose_overlay_env_file" ] && [ -z "$compose_overlay_file" ]; then
+  die "an overlay env file requires --compose-overlay or BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE"
+fi
+
 [ -f "$compose_file" ] || die "missing ${compose_file}"
 [ -f "$env_file" ] || die "missing ${env_file}; copy deploy/digitalocean/env.production.example and fill in production secrets"
+[ -z "$compose_overlay_file" ] || [ -f "$compose_overlay_file" ] || die "missing overlay Compose file ${compose_overlay_file}"
+[ -z "$compose_overlay_env_file" ] || [ -f "$compose_overlay_env_file" ] || die "missing overlay env file ${compose_overlay_env_file}"
+
+configured_policy_url="${BOXHAVEN_COMMERCIAL_POLICY_URL:-}"
+if [ -z "$configured_policy_url" ]; then
+  configured_policy_url="$(env_file_value BOXHAVEN_COMMERCIAL_POLICY_URL "$env_file")"
+fi
+if [ -n "$configured_policy_url" ] && [ -z "$compose_overlay_file" ]; then
+  die "BOXHAVEN_COMMERCIAL_POLICY_URL is configured but no Compose overlay was supplied; refusing to remove the external policy service"
+fi
+
 command -v docker >/dev/null 2>&1 || die "docker is required"
 command -v curl >/dev/null 2>&1 || die "curl is required"
+
+compose_args=(--env-file "$env_file" -f "$compose_file")
+if [ -n "$compose_overlay_env_file" ]; then
+  compose_args+=(--env-file "$compose_overlay_env_file")
+fi
+if [ -n "$compose_overlay_file" ]; then
+  compose_args+=(-f "$compose_overlay_file")
+fi
 
 if [ "$verify_only" -ne 1 ]; then
   echo "Building docs site"
@@ -190,13 +260,13 @@ if [ "$verify_only" -ne 1 ]; then
     '
 
   echo "Building and starting production containers"
-  docker compose --env-file "$env_file" -f "$compose_file" up -d --build --remove-orphans
+  docker compose "${compose_args[@]}" up -d --build --remove-orphans
   echo "Recreating Caddy to apply mounted configuration"
-  docker compose --env-file "$env_file" -f "$compose_file" up -d --force-recreate --no-deps caddy
+  docker compose "${compose_args[@]}" up -d --force-recreate --no-deps caddy
 fi
 
 echo "Checking production containers"
-docker compose --env-file "$env_file" -f "$compose_file" ps
+docker compose "${compose_args[@]}" ps
 
 echo "Checking ${api_health_url}"
 curl -fsS "$api_health_url" >/dev/null

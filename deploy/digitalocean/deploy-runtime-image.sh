@@ -21,6 +21,10 @@ Options:
                    Default: BOXHAVEN_DEPLOY_BRANCH or master.
   --env-file PATH  Production env file path on the machine doing the build.
                    Default: BOXHAVEN_PRODUCTION_ENV_FILE or deploy/digitalocean/.env.production.
+  --compose-overlay FILE
+                   Additional Docker Compose file used by the final app deploy.
+  --compose-overlay-env-file FILE
+                   Additional Compose env file used by the final app deploy.
   -h, --help       Show this help.
 
 Arguments after -- are passed to build-remote-image.sh.
@@ -40,6 +44,8 @@ deploy_target="${BOXHAVEN_DEPLOY_TARGET:-root@app.boxhaven.dev}"
 deploy_dir="${BOXHAVEN_DEPLOY_DIR:-/opt/boxhaven/app}"
 deploy_branch="${BOXHAVEN_DEPLOY_BRANCH:-master}"
 env_file="${BOXHAVEN_PRODUCTION_ENV_FILE:-deploy/digitalocean/.env.production}"
+compose_overlay_file="${BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE:-}"
+compose_overlay_env_file="${BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE:-}"
 build_args=()
 
 while [ "$#" -gt 0 ]; do
@@ -68,6 +74,16 @@ while [ "$#" -gt 0 ]; do
       env_file="$2"
       shift 2
       ;;
+    --compose-overlay)
+      [ "$#" -ge 2 ] || die "--compose-overlay requires a value"
+      compose_overlay_file="$2"
+      shift 2
+      ;;
+    --compose-overlay-env-file)
+      [ "$#" -ge 2 ] || die "--compose-overlay-env-file requires a value"
+      compose_overlay_env_file="$2"
+      shift 2
+      ;;
     --)
       shift
       build_args+=("$@")
@@ -92,13 +108,21 @@ if [ "$local_mode" -ne 1 ]; then
     "$deploy_dir" \
     "$deploy_branch" \
     "$env_file" \
+    "${compose_overlay_file:-__boxhaven_unset__}" \
+    "${compose_overlay_env_file:-__boxhaven_unset__}" \
     "${build_args[@]}" <<'REMOTE'
 set -euo pipefail
 
 deploy_dir="$1"
 deploy_branch="$2"
 env_file="$3"
-shift 3
+compose_overlay_file="$4"
+compose_overlay_env_file="$5"
+shift 5
+
+[ "$compose_overlay_file" = "__boxhaven_unset__" ] || export BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE="$compose_overlay_file"
+[ "$compose_overlay_env_file" = "__boxhaven_unset__" ] || export BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE="$compose_overlay_env_file"
+export BOXHAVEN_PRODUCTION_ENV_FILE="$env_file"
 
 cd "$deploy_dir"
 
@@ -127,4 +151,7 @@ cd "$repo_root"
 
 [ -f "$env_file" ] || die "missing ${env_file}; copy deploy/digitalocean/env.production.example and fill in production secrets"
 ./deploy/digitalocean/build-remote-image.sh --env-file "$env_file" --set-active "${build_args[@]}"
-BOXHAVEN_PRODUCTION_ENV_FILE="$env_file" ./deploy/digitalocean/deploy-production.sh --local
+BOXHAVEN_PRODUCTION_ENV_FILE="$env_file" \
+BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE="$compose_overlay_file" \
+BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE="$compose_overlay_env_file" \
+./deploy/digitalocean/deploy-production.sh --local

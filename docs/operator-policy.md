@@ -25,6 +25,13 @@ The backend also sends a complete active-machine reconciliation at startup and
 periodically. Reconciliation failures are logged and retried without affecting
 box operations.
 
+When the external service runs in the canonical deployment's Compose project,
+set `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and optionally
+`BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE`, or pass the matching
+`--compose-overlay` and `--compose-overlay-env-file` flags. A configured policy
+URL without an overlay makes the deploy fail before Compose, preventing
+`--remove-orphans` from deleting the policy service.
+
 ## Version 1 Contract
 
 Requests use JSON, `Authorization: Bearer <token>`, a `/contract/v1` path, and

@@ -349,6 +349,12 @@ fast-forward `/opt/boxhaven/app` on `master`, build the docs site, run the
 DigitalOcean Compose deploy, and check the production app, API, and docs health
 endpoints. They do not rebuild the remote VM snapshot.
 
+The deploy script supports external services through
+`BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and
+`BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE` (or the matching
+`--compose-overlay` flags). It refuses to deploy a configured external policy
+URL without its overlay, before Compose can remove the service as an orphan.
+
 After changing the VM runtime or image-builder code, explicitly rebuild and
 publish the remote VM image:
 
