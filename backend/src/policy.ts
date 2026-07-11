@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 export type PolicyTier = "small" | "medium" | "large";
 
 export type PolicyTeam = { id: string; name: string; slug?: string };
@@ -15,8 +13,6 @@ export type CreatePolicyInput = {
 export type CreatePolicyDecision = { allowed: boolean; message?: string };
 
 export type MachineLifecycleFact = {
-  id?: string;
-  occurred_at?: string;
   type: "machine.created" | "machine.destroyed" | "machine.moved";
   team: PolicyTeam;
   actor: { id: string; email: string };
@@ -24,14 +20,23 @@ export type MachineLifecycleFact = {
   previous_team_id?: string;
 };
 
+export type MachineLifecycleEvent = MachineLifecycleFact & {
+  version: 1;
+  id: string;
+  occurred_at: string;
+};
+
 export interface CommercialPolicy {
+  readonly lifecycleEventsEnabled: boolean;
   readonly accountCapability?: { label: string };
   checkCreate(input: CreatePolicyInput): Promise<CreatePolicyDecision>;
-  emitMachineFact(fact: MachineLifecycleFact): Promise<void>;
+  emitMachineFact(event: MachineLifecycleEvent): Promise<void>;
   createAccountLink?(input: { team: PolicyTeam; actor: PolicyActor }): Promise<string>;
 }
 
 export class AllowAllCommercialPolicy implements CommercialPolicy {
+  readonly lifecycleEventsEnabled = false;
+
   async checkCreate(): Promise<CreatePolicyDecision> {
     return { allowed: true };
   }
@@ -40,6 +45,7 @@ export class AllowAllCommercialPolicy implements CommercialPolicy {
 }
 
 export class HTTPCommercialPolicy implements CommercialPolicy {
+  readonly lifecycleEventsEnabled = true;
   readonly accountCapability?: { label: string };
   private readonly baseURL: string;
 
@@ -59,13 +65,8 @@ export class HTTPCommercialPolicy implements CommercialPolicy {
     return { allowed: response.allowed, ...(response.message ? { message: response.message } : {}) };
   }
 
-  async emitMachineFact(fact: MachineLifecycleFact): Promise<void> {
-    await this.request("/contract/v1/events", {
-      version: 1,
-      ...fact,
-      id: fact.id || randomUUID(),
-      occurred_at: fact.occurred_at || new Date().toISOString(),
-    });
+  async emitMachineFact(event: MachineLifecycleEvent): Promise<void> {
+    await this.request("/contract/v1/events", event, { "idempotency-key": event.id }, false);
   }
 
   async createAccountLink(input: { team: PolicyTeam; actor: PolicyActor }): Promise<string> {
@@ -75,7 +76,12 @@ export class HTTPCommercialPolicy implements CommercialPolicy {
     return response.url;
   }
 
-  private async request<T = unknown>(path: string, body: unknown): Promise<T> {
+  private async request<T = unknown>(
+    path: string,
+    body: unknown,
+    extraHeaders: Record<string, string> = {},
+    expectJSON = true,
+  ): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 5000);
     try {
@@ -84,11 +90,13 @@ export class HTTPCommercialPolicy implements CommercialPolicy {
         headers: {
           authorization: `Bearer ${this.options.token}`,
           "content-type": "application/json",
+          ...extraHeaders,
         },
         body: JSON.stringify(body),
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`commercial policy ${path} failed with HTTP ${response.status}: ${await response.text()}`);
+      if (!expectJSON) return undefined as T;
       return response.json() as Promise<T>;
     } finally {
       clearTimeout(timer);

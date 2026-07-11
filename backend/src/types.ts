@@ -1,3 +1,5 @@
+import type { MachineLifecycleEvent } from "./policy.js";
+
 export type RemoteMachine = {
   name: string;
   user_id?: string;
@@ -103,9 +105,10 @@ export type BackendState = {
   provider: string;
   machines: Record<string, RemoteMachine>;
   images?: Record<string, TeamImageRecord>;
+  policy_events?: Record<string, MachineLifecycleEvent>;
   updated_at?: string;
 };
 
-export const stateVersion = 5;
+export const stateVersion = 6;
 export const defaultProjectPath = "/opt/boxhaven/project";
 export const defaultSSHUser = "boxhaven";

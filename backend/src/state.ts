@@ -1,9 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
+import type { MachineLifecycleEvent } from "./policy.js";
 import { BackendState, RemoteMachine, TeamImageRecord, stateVersion } from "./types.js";
 
 export class StateStore {
   private state: BackendState | undefined;
+  private pendingUpdate: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly path: string,
@@ -26,11 +29,15 @@ export class StateStore {
           provider: parsed.provider || this.provider,
           machines: parsed.machines || {},
           images: parsed.images || {},
+          policy_events: parsed.policy_events || {},
           updated_at: parsed.updated_at,
         };
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        this.state = undefined;
+        throw error;
+      }
     }
     return this.snapshot();
   }
@@ -55,10 +62,13 @@ export class StateStore {
     return state.machines[machineKey(userID, name)];
   }
 
-  async putMachine(machine: RemoteMachine): Promise<void> {
+  async putMachine(machine: RemoteMachine, policyEvent?: MachineLifecycleEvent): Promise<void> {
     if (!machine.user_id) throw new Error("machine user_id is required");
     await this.update((state) => {
       state.machines[machineKey(machine.user_id as string, machine.name)] = machine;
+      if (policyEvent) {
+        state.policy_events = { ...(state.policy_events || {}), [policyEvent.id]: policyEvent };
+      }
     });
   }
 
@@ -71,9 +81,25 @@ export class StateStore {
     });
   }
 
-  async deleteMachine(userID: string, name: string): Promise<void> {
+  async deleteMachine(userID: string, name: string, policyEvent?: MachineLifecycleEvent): Promise<void> {
     await this.update((state) => {
       delete state.machines[machineKey(userID, name)];
+      if (policyEvent) {
+        state.policy_events = { ...(state.policy_events || {}), [policyEvent.id]: policyEvent };
+      }
+    });
+  }
+
+  async listPolicyEvents(): Promise<MachineLifecycleEvent[]> {
+    const state = await this.load();
+    return Object.values(state.policy_events || {});
+  }
+
+  async deletePolicyEvent(id: string): Promise<void> {
+    await this.update((state) => {
+      if (!state.policy_events?.[id]) return;
+      state.policy_events = { ...state.policy_events };
+      delete state.policy_events[id];
     });
   }
 
@@ -126,13 +152,41 @@ export class StateStore {
   }
 
   private async update(fn: (state: BackendState) => void): Promise<void> {
-    const state = await this.load();
-    fn(state);
-    state.version = stateVersion;
-    state.updated_at = new Date().toISOString();
-    await mkdir(dirname(this.path), { recursive: true });
-    await writeFile(this.path, `${JSON.stringify(state, null, 2)}\n`);
-    this.state = state;
+    const update = this.pendingUpdate.then(async () => {
+      const state = await this.load();
+      fn(state);
+      state.version = stateVersion;
+      state.updated_at = new Date().toISOString();
+      await this.writeState(state);
+      this.state = state;
+    });
+    this.pendingUpdate = update.catch(() => {});
+    await update;
+  }
+
+  private async writeState(state: BackendState): Promise<void> {
+    const directory = dirname(this.path);
+    const temporaryPath = `${this.path}.${process.pid}.${randomUUID()}.tmp`;
+    await mkdir(directory, { recursive: true });
+    try {
+      const file = await open(temporaryPath, "wx", 0o600);
+      try {
+        await file.writeFile(`${JSON.stringify(state, null, 2)}\n`);
+        await file.sync();
+      } finally {
+        await file.close();
+      }
+      await rename(temporaryPath, this.path);
+      const directoryHandle = await open(directory, "r");
+      try {
+        await directoryHandle.sync();
+      } finally {
+        await directoryHandle.close();
+      }
+    } catch (error) {
+      await rm(temporaryPath, { force: true }).catch(() => {});
+      throw error;
+    }
   }
 
   private snapshot(): BackendState {
@@ -143,6 +197,7 @@ export class StateStore {
       ...this.state,
       machines: { ...this.state.machines },
       images: { ...(this.state.images || {}) },
+      policy_events: { ...(this.state.policy_events || {}) },
     };
   }
 }

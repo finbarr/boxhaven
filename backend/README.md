@@ -234,7 +234,9 @@ no policy URL and token, `POST /v1/machines` is allowed normally and lifecycle
 facts are no-ops. When configured, the backend calls:
 
 - `POST <policy-url>/contract/v1/entitlements/create` before provisioning.
-- `POST <policy-url>/contract/v1/events` after creates, moves, and destroys.
+- `POST <policy-url>/contract/v1/events` for creates, moves, and destroys. The
+  complete versioned payload is committed to a durable local outbox in the same
+  state update as the machine mutation, then retried until delivery succeeds.
 - `POST <policy-url>/contract/v1/account-link` from the authenticated generic
   `POST /v1/account-link` endpoint when `BOXHAVEN_ACCOUNT_LABEL` is set.
 
@@ -242,7 +244,10 @@ All contract bodies contain `version: 1` and calls use the configured bearer
 token. A missing or invalid create decision returns `503 entitlement_unavailable`
 without provisioning. A denied decision returns `403 entitlement_denied`.
 Existing box list, connect, run, sync, move, and destroy operations do not wait
-for the policy service; lifecycle delivery failures are logged. See
+for the policy service. Lifecycle delivery failures are logged and remain
+queued across backend restarts. Stable event IDs make retries idempotent, even
+when delivery succeeded but the local dequeue commit did not. The allow-all
+self-hosted policy does not create outbox entries. See
 [`docs/operator-policy.md`](../docs/operator-policy.md) for the payload contract.
 
 Transactional email (enabled by setting `RESEND_API_KEY`) sends password

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { WebSocketServer } from "ws";
 import { createBackendAuth, migrateBackendAuth } from "./auth.js";
 import { ProviderRegistry } from "./providers.js";
-import { CommercialPolicy, CreatePolicyDecision, MachineLifecycleFact } from "./policy.js";
+import { CommercialPolicy, CreatePolicyDecision, MachineLifecycleEvent } from "./policy.js";
 import { StateStore } from "./state.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
@@ -1123,10 +1123,11 @@ test("backend starts GitHub sign-in", async () => {
 });
 
 test("hosted policy fails new creates closed while existing box access and destroy stay available", async () => {
-  const facts: MachineLifecycleFact[] = [];
+  const facts: MachineLifecycleEvent[] = [];
   const checkedMachineIDs: string[] = [];
   let createFailure = false;
   const commercialPolicy: CommercialPolicy = {
+    lifecycleEventsEnabled: true,
     async checkCreate(input): Promise<CreatePolicyDecision> {
       checkedMachineIDs.push(input.machine.id);
       if (createFailure) throw new Error("policy offline");
@@ -1137,13 +1138,18 @@ test("hosted policy fails new creates closed while existing box access and destr
       if (createFailure) throw new Error("policy offline");
     },
   };
-  const { app, provider, token } = await createTestBackend("policy@example.com", "password123", { commercialPolicy });
+  const { app, provider, store, token } = await createTestBackend("policy@example.com", "password123", {
+    commercialPolicy,
+    policyEventRetryMs: 5,
+  });
   const headers = { authorization: `Bearer ${token}` };
 
   const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "existing", tier: "large" } });
   assert.equal(created.statusCode, 201, created.body);
-  await delay(0);
+  await waitFor(() => facts.length === 1);
   assert.equal(facts[0].type, "machine.created");
+  assert.equal(facts[0].version, 1);
+  assert.equal(typeof facts[0].id, "string");
   assert.equal(facts[0].machine.tier, "large");
   assert.equal(facts[0].machine.id, checkedMachineIDs[0]);
 
@@ -1160,13 +1166,23 @@ test("hosted policy fails new creates closed while existing box access and destr
   assert.equal(connected.statusCode, 200, connected.body);
   const destroyed = await app.inject({ method: "DELETE", url: "/v1/machines/renamed", headers });
   assert.equal(destroyed.statusCode, 204, destroyed.body);
-  await delay(0);
+  await waitFor(async () => (await store.listPolicyEvents()).some((event) => event.type === "machine.destroyed"));
   assert.deepEqual(provider.released, ["renamed"]);
-  assert.equal(facts.at(-1)?.machine.id, facts[0].machine.id);
+  assert.equal((await store.listPolicyEvents()).at(-1)?.machine.id, facts[0].machine.id);
+  await app.close();
+});
+
+test("self-hosted lifecycle mutations do not accumulate policy outbox entries", async () => {
+  const { app, store, token } = await createTestBackend("self-hosted@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "local" } })).statusCode, 201);
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/machines/local", headers })).statusCode, 204);
+  assert.deepEqual(await store.listPolicyEvents(), []);
 });
 
 test("generic account capability returns an external link without exposing provider state", async () => {
   const commercialPolicy: CommercialPolicy = {
+    lifecycleEventsEnabled: false,
     accountCapability: { label: "Plan" },
     async checkCreate() { return { allowed: true }; },
     async emitMachineFact() {},
@@ -1194,6 +1210,7 @@ async function createTestBackend(
     github?: boolean;
     previewTLSWarmup?: (previewURL: string) => Promise<void>;
     commercialPolicy?: CommercialPolicy;
+    policyEventRetryMs?: number;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -1218,6 +1235,7 @@ async function createTestBackend(
     adminEmails: options.adminEmails,
     maxMachinesPerUser: options.maxMachinesPerUser,
     commercialPolicy: options.commercialPolicy,
+    policyEventRetryMs: options.policyEventRetryMs,
     apiPublicURL: "https://api.hosted.test",
     appPublicURL: "https://app.hosted.test",
     previewBaseDomain: "hosted.test",
@@ -1226,7 +1244,7 @@ async function createTestBackend(
     machineReadyTimeoutMs: options.machineReadyTimeoutMs ?? 0,
   });
   const token = await signUp(app, email, password);
-  return { app, provider, token };
+  return { app, provider, store, token };
 }
 
 async function signUp(app: ReturnType<typeof createBackend>, email: string, password = "password123"): Promise<string> {
@@ -1247,6 +1265,14 @@ async function signUp(app: ReturnType<typeof createBackend>, email: string, pass
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 1000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await predicate())) {
+    if (Date.now() >= deadline) throw new Error("condition was not met before timeout");
+    await delay(5);
+  }
 }
 
 function hashUserID(userID: string): string {

@@ -7,7 +7,8 @@ import Fastify, { FastifyInstance } from "fastify";
 import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
 import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
-import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleFact, PolicyTeam, PolicyTier } from "./policy.js";
+import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyTeam, PolicyTier } from "./policy.js";
+import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { StateStore } from "./state.js";
@@ -21,6 +22,7 @@ export type BackendOptions = {
   adminEmails?: string[];
   maxMachinesPerUser?: number;
   commercialPolicy?: CommercialPolicy;
+  policyEventRetryMs?: number;
   appDir?: string;
   apiPublicURL?: string;
   appPublicURL?: string;
@@ -144,6 +146,9 @@ const agentRPCSetupTimeout = 30 * 60_000;
 export function createBackend(options: BackendOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const commercialPolicy: CommercialPolicy = options.commercialPolicy || new AllowAllCommercialPolicy();
+  const policyDelivery = new PolicyEventDelivery(options.store, commercialPolicy, options.policyEventRetryMs);
+  policyDelivery.start();
+  app.addHook("onClose", async () => policyDelivery.stop());
   void app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
   registerCors(app, options.corsOrigins || []);
   const agents = new Map<string, AgentConnection>();
@@ -306,7 +311,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
         });
       }
     }
-    return createMachine(options, agents, auth, provider, body, orgID, auth.teams, reply);
+    return createMachine(options, agents, auth, provider, body, orgID, auth.teams, policyDelivery, reply);
   });
 
   app.get("/v1/machines", async (request, reply) => {
@@ -556,8 +561,12 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       const provider = providerForMachine(options, existing, reply);
       if (!provider) return;
       await provider.releaseMachine(existing);
-      await options.store.deleteMachine(auth.userID, name);
-      emitMachineFact(commercialPolicy, machineFact("machine.destroyed", auth, existing, auth.teams));
+      await options.store.deleteMachine(
+        auth.userID,
+        name,
+        machineLifecycleEvent(commercialPolicy, machineFact("machine.destroyed", auth, existing, auth.teams)),
+      );
+      policyDelivery.notify();
     }
     return reply.code(204).send();
   });
@@ -663,8 +672,12 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
     await provider.releaseMachine(existing);
-    await options.store.deleteMachine(targetUserID, name);
-    emitMachineFact(commercialPolicy, machineFact("machine.destroyed", context.auth, existing, context.auth.teams));
+    await options.store.deleteMachine(
+      targetUserID,
+      name,
+      machineLifecycleEvent(commercialPolicy, machineFact("machine.destroyed", context.auth, existing, context.auth.teams)),
+    );
+    policyDelivery.notify();
     return reply.code(204).send();
   });
 
@@ -686,11 +699,11 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return reply.code(400).send({ id: "bad_request", message: `you are not a member of team ${reference}` });
     }
     const moved = normalizeMachine(options, { ...machine, org_id: found.team.id, updated_at: new Date().toISOString() });
-    await options.store.putMachine(moved);
-    emitMachineFact(commercialPolicy, {
+    await options.store.putMachine(moved, machineLifecycleEvent(commercialPolicy, {
       ...machineFact("machine.moved", auth, moved, auth.teams),
       previous_team_id: machine.org_id,
-    });
+    }));
+    policyDelivery.notify();
     return { machine: decorateTeam(publicMachine(moved), auth.teams) };
   });
 
@@ -709,6 +722,7 @@ async function createMachine(
   body: CreateMachineRequest,
   orgID: string,
   teams: TeamInfo[],
+  policyDelivery: PolicyEventDelivery,
   reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
 ) {
   const timings: MachineCreateTimings = {};
@@ -763,8 +777,9 @@ async function createMachine(
     ssh_principal: sshPrincipal,
   });
   phaseStarted = Date.now();
-  await options.store.putMachine(machine);
-  emitMachineFact(options.commercialPolicy || new AllowAllCommercialPolicy(), machineFact("machine.created", auth, machine, teams));
+  const commercialPolicy = options.commercialPolicy || new AllowAllCommercialPolicy();
+  await options.store.putMachine(machine, machineLifecycleEvent(commercialPolicy, machineFact("machine.created", auth, machine, teams)));
+  policyDelivery.notify();
   recordMachineCreateTiming(timings, "store_machine_ms", phaseStarted);
   let ready: RemoteMachine;
   try {
@@ -1211,10 +1226,14 @@ function machineFact(
   };
 }
 
-function emitMachineFact(policy: CommercialPolicy, fact: MachineLifecycleFact): void {
-  void policy.emitMachineFact(fact).catch((error) => {
-    console.error(`commercial policy ${fact.type} fact failed: ${(error as Error).message}`);
-  });
+function machineLifecycleEvent(policy: CommercialPolicy, fact: MachineLifecycleFact): MachineLifecycleEvent | undefined {
+  if (!policy.lifecycleEventsEnabled) return undefined;
+  return {
+    version: 1,
+    id: randomUUID(),
+    occurred_at: new Date().toISOString(),
+    ...fact,
+  };
 }
 
 function machineNameConflict(name: string) {

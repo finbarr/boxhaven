@@ -126,6 +126,7 @@ async function startSeededBackend() {
   const store = new StateStore(join(dir, "state.json"), providers.defaultName);
   const sshCA = new SSHCertificateAuthority(join(dir, "ssh_ca_ed25519"));
   const commercialPolicy = {
+    lifecycleEventsEnabled: false,
     accountCapability: { label: "Account" },
     async checkCreate() { return { allowed: true }; },
     async emitMachineFact() {},

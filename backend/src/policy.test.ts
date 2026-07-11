@@ -5,10 +5,15 @@ import test from "node:test";
 import { HTTPCommercialPolicy, commercialPolicyFromEnv } from "./policy.js";
 
 test("HTTP commercial policy uses authenticated version 1 contract calls", async () => {
-  const calls: Array<{ url: string; authorization: string; body: Record<string, unknown> }> = [];
+  const calls: Array<{ url: string; authorization: string; idempotencyKey: string; body: Record<string, unknown> }> = [];
   const server = createServer(async (request, response) => {
     const body = JSON.parse(await readBody(request)) as Record<string, unknown>;
-    calls.push({ url: request.url || "", authorization: request.headers.authorization || "", body });
+    calls.push({
+      url: request.url || "",
+      authorization: request.headers.authorization || "",
+      idempotencyKey: String(request.headers["idempotency-key"] || ""),
+      body,
+    });
     response.setHeader("content-type", "application/json");
     if (request.url === "/contract/v1/entitlements/create") return response.end(JSON.stringify({ version: 1, allowed: true }));
     if (request.url === "/contract/v1/events") return response.end(JSON.stringify({ version: 1, accepted: true }));
@@ -26,6 +31,9 @@ test("HTTP commercial policy uses authenticated version 1 contract calls", async
   try {
     assert.deepEqual(await policy.checkCreate({ ...input, machine: { id: "user-1:box", name: "box", tier: "small" } }), { allowed: true });
     await policy.emitMachineFact({
+      version: 1,
+      id: "event-1",
+      occurred_at: "2026-07-11T00:00:00.000Z",
       type: "machine.created",
       team: input.team,
       actor: { id: input.actor.id, email: input.actor.email },
@@ -39,8 +47,9 @@ test("HTTP commercial policy uses authenticated version 1 contract calls", async
     ]);
     assert.ok(calls.every((call) => call.authorization === "Bearer shared-test"));
     assert.ok(calls.every((call) => call.body.version === 1));
-    assert.equal(typeof calls[1].body.id, "string");
-    assert.equal(typeof calls[1].body.occurred_at, "string");
+    assert.equal(calls[1].body.id, "event-1");
+    assert.equal(calls[1].body.occurred_at, "2026-07-11T00:00:00.000Z");
+    assert.equal(calls[1].idempotencyKey, "event-1");
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
@@ -54,6 +63,7 @@ test("self-hosted policy defaults to allow-all and rejects partial hosted config
     machine: { id: "user:box", name: "box", tier: "small" },
   }), { allowed: true });
   assert.equal(policy.accountCapability, undefined);
+  assert.equal(policy.lifecycleEventsEnabled, false);
   assert.throws(() => commercialPolicyFromEnv({ BOXHAVEN_COMMERCIAL_POLICY_URL: "https://policy.test" }), /must be set together/);
 });
 
