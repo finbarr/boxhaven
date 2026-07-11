@@ -47,6 +47,18 @@ export class StateStore {
     return Object.values(state.machines);
   }
 
+  async captureMachineSnapshot(now = () => new Date()): Promise<{ generatedAt: string; machines: RemoteMachine[] }> {
+    const capture = this.pendingUpdate.then(async () => {
+      const state = await this.load();
+      return {
+        generatedAt: now().toISOString(),
+        machines: Object.values(state.machines).map((machine) => ({ ...machine })),
+      };
+    });
+    this.pendingUpdate = capture.then(() => {}, () => {});
+    return capture;
+  }
+
   async listMachinesForUser(userID: string): Promise<RemoteMachine[]> {
     const state = await this.load();
     return Object.values(state.machines).filter((machine) => machine.user_id === userID);
@@ -159,12 +171,13 @@ export class StateStore {
       state.updated_at = new Date().toISOString();
       await this.writeState(state);
       this.state = state;
+      await this.syncStateDirectory();
     });
     this.pendingUpdate = update.catch(() => {});
     await update;
   }
 
-  private async writeState(state: BackendState): Promise<void> {
+  protected async writeState(state: BackendState): Promise<void> {
     const directory = dirname(this.path);
     const temporaryPath = `${this.path}.${process.pid}.${randomUUID()}.tmp`;
     await mkdir(directory, { recursive: true });
@@ -177,15 +190,18 @@ export class StateStore {
         await file.close();
       }
       await rename(temporaryPath, this.path);
-      const directoryHandle = await open(directory, "r");
-      try {
-        await directoryHandle.sync();
-      } finally {
-        await directoryHandle.close();
-      }
     } catch (error) {
       await rm(temporaryPath, { force: true }).catch(() => {});
       throw error;
+    }
+  }
+
+  protected async syncStateDirectory(): Promise<void> {
+    const directoryHandle = await open(dirname(this.path), "r");
+    try {
+      await directoryHandle.sync();
+    } finally {
+      await directoryHandle.close();
     }
   }
 

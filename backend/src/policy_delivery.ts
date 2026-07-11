@@ -86,7 +86,8 @@ export class PolicyEventDelivery {
     this.reconciling = true;
     let failed = false;
     try {
-      await this.policy.reconcile(reconciliationSnapshot(await this.store.listMachines()));
+      const snapshot = await this.store.captureMachineSnapshot();
+      await this.policy.reconcile(reconciliationSnapshot(snapshot.machines, snapshot.generatedAt));
     } catch (error) {
       failed = true;
       console.error(`commercial policy reconciliation failed: ${(error as Error).message}`);

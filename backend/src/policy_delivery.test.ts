@@ -82,6 +82,43 @@ test("a dequeue persistence failure redelivers the same idempotent event ID", as
   assert.deepEqual(deliveredIDs, [event.id, event.id]);
 });
 
+test("a post-rename sync failure cannot make a later state write lose the committed outbox", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-sync-failure-"));
+  const path = join(dir, "state.json");
+  const store = new FlakyDirectorySyncStateStore(path, "fake");
+  await store.load();
+  await assert.rejects(
+    store.putMachine({ name: "first", user_id: "user-1", provider: "fake" }, event),
+    /simulated directory sync failure/,
+  );
+  const second = { ...event, id: "event-stable-second", machine: { ...event.machine, id: "provider:second", name: "second" } };
+  await store.putMachine({ name: "second", user_id: "user-1", provider: "fake" }, second);
+
+  const restarted = new StateStore(path, "fake");
+  assert.equal((await restarted.getMachine("user-1", "first"))?.name, "first");
+  assert.equal((await restarted.getMachine("user-1", "second"))?.name, "second");
+  assert.deepEqual((await restarted.listPolicyEvents()).map((queued) => queued.id).sort(), [event.id, second.id].sort());
+});
+
+test("concurrent state mutations are serialized without lost machines or outbox entries", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-concurrent-"));
+  const path = join(dir, "state.json");
+  const store = new StateStore(path, "fake");
+  await Promise.all(Array.from({ length: 20 }, (_, index) => {
+    const queued = {
+      ...event,
+      id: `event-${index}`,
+      machine: { ...event.machine, id: `provider:machine-${index}`, name: `box-${index}` },
+    };
+    return store.putMachine({ name: `box-${index}`, user_id: "user-1", provider: "fake" }, queued);
+  }));
+  assert.equal((await store.listMachines()).length, 20);
+  assert.equal((await store.listPolicyEvents()).length, 20);
+  const restarted = new StateStore(path, "fake");
+  assert.equal((await restarted.listMachines()).length, 20);
+  assert.equal((await restarted.listPolicyEvents()).length, 20);
+});
+
 test("reconciliation uses lifecycle team and stable provider machine identity semantics", () => {
   assert.deepEqual(reconciliationSnapshot([{
     name: "renamed-box",
@@ -100,6 +137,25 @@ test("reconciliation uses lifecycle team and stable provider machine identity se
       machine: { id: "fake:stable-provider-name", name: "renamed-box", tier: "large" },
     }],
   });
+});
+
+test("reconciliation capture is serialized with lifecycle state commits", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-capture-"));
+  const store = new StateStore(join(dir, "state.json"), "fake");
+  const beforeCreate = store.captureMachineSnapshot(() => new Date("2026-07-11T10:00:00.000Z"));
+  const create = store.putMachine({
+    name: "box",
+    user_id: "user-1",
+    provider: "fake",
+    provider_name: "stable-box",
+  }, { ...event, occurred_at: "2026-07-11T10:00:01.000Z" });
+  assert.deepEqual(await beforeCreate, { generatedAt: "2026-07-11T10:00:00.000Z", machines: [] });
+  await create;
+
+  const afterCreate = await store.captureMachineSnapshot(() => new Date("2026-07-11T10:00:02.000Z"));
+  assert.equal(afterCreate.generatedAt, "2026-07-11T10:00:02.000Z");
+  assert.equal(afterCreate.machines.length, 1);
+  assert.equal(afterCreate.machines[0].provider_name, "stable-box");
 });
 
 test("hosted reconciliation runs at startup, retries failures, and remains periodic", async () => {
@@ -148,6 +204,18 @@ class FlakyDeleteStateStore extends StateStore {
       throw new Error("simulated crash before dequeue commit");
     }
     await super.deletePolicyEvent(id);
+  }
+}
+
+class FlakyDirectorySyncStateStore extends StateStore {
+  private fail = true;
+
+  protected override async syncStateDirectory(): Promise<void> {
+    if (this.fail) {
+      this.fail = false;
+      throw new Error("simulated directory sync failure");
+    }
+    await super.syncStateDirectory();
   }
 }
 
