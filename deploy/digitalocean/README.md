@@ -93,10 +93,12 @@ The equivalent flags are `--compose-overlay FILE` and
 `--compose-overlay-env-file FILE` (after `--` when invoked through npm). Remote
 deploy paths refer to files on the remote checkout. The deploy combines both
 Compose files for `up --remove-orphans`, Caddy recreation, and verification so
-overlay services are preserved. If the production env sets
-`BOXHAVEN_COMMERCIAL_POLICY_URL` without an overlay, deployment fails before
-Docker Compose. With no policy URL or overlay, the normal public/self-hosted
-deployment is unchanged.
+overlay services are preserved. Keep `BOXHAVEN_COMMERCIAL_POLICY_URL` in the
+primary production env after activating an external service, even if the
+overlay supplies its secret token. This URL is a durable marker: running the
+public deploy later without the overlay fails before Docker Compose can remove
+the external service. With no policy URL or overlay, the normal
+public/self-hosted deployment is unchanged.
 
 After changing the VM runtime or image-builder code, explicitly rebuild and
 publish the remote VM image:

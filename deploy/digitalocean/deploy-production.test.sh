@@ -39,11 +39,11 @@ EOF
 chmod +x "${temp_dir}/bin/docker" "${temp_dir}/bin/curl" "${temp_dir}/bin/ssh"
 
 public_env="${temp_dir}/public.env"
-hosted_env="${temp_dir}/hosted.env"
+protected_env="${temp_dir}/protected.env"
 overlay_env="${temp_dir}/overlay.env"
 overlay_file="${temp_dir}/compose.overlay.yml"
 printf 'BOXHAVEN_COMMERCIAL_POLICY_URL=\n' > "$public_env"
-printf 'BOXHAVEN_COMMERCIAL_POLICY_URL="http://policy:9000"\n' > "$hosted_env"
+printf 'BOXHAVEN_COMMERCIAL_POLICY_URL="http://hosted:8790"\n' > "$protected_env"
 printf 'POLICY_IMAGE=example/policy:test\n' > "$overlay_env"
 printf 'services:\n  policy:\n    image: ${POLICY_IMAGE}\n' > "$overlay_file"
 
@@ -66,22 +66,22 @@ run_deploy "$public_env" --local --verify-only >/dev/null
 assert_contains "$(cat "$docker_log")" "compose --env-file ${public_env} -f deploy/digitalocean/docker-compose.yml ps"
 
 : > "$docker_log"
-if run_deploy "$hosted_env" --local --verify-only >"${temp_dir}/guard.out" 2>&1; then
-  echo "expected hosted deploy without an overlay to fail" >&2
-  exit 1
-fi
-assert_contains "$(cat "${temp_dir}/guard.out")" "no Compose overlay was supplied"
-[ ! -s "$docker_log" ] || { echo "guard invoked docker before failing" >&2; exit 1; }
-
-: > "$docker_log"
-run_deploy "$hosted_env" --local \
+run_deploy "$protected_env" --local \
   --compose-overlay "$overlay_file" \
   --compose-overlay-env-file "$overlay_env" >/dev/null
 assert_contains "$(cat "$docker_log")" "--env-file ${overlay_env} -f ${overlay_file} up -d --build --remove-orphans"
 assert_contains "$(cat "$docker_log")" "--env-file ${overlay_env} -f ${overlay_file} up -d --force-recreate --no-deps caddy"
 
 : > "$docker_log"
-run_deploy "$hosted_env" --verify-only --target test-host --dir "$repo_root" \
+if run_deploy "$protected_env" --local >"${temp_dir}/guard.out" 2>&1; then
+  echo "expected a public-only deploy after overlay activation to fail" >&2
+  exit 1
+fi
+assert_contains "$(cat "${temp_dir}/guard.out")" "no Compose overlay was supplied"
+[ ! -s "$docker_log" ] || { echo "guard invoked docker before failing" >&2; exit 1; }
+
+: > "$docker_log"
+run_deploy "$protected_env" --verify-only --target test-host --dir "$repo_root" \
   --compose-overlay "$overlay_file" \
   --compose-overlay-env-file "$overlay_env" >/dev/null
 assert_contains "$(cat "$docker_log")" "--env-file ${overlay_env} -f ${overlay_file} ps"
@@ -91,7 +91,7 @@ special_env="${temp_dir}/env with spaces & symbols.env"
 cp "$overlay_file" "$special_overlay"
 cp "$overlay_env" "$special_env"
 : > "$docker_log"
-run_deploy "$hosted_env" --verify-only --target test-host --dir "$repo_root" \
+run_deploy "$protected_env" --verify-only --target test-host --dir "$repo_root" \
   --compose-overlay "$special_overlay" \
   --compose-overlay-env-file "$special_env" >/dev/null
 assert_contains "$(cat "$docker_log")" "--env-file ${special_env} -f ${special_overlay} ps"
