@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Copy, KeyRound, Play, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { apiFetch, formatUserCode, LoginResponse } from "./api";
-import { GitHubMark } from "./shell";
+import { GitHubMark, isHostedService, privacyURL, termsURL } from "./shell";
 
 export const installCommand = "curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh";
 
@@ -26,6 +26,8 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
 }) {
   const [mode, setMode] = useState<"signin" | "signup">(initialMode ?? "signup");
   const [forgot, setForgot] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const requiresTerms = isHostedService && mode === "signup";
   const github = useMutation({
     mutationFn: () => apiFetch<{ url?: string }>("/v1/auth/sign-in/social", "", {
       method: "POST",
@@ -55,6 +57,7 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (requiresTerms && !acceptedTerms) return;
     mutation.mutate();
   }
 
@@ -73,7 +76,21 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
             <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>Sign up</button>
             <button type="button" className={mode === "signin" ? "active" : ""} onClick={() => setMode("signin")}>Sign in</button>
           </div>
-          <button className="github-button" type="button" disabled={github.isPending} onClick={() => github.mutate()}>
+          {requiresTerms ? (
+            <label className="legal-consent">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(event) => setAcceptedTerms(event.target.checked)}
+                required
+              />
+              <span>
+                I agree to the <a href={termsURL} target="_blank" rel="noreferrer">Terms of Service</a>, including
+                individual arbitration, and acknowledge the <a href={privacyURL} target="_blank" rel="noreferrer">Privacy Policy</a>.
+              </span>
+            </label>
+          ) : null}
+          <button className="github-button" type="button" disabled={github.isPending || (requiresTerms && !acceptedTerms)} onClick={() => github.mutate()}>
             <GitHubMark size={16} />
             {github.isPending ? "Redirecting" : "Continue with GitHub"}
           </button>
@@ -97,7 +114,7 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
             <button className="link-button forgot-link" type="button" onClick={() => setForgot(true)}>Forgot password?</button>
           ) : null}
           {deviceUserCode ? <p className="hint">Sign in here to approve CLI access for code <code>{formatUserCode(deviceUserCode)}</code>.</p> : null}
-          <button className="primary-button" type="submit" disabled={mutation.isPending}>
+          <button className="primary-button" type="submit" disabled={mutation.isPending || (requiresTerms && !acceptedTerms)}>
             <Play size={16} />
             {mutation.isPending ? "Working" : mode === "signup" ? "Create account" : "Open console"}
           </button>

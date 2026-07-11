@@ -6,6 +6,9 @@ import logoURL from "./assets/boxhaven-logo.png";
 
 export const repoURL = "https://github.com/finbarr/boxhaven";
 export const docsURL = (import.meta.env.VITE_BOXHAVEN_DOCS_URL || "https://docs.boxhaven.dev").replace(/\/+$/, "");
+export const termsURL = "https://boxhaven.dev/terms/";
+export const privacyURL = "https://boxhaven.dev/privacy/";
+export const isHostedService = typeof window !== "undefined" && window.location.hostname === "app.boxhaven.dev";
 
 export type ConsoleSection = "boxes" | "team" | "teams" | "images" | "billing";
 

@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json && npm run app:build",
     "app:build": "vite build",
     "smoke:console": "tsx scripts/console-smoke.mjs",
+    "smoke:hosted-legal": "tsx scripts/hosted-legal-smoke.mjs",
     "test": "node --import tsx --test src/*.test.ts"
   },
   "dependencies": {

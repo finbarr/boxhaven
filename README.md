@@ -96,6 +96,8 @@ copyright notice and full license text.
 `app.boxhaven.dev` is the hosted control plane run by the BoxHaven operators.
 Hosted boxes are provisioned from the operators' cloud provider accounts, and
 the operators can cap boxes per account with `BOXHAVEN_MAX_MACHINES_PER_USER`.
+Use of the hosted service is subject to the [Terms of Service](https://boxhaven.dev/terms/)
+and [Privacy Policy](https://boxhaven.dev/privacy/).
 
 The same open-source backend self-hosts with your own provider credentials and
 no built-in limits. See [backend/README.md](backend/README.md) for running the

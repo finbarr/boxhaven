@@ -1,6 +1,6 @@
 import { createRootRoute, HeadContent, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
 import { Compass } from "lucide-react";
-import { docsURL, GitHubMark, repoURL, TopBar } from "../shell";
+import { docsURL, GitHubMark, isHostedService, privacyURL, repoURL, termsURL, TopBar } from "../shell";
 
 // App shell only: backdrop + topbar slot. Auth lives in the _console layout.
 export const Route = createRootRoute({
@@ -27,6 +27,8 @@ function RootShell() {
           <footer className="site-footer">
             <span>© 2026 BoxHaven</span>
             <nav>
+              {isHostedService ? <a href={termsURL}>Terms</a> : null}
+              {isHostedService ? <a href={privacyURL}>Privacy</a> : null}
               <a href={docsURL} target="_blank" rel="noreferrer">Docs</a>
               <a href={repoURL} target="_blank" rel="noreferrer"><GitHubMark size={13} /> GitHub</a>
               <a href={`${repoURL}/blob/master/LICENSE`} target="_blank" rel="noreferrer">AGPL-3.0</a>

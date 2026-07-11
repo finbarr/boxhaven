@@ -52,13 +52,12 @@ done or scripted.
   GitHub" button appears automatically once they are set; accounts with a
   matching verified email link to the existing account.
 
-## Needs you: legal and money decisions
+## Needs you: money decisions
 
-- [ ] **(you) Terms of Service + Privacy Policy.** Required before charging
-  cards and storing user code on your infrastructure. Use a generator or
-  lawyer; host as static pages (the console can serve `/terms` and
-  `/privacy` — add them to `backend/app` when the text exists) and link them
-  from the sign-up panel and Stripe checkout settings.
+- [x] **Terms of Service + Privacy Policy.** Live at
+  `https://boxhaven.dev/terms/` and `https://boxhaven.dev/privacy/`; linked
+  from the marketing site and hosted console, with explicit acceptance on
+  account creation. Have counsel review before a broad paid launch.
 - [ ] **(you) Pricing number.** The meter bills per box-hour beyond the free
   box. Reference point: an `s-2vcpu-4gb` droplet costs ~$0.036/hr; price
   above that with margin (e.g. $0.06–0.10/box-hour) or round to a friendly
