@@ -108,9 +108,10 @@ export type BackendState = {
   machines: Record<string, RemoteMachine>;
   images?: Record<string, TeamImageRecord>;
   policy_events?: Record<string, MachineLifecycleEvent>;
+  policy_timestamp?: string;
   updated_at?: string;
 };
 
-export const stateVersion = 6;
+export const stateVersion = 7;
 export const defaultProjectPath = "/opt/boxhaven/project";
 export const defaultSSHUser = "boxhaven";

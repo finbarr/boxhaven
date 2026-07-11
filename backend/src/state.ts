@@ -24,12 +24,14 @@ export class StateStore {
       const data = await readFile(this.path, "utf8");
       if (data.trim() !== "") {
         const parsed = JSON.parse(data) as BackendState;
+        const policyTimestamp = latestPolicyTimestamp(parsed);
         this.state = {
           version: parsed.version || stateVersion,
           provider: parsed.provider || this.provider,
           machines: parsed.machines || {},
           images: parsed.images || {},
           policy_events: parsed.policy_events || {},
+          ...(policyTimestamp ? { policy_timestamp: policyTimestamp } : {}),
           updated_at: parsed.updated_at,
         };
       }
@@ -50,8 +52,10 @@ export class StateStore {
   async captureMachineSnapshot(now = () => new Date()): Promise<{ generatedAt: string; machines: RemoteMachine[] }> {
     const capture = this.pendingUpdate.then(async () => {
       const state = await this.load();
+      const generatedAt = reservePolicyTimestamp(state, now().toISOString());
+      await this.commit(state);
       return {
-        generatedAt: now().toISOString(),
+        generatedAt,
         machines: Object.values(state.machines).map((machine) => ({ ...machine })),
       };
     });
@@ -79,7 +83,11 @@ export class StateStore {
     await this.update((state) => {
       state.machines[machineKey(machine.user_id as string, machine.name)] = machine;
       if (policyEvent) {
-        state.policy_events = { ...(state.policy_events || {}), [policyEvent.id]: policyEvent };
+        const persistedEvent = {
+          ...policyEvent,
+          occurred_at: reservePolicyTimestamp(state, policyEvent.occurred_at),
+        };
+        state.policy_events = { ...(state.policy_events || {}), [policyEvent.id]: persistedEvent };
       }
     });
   }
@@ -97,7 +105,11 @@ export class StateStore {
     await this.update((state) => {
       delete state.machines[machineKey(userID, name)];
       if (policyEvent) {
-        state.policy_events = { ...(state.policy_events || {}), [policyEvent.id]: policyEvent };
+        const persistedEvent = {
+          ...policyEvent,
+          occurred_at: reservePolicyTimestamp(state, policyEvent.occurred_at),
+        };
+        state.policy_events = { ...(state.policy_events || {}), [policyEvent.id]: persistedEvent };
       }
     });
   }
@@ -167,14 +179,18 @@ export class StateStore {
     const update = this.pendingUpdate.then(async () => {
       const state = await this.load();
       fn(state);
-      state.version = stateVersion;
-      state.updated_at = new Date().toISOString();
-      await this.writeState(state);
-      this.state = state;
-      await this.syncStateDirectory();
+      await this.commit(state);
     });
     this.pendingUpdate = update.catch(() => {});
     await update;
+  }
+
+  private async commit(state: BackendState): Promise<void> {
+    state.version = stateVersion;
+    state.updated_at = new Date().toISOString();
+    await this.writeState(state);
+    this.state = state;
+    await this.syncStateDirectory();
   }
 
   protected async writeState(state: BackendState): Promise<void> {
@@ -216,6 +232,31 @@ export class StateStore {
       policy_events: { ...(this.state.policy_events || {}) },
     };
   }
+}
+
+function reservePolicyTimestamp(state: BackendState, candidate: string): string {
+  const candidateMs = Date.parse(candidate);
+  if (!Number.isFinite(candidateMs)) throw new Error(`invalid policy timestamp: ${candidate}`);
+  const previousMs = Date.parse(state.policy_timestamp || "");
+  const reservedMs = Number.isFinite(previousMs) ? Math.max(candidateMs, previousMs + 1) : candidateMs;
+  const reserved = new Date(reservedMs).toISOString();
+  state.policy_timestamp = reserved;
+  return reserved;
+}
+
+function latestPolicyTimestamp(state: BackendState): string | undefined {
+  const persistedMs = Date.parse(state.policy_timestamp || "");
+  if (Number.isFinite(persistedMs)) return new Date(persistedMs).toISOString();
+  const candidates = [
+    state.updated_at,
+    ...Object.values(state.policy_events || {}).map((event) => event.occurred_at),
+  ];
+  let latestMs = Number.NEGATIVE_INFINITY;
+  for (const candidate of candidates) {
+    const parsed = Date.parse(candidate || "");
+    if (Number.isFinite(parsed)) latestMs = Math.max(latestMs, parsed);
+  }
+  return Number.isFinite(latestMs) ? new Date(latestMs).toISOString() : undefined;
 }
 
 function machineKey(userID: string, name: string): string {

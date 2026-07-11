@@ -6,6 +6,7 @@ import test from "node:test";
 import type { CommercialPolicy, MachineLifecycleEvent } from "./policy.js";
 import { PolicyEventDelivery, reconciliationSnapshot } from "./policy_delivery.js";
 import { StateStore } from "./state.js";
+import type { BackendState } from "./types.js";
 
 const event: MachineLifecycleEvent = {
   version: 1,
@@ -35,7 +36,10 @@ test("machine state and its policy event survive restart in one state commit", a
   await restarted.deleteMachine("user-1", "box", destroyed);
   const afterDestroy = JSON.parse(await readFile(path, "utf8"));
   assert.equal(afterDestroy.machines["user-1:box"], undefined);
-  assert.deepEqual(afterDestroy.policy_events[destroyed.id], destroyed);
+  assert.deepEqual(afterDestroy.policy_events[destroyed.id], {
+    ...destroyed,
+    occurred_at: "2026-07-11T00:00:00.001Z",
+  });
 });
 
 test("failed delivery remains queued and is retried after process restart", async () => {
@@ -44,27 +48,29 @@ test("failed delivery remains queued and is retried after process restart", asyn
   const store = new StateStore(path, "fake");
   await store.putMachine({ name: "box", user_id: "user-1", provider: "fake" }, event);
 
-  const failedIDs: string[] = [];
+  const persistedBody = (await store.listPolicyEvents())[0];
+  const failedBodies: MachineLifecycleEvent[] = [];
   const failing = deliveryPolicy(async (delivered) => {
-    failedIDs.push(delivered.id);
+    failedBodies.push(structuredClone(delivered));
     throw new Error("offline");
   });
   const firstProcess = new PolicyEventDelivery(store, failing, 5);
   firstProcess.start();
-  await waitFor(() => failedIDs.length > 0);
+  await waitFor(() => failedBodies.length > 0);
   firstProcess.stop();
   assert.deepEqual((await store.listPolicyEvents()).map((queued) => queued.id), [event.id]);
 
-  const deliveredIDs: string[] = [];
+  const deliveredBodies: MachineLifecycleEvent[] = [];
   const restartedStore = new StateStore(path, "fake");
   const secondProcess = new PolicyEventDelivery(restartedStore, deliveryPolicy(async (delivered) => {
-    deliveredIDs.push(delivered.id);
+    deliveredBodies.push(structuredClone(delivered));
   }), 5);
   secondProcess.start();
+  await waitFor(() => deliveredBodies.length > 0);
   await waitFor(async () => (await restartedStore.listPolicyEvents()).length === 0);
   secondProcess.stop();
-  assert.deepEqual(deliveredIDs, [event.id]);
-  assert.ok(failedIDs.every((id) => id === event.id));
+  assert.deepEqual(deliveredBodies, [persistedBody]);
+  for (const body of failedBodies) assert.deepEqual(body, persistedBody);
 });
 
 test("a dequeue persistence failure redelivers the same idempotent event ID", async () => {
@@ -158,6 +164,34 @@ test("reconciliation capture is serialized with lifecycle state commits", async 
   assert.equal(afterCreate.machines[0].provider_name, "stable-box");
 });
 
+test("snapshot and lifecycle timestamps follow queue reservation order behind a slow write", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-reservation-"));
+  const path = join(dir, "state.json");
+  const store = new SlowFirstWriteStateStore(path, "fake");
+  const slowUpdate = store.putImage({ name: "base", provider: "fake", org_id: "team-1" });
+  await store.firstWriteStarted;
+
+  const snapshot = store.captureMachineSnapshot(() => new Date("2026-07-11T10:00:02.000Z"));
+  const create = store.putMachine({
+    name: "box",
+    user_id: "user-1",
+    provider: "fake",
+    provider_name: "stable-box",
+  }, { ...event, occurred_at: "2026-07-11T10:00:01.000Z" });
+
+  store.releaseFirstWrite();
+  await slowUpdate;
+  const captured = await snapshot;
+  assert.deepEqual(captured, { generatedAt: "2026-07-11T10:00:02.000Z", machines: [] });
+  await create;
+
+  const restarted = new StateStore(path, "fake");
+  const [persistedEvent] = await restarted.listPolicyEvents();
+  assert.equal(persistedEvent.occurred_at, "2026-07-11T10:00:02.001Z");
+  assert.ok(persistedEvent.occurred_at > captured.generatedAt);
+  assert.equal((await restarted.getMachine("user-1", "box"))?.provider_name, "stable-box");
+});
+
 test("hosted reconciliation runs at startup, retries failures, and remains periodic", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-reconcile-"));
   const store = new StateStore(join(dir, "state.json"), "fake");
@@ -204,6 +238,33 @@ class FlakyDeleteStateStore extends StateStore {
       throw new Error("simulated crash before dequeue commit");
     }
     await super.deletePolicyEvent(id);
+  }
+}
+
+class SlowFirstWriteStateStore extends StateStore {
+  readonly firstWriteStarted: Promise<void>;
+  private markFirstWriteStarted!: () => void;
+  private resumeFirstWrite!: () => void;
+  private firstWrite = true;
+  private readonly firstWriteReleased: Promise<void>;
+
+  constructor(path: string, provider: string) {
+    super(path, provider);
+    this.firstWriteStarted = new Promise((resolve) => { this.markFirstWriteStarted = resolve; });
+    this.firstWriteReleased = new Promise((resolve) => { this.resumeFirstWrite = resolve; });
+  }
+
+  releaseFirstWrite(): void {
+    this.resumeFirstWrite();
+  }
+
+  protected override async writeState(state: BackendState): Promise<void> {
+    if (this.firstWrite) {
+      this.firstWrite = false;
+      this.markFirstWriteStarted();
+      await this.firstWriteReleased;
+    }
+    await super.writeState(state);
   }
 }
 
