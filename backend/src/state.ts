@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { BackendState, BillingRecord, RemoteMachine, TeamImageRecord, stateVersion } from "./types.js";
+import { BackendState, RemoteMachine, TeamImageRecord, stateVersion } from "./types.js";
 
 export class StateStore {
   private state: BackendState | undefined;
@@ -26,7 +26,6 @@ export class StateStore {
           provider: parsed.provider || this.provider,
           machines: parsed.machines || {},
           images: parsed.images || {},
-          billing: parsed.billing || {},
           updated_at: parsed.updated_at,
         };
       }
@@ -126,22 +125,6 @@ export class StateStore {
     });
   }
 
-  async getBillingRecord(orgID: string): Promise<BillingRecord | undefined> {
-    const state = await this.load();
-    return state.billing?.[orgID];
-  }
-
-  async putBillingRecord(orgID: string, record: BillingRecord): Promise<void> {
-    await this.update((state) => {
-      state.billing = { ...(state.billing || {}), [orgID]: record };
-    });
-  }
-
-  async listBillingRecords(): Promise<Record<string, BillingRecord>> {
-    const state = await this.load();
-    return { ...(state.billing || {}) };
-  }
-
   private async update(fn: (state: BackendState) => void): Promise<void> {
     const state = await this.load();
     fn(state);
@@ -160,7 +143,6 @@ export class StateStore {
       ...this.state,
       machines: { ...this.state.machines },
       images: { ...(this.state.images || {}) },
-      billing: { ...(this.state.billing || {}) },
     };
   }
 }

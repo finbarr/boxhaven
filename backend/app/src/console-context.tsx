@@ -2,7 +2,7 @@ import { createContext, ReactNode, useContext } from "react";
 import { AuthUser, TeamInfo } from "./api";
 
 // Session snapshot owned by the authed _console layout route. Child routes
-// (boxes, team, images, billing, device) consume it instead of re-querying
+// (boxes, team, images, device) consume it instead of re-querying
 // whoami or threading props through every component.
 export type ConsoleSession = {
   token: string;

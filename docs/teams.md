@@ -4,9 +4,6 @@ Teams are Better Auth organizations with `owner`, `admin`, and `member`
 roles. Every box belongs to a team. Each account automatically gets a
 default team named `<name>'s team`, so boxes work with no setup.
 
-On the hosted service, [billing](/billing) also attaches to teams. Every team
-uses the same allowance and subscription model.
-
 ## Create A Team
 
 Create a team in the console or from the CLI:

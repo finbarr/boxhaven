@@ -17,29 +17,12 @@ done or scripted.
 - [x] Golden image verified end to end: claude and codex run as the box user,
   codex pre-trusts the project path, incremental rebuilds actually rebuild.
 - [x] Daily state backups on the droplet (systemd timer, verified armed).
-- [x] Installer script, Homebrew tap formula, VitePress docs site, Stripe
-  billing (per team: personal teams get 1 free box, shared teams are
-  subscription-first, usage-billed beyond the allowance), transactional
-  email plumbing — all landed in this release; see sections below for the
-  pieces only you can finish.
+- [x] Installer script, Homebrew tap formula, VitePress docs site, and
+  transactional email plumbing — all landed in this release; see sections
+  below for the pieces only you can finish.
 
 ## Needs you: accounts and keys
 
-- [ ] **(you) Stripe**: billing is per team — each subscribed team gets its
-  own Stripe customer, personal teams include `BOXHAVEN_FREE_MACHINES` free
-  boxes (default 1), and shared teams are subscription-first
-  (`BOXHAVEN_TEAM_FREE_MACHINES`, default 0). Create the products in the
-  Stripe dashboard —
-  1. Billing → Meters → create meter with event name `boxhaven_box_hours`.
-  2. A usage-based price on that meter (pick the $/box-hour number) →
-     `STRIPE_PRICE_ID`.
-  3. Developers → Webhooks → endpoint `https://api.boxhaven.dev/v1/billing/webhook`
-     with events `checkout.session.completed`,
-     `customer.subscription.updated`, `customer.subscription.deleted` →
-     `STRIPE_WEBHOOK_SECRET`.
-  4. Set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` in
-     `deploy/digitalocean/.env.production` and redeploy. Billing stays
-     entirely off (and self-host unaffected) until the key is set.
 - [x] **Resend**: `mail.boxhaven.dev` verified; production sends from
   `BoxHaven <hello@mail.boxhaven.dev>` (password reset and invitation emails
   deliver to all users).
@@ -52,16 +35,12 @@ done or scripted.
   GitHub" button appears automatically once they are set; accounts with a
   matching verified email link to the existing account.
 
-## Needs you: money decisions
+## Needs you: launch decisions
 
 - [x] **Terms of Service + Privacy Policy.** Live at
   `https://boxhaven.dev/terms/` and `https://boxhaven.dev/privacy/`; linked
   from the marketing site and hosted console, with explicit acceptance on
   account creation. Have counsel review before a broad paid launch.
-- [ ] **(you) Pricing number.** The meter bills per box-hour beyond the free
-  box. Reference point: an `s-2vcpu-4gb` droplet costs ~$0.036/hr; price
-  above that with margin (e.g. $0.06–0.10/box-hour) or round to a friendly
-  monthly-equivalent.
 - [ ] **(you) Support channel.** `support@boxhaven.dev` forwarding to your
   inbox, mentioned in docs and the console footer.
 

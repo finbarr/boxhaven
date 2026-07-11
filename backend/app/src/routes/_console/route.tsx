@@ -33,7 +33,7 @@ function ConsoleLayout() {
   const onTeam = Boolean(matchRoute({ to: "/team" }) || matchRoute({ to: "/team/$team" }));
   const onTeams = Boolean(matchRoute({ to: "/teams" }));
   const onImages = Boolean(matchRoute({ to: "/images" }));
-  const activeSection: ConsoleSection = onTeam ? "team" : onTeams ? "teams" : onImages ? "images" : (onHome || onBox) ? "boxes" : "billing";
+  const activeSection: ConsoleSection = onTeam ? "team" : onTeams ? "teams" : onImages ? "images" : "boxes";
   // Surfaced in the sign-in hint when someone deep-links to /device.
   const deviceUserCode = typeof search.user_code === "string" ? search.user_code : "";
   const switchTeam = useMutation({
@@ -47,17 +47,21 @@ function ConsoleLayout() {
       void queryClient.invalidateQueries({ queryKey: ["session", token] });
       void queryClient.invalidateQueries({ queryKey: ["machines", token] });
       void queryClient.invalidateQueries({ queryKey: ["images", token] });
-      void queryClient.invalidateQueries({ queryKey: ["billing"] });
       if (activeSection === "team") {
         void navigate({ to: "/team/$team", params: { team: teamRef } });
-      } else if (activeSection === "billing") {
-        void navigate({ to: "/billing/$team", params: { team: teamRef } });
       } else if (activeSection === "images") {
         void navigate({ to: "/images" });
       } else if (onBox) {
         void navigate({ to: "/" });
       }
     },
+  });
+  const accountLink = useMutation({
+    mutationFn: () => apiFetch<{ url: string }>("/v1/account-link", token, {
+      method: "POST",
+      body: { team: session.data?.team?.slug || session.data?.team?.id },
+    }),
+    onSuccess: ({ url }) => window.location.assign(url),
   });
 
   function handleToken(nextToken: string) {
@@ -127,7 +131,13 @@ function ConsoleLayout() {
         activeTeam={consoleValue.activeTeam}
         teamSwitching={switchTeam.isPending}
         teamSwitchError={switchTeam.error ? (switchTeam.error as Error).message : ""}
+        account={session.data?.account ? {
+          label: session.data.account.label,
+          pending: accountLink.isPending,
+          error: accountLink.error ? (accountLink.error as Error).message : "",
+        } : undefined}
         onTeamSwitch={handleTeamSwitch}
+        onAccount={() => accountLink.mutate()}
         onLogout={handleLogout}
       >
         <Outlet />

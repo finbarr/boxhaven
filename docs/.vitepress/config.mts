@@ -23,9 +23,9 @@ const pageSeo: Record<string, { title: string, description: string, noindex?: bo
     title: 'Teams',
     description: 'Share boxes with teammates using team-owned boxes, owner/admin/member roles, shareable invite links, and per-team visibility.',
   },
-  '/billing': {
-    title: 'Billing',
-    description: 'How hosted BoxHaven billing works: per-team subscriptions, one free box on personal teams, per-box-hour metering, and the operator configuration.',
+  '/operator-policy': {
+    title: 'External Policy Service',
+    description: 'Connect an optional vendor-neutral create policy, lifecycle fact receiver, and external account capability to BoxHaven.',
   },
   '/images': {
     title: 'Golden Images',
@@ -192,7 +192,6 @@ export default defineConfig({
         text: 'Boxes & Teams',
         items: [
           { text: 'Teams', link: '/teams' },
-          { text: 'Billing', link: '/billing' },
           { text: 'Golden Images', link: '/images' },
           { text: 'Cloud Providers', link: '/providers' },
         ]
@@ -202,6 +201,7 @@ export default defineConfig({
         items: [
           { text: 'Self-Hosting', link: '/self-hosting' },
           { text: 'Security Model', link: '/security' },
+          { text: 'External Policy Service', link: '/operator-policy' },
           { text: 'Changelog', link: 'https://github.com/finbarr/boxhaven/blob/master/CHANGELOG.md' },
         ]
       }

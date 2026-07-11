@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createBackendAuth, migrateBackendAuth } from "./auth.js";
-import { billingServiceFromEnv } from "./billing.js";
+import { commercialPolicyFromEnv } from "./policy.js";
 import { emailServiceFromEnv } from "./email.js";
 import { StateStore } from "./state.js";
 import { createBackend } from "./server.js";
@@ -31,7 +31,7 @@ const email = emailServiceFromEnv();
 const github = process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
   ? { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET }
   : undefined;
-const billing = billingServiceFromEnv(store);
+const commercialPolicy = commercialPolicyFromEnv();
 const authOptions = {
   baseURL: authBaseURL,
   databasePath: process.env.BOXHAVEN_BACKEND_AUTH_DB || join(homedir(), ".local", "state", "boxhaven", "auth.sqlite"),
@@ -51,7 +51,7 @@ const app = createBackend({
   sshCA,
   adminEmails: splitList(process.env.BOXHAVEN_ADMIN_EMAILS),
   maxMachinesPerUser: Number(process.env.BOXHAVEN_MAX_MACHINES_PER_USER || 0) || undefined,
-  billing,
+  commercialPolicy,
   appDir: process.env.BOXHAVEN_BACKEND_APP_DIR || defaultAppDir,
   apiPublicURL,
   appPublicURL,
@@ -63,14 +63,6 @@ const app = createBackend({
 
 await app.listen({ host, port });
 console.error(`boxhaven backend listening on ${host}:${port} with providers ${providers.names().join(", ")} (default ${providers.defaultName})`);
-if (billing) {
-  if (usageReporterDisabled(process.env.BOXHAVEN_BILLING_USAGE_REPORTER)) {
-    console.error("boxhaven billing usage reporter is disabled by BOXHAVEN_BILLING_USAGE_REPORTER");
-  } else {
-    billing.startUsageReporter();
-    console.error("boxhaven billing usage reporter started (one report per started box-hour)");
-  }
-}
 
 function parseListen(value: string): { host: string; port: number } {
   const lastColon = value.lastIndexOf(":");
@@ -83,10 +75,6 @@ function parseListen(value: string): { host: string; port: number } {
 
 function splitList(value: string | undefined): string[] {
   return (value || "").split(",").map((part) => part.trim()).filter(Boolean);
-}
-
-function usageReporterDisabled(value: string | undefined): boolean {
-  return ["off", "0", "false", "no"].includes((value || "").trim().toLowerCase());
 }
 
 function publicOrigin(value: string): string {

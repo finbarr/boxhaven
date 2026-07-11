@@ -7,7 +7,7 @@ credentials and no built-in limits.
 
 The browser app is built with TanStack Router and TanStack Query. It is the
 console/auth surface only: login, signup, CLI device approval, invitations,
-and authenticated box/team/image/billing views. The paid-service website lives
+and authenticated box/team/image views. The paid-service website lives
 outside this repository, and documentation lives in `docs/`, so a self-hosted
 server can run with only the login and console UI. Teams that want
 internal documentation can host the `docs/` static build without hosting the
@@ -85,11 +85,16 @@ DigitalOcean token and a CLI login token for the local backend.
 - `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_BACKEND_STATE`.
 - `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
 - `BOXHAVEN_MAX_MACHINES_PER_USER`: per-user cap on concurrently existing boxes; `0` or unset means unlimited. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. The hosted control plane sets this; self-hosted deployments normally leave it unset.
+- `BOXHAVEN_COMMERCIAL_POLICY_URL` and `BOXHAVEN_COMMERCIAL_POLICY_TOKEN`: optional external create-policy and lifecycle-fact service; leave both unset for the allow-all self-hosted behavior.
+- `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS`: external create-decision timeout, default `5000`.
+- `BOXHAVEN_ACCOUNT_LABEL`: optional generic external account action; empty hides it from the console.
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
 
 Provider credentials and image variables (`DIGITALOCEAN_*`, `HCLOUD_TOKEN`,
 `HETZNER_*`, `BOXHAVEN_REMOTE_IMAGE*`) are documented on the
 [Cloud Providers](/providers) page.
+The [external policy service](/operator-policy) page documents the optional
+versioned HTTP contract and its outage behavior.
 
 ## Production DigitalOcean Deployment
 

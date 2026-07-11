@@ -2,14 +2,11 @@
 
 ## Unreleased
 
-- Moved billing from accounts to teams: personal teams keep
-  `BOXHAVEN_FREE_MACHINES` free boxes (default 1), shared teams are
-  subscription-first (`BOXHAVEN_TEAM_FREE_MACHINES`, default 0), and a team
-  owner or admin subscribes once for the whole team. `GET /v1/billing` is
-  team-scoped (`?team=<id-or-slug>`, any member can read, owners/admins
-  manage checkout and portal), Stripe customers and box-hour metering are per
-  team, and team entries in `whoami` and billing responses now carry a
-  `personal` flag.
+- Split hosted commercial policy into a separate service. The public backend
+  now exposes only an authenticated, versioned, vendor-neutral HTTP contract;
+  self-hosting defaults to allow-all, configured create checks fail closed,
+  and existing box operations remain available during policy outages. The
+  console shows only an operator-configured generic account action.
 - `bh run` no longer mirrors the local project to the box: the project syncs
   at create and via `bh sync up`, so agent work on the box is never
   overwritten by a routine command (`bh run --sync` opts back in).

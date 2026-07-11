@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { createServer as createViteServer } from "vite";
 import { createBackendAuth, migrateBackendAuth } from "../src/auth.ts";
-import { BillingService } from "../src/billing.ts";
 import { ProviderRegistry } from "../src/providers.ts";
 import { createBackend } from "../src/server.ts";
 import { SSHCertificateAuthority } from "../src/ssh_ca.ts";
@@ -55,7 +54,7 @@ try {
   const teamsFacts = await checkTeamsPage(page);
   const imagesFacts = await checkImagesPage(page);
   const boxCreateFacts = await checkBoxCreateDrawer(page);
-  const billingFacts = await checkBillingPage(page);
+  const accountFacts = await checkAccountCapability(page);
   const mobileFacts = await checkMobileTeams(page);
 
   console.log(JSON.stringify({
@@ -71,7 +70,6 @@ try {
       teamEditor: join(outDir, "team-editor.png"),
       images: join(outDir, "images.png"),
       boxCreate: join(outDir, "box-create.png"),
-      billing: join(outDir, "billing.png"),
       mobileTeams: join(outDir, "mobile-teams.png"),
     },
     accessFacts,
@@ -80,7 +78,7 @@ try {
     teamsFacts,
     imagesFacts,
     boxCreateFacts,
-    billingFacts,
+    accountFacts,
     mobileFacts,
   }, null, 2));
 } finally {
@@ -127,12 +125,12 @@ async function startSeededBackend() {
   const providers = new ProviderRegistry([fakeProvider], fakeProvider.name);
   const store = new StateStore(join(dir, "state.json"), providers.defaultName);
   const sshCA = new SSHCertificateAuthority(join(dir, "ssh_ca_ed25519"));
-  const billing = new BillingService({
-    secretKey: "sk_console_smoke",
-    priceID: "price_console_smoke",
-    webhookSecret: "whsec_console_smoke",
-    apiURL: "http://127.0.0.1:9",
-  }, store);
+  const commercialPolicy = {
+    accountCapability: { label: "Account" },
+    async checkCreate() { return { allowed: true }; },
+    async emitMachineFact() {},
+    async createAccountLink() { return `${appURL}/?account=opened`; },
+  };
   const authOptions = {
     baseURL: `${apiURL}/v1/auth`,
     databasePath: join(dir, "auth.sqlite"),
@@ -149,7 +147,7 @@ async function startSeededBackend() {
     store,
     sshCA,
     adminEmails: ["admin@example.com"],
-    billing,
+    commercialPolicy,
     apiPublicURL: apiURL,
     appPublicURL: appURL,
     corsOrigins: [appURL],
@@ -295,7 +293,6 @@ async function checkMembersPage(page) {
     eyebrow: document.querySelector(".workspace-title span")?.textContent?.trim(),
     teamSettingsPresent: Boolean(document.querySelector(".team-settings, .teams-table")),
     newTeamButtonPresent: [...document.querySelectorAll("button")].some((button) => button.textContent?.includes("New team")),
-    billingHintPresent: Boolean(document.querySelector(".billing-hint")),
     panelHeadings: [...document.querySelectorAll(".workspace-body .panel-heading h2")].map((node) => node.textContent?.trim()),
     tableHeadings: [...document.querySelectorAll(".data-table th")].map((node) => node.textContent?.trim() || ""),
     removeCellAlign: getComputedStyle(document.querySelector(".data-table td:last-child")).textAlign,
@@ -306,10 +303,9 @@ async function checkMembersPage(page) {
   assert.equal(facts.eyebrow, "team / Acme Labs");
   assert.equal(facts.teamSettingsPresent, false);
   assert.equal(facts.newTeamButtonPresent, false);
-  assert.equal(facts.billingHintPresent, false);
   assert.deepEqual(facts.panelHeadings, []);
   assert.equal(facts.removeCellAlign, "right");
-  assert.deepEqual(facts.teamNav, ["Boxes", "Members", "Billing", "Images"]);
+  assert.deepEqual(facts.teamNav, ["Boxes", "Members", "Images"]);
   assert.deepEqual(facts.globalNav, ["Teams"]);
   for (const heading of ["Email", "Name", "Role"]) {
     assert.ok(facts.tableHeadings.includes(heading), `members table missing ${heading}`);
@@ -410,23 +406,16 @@ async function checkBoxCreateDrawer(page) {
   return facts;
 }
 
-async function checkBillingPage(page) {
+async function checkAccountCapability(page) {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(`${appURL}/billing`, { waitUntil: "domcontentloaded" });
+  await page.goto(appURL, { waitUntil: "domcontentloaded" });
   await waitForConsole(page);
-  await page.waitForSelector(".billing-body .panel", { timeout: 10_000 });
-  await page.screenshot({ path: join(outDir, "billing.png"), fullPage: true });
   const facts = await page.evaluate(() => ({
-    title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
-    planLabel: document.querySelector(".billing-body .panel-heading span")?.textContent?.trim(),
-    bodyText: document.querySelector(".billing-body")?.textContent || "",
-    activeTeamNav: document.querySelector("nav[aria-label='Team'] a.active")?.textContent?.trim(),
+    accountAction: document.querySelector("nav[aria-label='Global'] button")?.textContent?.trim(),
+    allNavigation: [...document.querySelectorAll(".side-links a, .side-links button")].map((item) => item.textContent?.trim()),
   }));
-  assert.equal(facts.title, "Billing");
-  assert.equal(facts.planLabel, "plan");
-  assert.equal(facts.activeTeamNav, "Billing");
-  assert.match(facts.bodyText, /Acme Labs includes 1 free box/);
-  assert.doesNotMatch(facts.bodyText, /personal team|shared team/i);
+  assert.equal(facts.accountAction, "Account");
+  assert.deepEqual(facts.allNavigation, ["Boxes", "Members", "Images", "Teams", "Account"]);
   return facts;
 }
 

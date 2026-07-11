@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { WebSocketServer } from "ws";
 import { createBackendAuth, migrateBackendAuth } from "./auth.js";
 import { ProviderRegistry } from "./providers.js";
+import { CommercialPolicy, CreatePolicyDecision, MachineLifecycleFact } from "./policy.js";
 import { StateStore } from "./state.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
@@ -1121,6 +1122,58 @@ test("backend starts GitHub sign-in", async () => {
   assert.match(social.json().url, /client_id=test-client-id/);
 });
 
+test("hosted policy fails new creates closed while existing box access and destroy stay available", async () => {
+  const facts: MachineLifecycleFact[] = [];
+  let createFailure = false;
+  const commercialPolicy: CommercialPolicy = {
+    async checkCreate(): Promise<CreatePolicyDecision> {
+      if (createFailure) throw new Error("policy offline");
+      return { allowed: true };
+    },
+    async emitMachineFact(fact) {
+      facts.push(fact);
+      if (createFailure) throw new Error("policy offline");
+    },
+  };
+  const { app, provider, token } = await createTestBackend("policy@example.com", "password123", { commercialPolicy });
+  const headers = { authorization: `Bearer ${token}` };
+
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "existing", tier: "large" } });
+  assert.equal(created.statusCode, 201, created.body);
+  await delay(0);
+  assert.equal(facts[0].type, "machine.created");
+  assert.equal(facts[0].machine.tier, "large");
+
+  createFailure = true;
+  const denied = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "new" } });
+  assert.equal(denied.statusCode, 503, denied.body);
+  assert.equal(denied.json().id, "entitlement_unavailable");
+  assert.equal(provider.created.length, 1);
+
+  const connected = await app.inject({ method: "GET", url: "/v1/machines/existing/connect", headers });
+  assert.equal(connected.statusCode, 200, connected.body);
+  const destroyed = await app.inject({ method: "DELETE", url: "/v1/machines/existing", headers });
+  assert.equal(destroyed.statusCode, 204, destroyed.body);
+  assert.deepEqual(provider.released, ["existing"]);
+});
+
+test("generic account capability returns an external link without exposing provider state", async () => {
+  const commercialPolicy: CommercialPolicy = {
+    accountCapability: { label: "Plan" },
+    async checkCreate() { return { allowed: true }; },
+    async emitMachineFact() {},
+    async createAccountLink(input) { return `https://account.hosted.test/team/${input.team.id}`; },
+  };
+  const { app, token } = await createTestBackend("account@example.com", "password123", { commercialPolicy });
+  const headers = { authorization: `Bearer ${token}` };
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  assert.deepEqual(whoami.json().account, { label: "Plan" });
+
+  const link = await app.inject({ method: "POST", url: "/v1/account-link", headers, payload: {} });
+  assert.equal(link.statusCode, 200, link.body);
+  assert.match(link.json().url, /^https:\/\/account\.hosted\.test\/team\//);
+});
+
 async function createTestBackend(
   email = "user@example.com",
   password = "password123",
@@ -1132,6 +1185,7 @@ async function createTestBackend(
     maxMachinesPerUser?: number;
     github?: boolean;
     previewTLSWarmup?: (previewURL: string) => Promise<void>;
+    commercialPolicy?: CommercialPolicy;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -1155,6 +1209,7 @@ async function createTestBackend(
     sshCA,
     adminEmails: options.adminEmails,
     maxMachinesPerUser: options.maxMachinesPerUser,
+    commercialPolicy: options.commercialPolicy,
     apiPublicURL: "https://api.hosted.test",
     appPublicURL: "https://app.hosted.test",
     previewBaseDomain: "hosted.test",

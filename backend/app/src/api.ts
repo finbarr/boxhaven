@@ -18,6 +18,7 @@ export type WhoamiResponse = {
   team?: TeamInfo | null;
   teams?: TeamInfo[];
   user: AuthUser;
+  account?: { label: string };
 };
 
 export type ProviderInfo = {
@@ -88,22 +89,6 @@ export type MachinesResponse = {
 export type ProvidersResponse = {
   providers: ProviderInfo[];
 };
-
-export type BillingStatus = "free" | "active" | "past_due" | "canceled";
-
-// Billing attaches to teams: when billing is disabled the backend returns
-// only {enabled, team}, so the per-team fields live on the enabled branch.
-export type BillingResponse =
-  | { enabled: false; team: TeamInfo }
-  | {
-      enabled: true;
-      team: TeamInfo;
-      status: BillingStatus;
-      free_machines: number;
-      machines_used: number;
-      can_manage: boolean;
-      portal_available: boolean;
-    };
 
 const configuredAPIURL = (import.meta.env.VITE_BOXHAVEN_API_URL || "").replace(/\/+$/, "");
 export const apiBaseURL = configuredAPIURL || (window.location.hostname === "app.boxhaven.dev" ? "https://api.boxhaven.dev" : "");

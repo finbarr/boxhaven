@@ -6,8 +6,8 @@ import websocket from "@fastify/websocket";
 import Fastify, { FastifyInstance } from "fastify";
 import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
-import { BillingService, StripeEvent, billingRecordAllowsPaidBoxes, billingStatusForRecord } from "./billing.js";
 import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
+import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleFact, PolicyTeam, PolicyTier } from "./policy.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { StateStore } from "./state.js";
@@ -20,7 +20,7 @@ export type BackendOptions = {
   sshCA: SSHCertificateAuthority;
   adminEmails?: string[];
   maxMachinesPerUser?: number;
-  billing?: BillingService;
+  commercialPolicy?: CommercialPolicy;
   appDir?: string;
   apiPublicURL?: string;
   appPublicURL?: string;
@@ -143,6 +143,7 @@ const agentRPCSetupTimeout = 30 * 60_000;
 
 export function createBackend(options: BackendOptions): FastifyInstance {
   const app = Fastify({ logger: false });
+  const commercialPolicy: CommercialPolicy = options.commercialPolicy || new AllowAllCommercialPolicy();
   void app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
   registerCors(app, options.corsOrigins || []);
   const agents = new Map<string, AgentConnection>();
@@ -182,6 +183,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
         id: auth.userID,
         email: auth.email,
       },
+      ...(commercialPolicy.accountCapability ? { account: commercialPolicy.accountCapability } : {}),
     };
   });
 
@@ -189,99 +191,28 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
   });
 
-  // Billing attaches to teams, never users: GET reports the team's billing
-  // state to any member, while checkout and portal require the owner or
-  // admin role on that team.
-  app.get<{ Querystring: { team?: string } }>("/v1/billing", async (request, reply) => {
+  app.post<{ Body: { team?: string } }>("/v1/account-link", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
-    const team = resolveBillingTeam(auth, request.query.team, reply);
+    if (!commercialPolicy.accountCapability || !commercialPolicy.createAccountLink) {
+      return reply.code(404).send({ id: "not_found", message: "account management is not configured" });
+    }
+    const team = resolveTeamReference(auth, bodyString(request.body?.team), reply);
     if (!team) return;
-    if (!options.billing) {
-      return { enabled: false, team: billingTeamInfo(team) };
+    try {
+      const url = await commercialPolicy.createAccountLink({
+        team: policyTeam(team),
+        actor: {
+          id: auth.userID,
+          email: auth.email,
+          can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
+        },
+      });
+      return { url };
+    } catch (error) {
+      console.error(`commercial policy account link failed: ${(error as Error).message}`);
+      return reply.code(503).send({ id: "account_unavailable", message: "Account management is temporarily unavailable." });
     }
-    const record = await options.store.getBillingRecord(team.id);
-    const role = await orgRoleForUser(options, request.headers, team.id, auth.userID);
-    return {
-      enabled: true,
-      team: billingTeamInfo(team),
-      status: billingStatusForRecord(record),
-      free_machines: options.billing.freeAllowance(),
-      machines_used: (await options.store.listMachinesForOrg(team.id)).length,
-      can_manage: orgRoleCanManage(role),
-      portal_available: !!record?.customer_id,
-    };
-  });
-
-  app.post<{ Body: { team?: string } }>("/v1/billing/checkout", async (request, reply) => {
-    const auth = await requireAuth(options, request, reply);
-    if (!auth) return;
-    const billing = options.billing;
-    if (!billing) {
-      return reply.code(400).send({ id: "bad_request", message: "billing is not enabled on this backend" });
-    }
-    const team = resolveBillingTeam(auth, bodyString(request.body?.team), reply);
-    if (!team) return;
-    if (!orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID))) {
-      return reply.code(403).send({ id: "forbidden", message: "subscribing a team requires the owner or admin role" });
-    }
-    const existing = await options.store.getBillingRecord(team.id);
-    if (billingRecordAllowsPaidBoxes(existing)) {
-      return reply.code(400).send({ id: "bad_request", message: "subscription is already active; manage it through the billing portal" });
-    }
-    const record = await billing.ensureCustomer(team.id, auth.email, team.name || team.slug || team.id);
-    const billingURL = `${options.appPublicURL || ""}/billing/${encodeURIComponent(team.slug || team.id)}`;
-    const url = await billing.createCheckoutSession(team.id, record.customer_id, `${billingURL}?checkout=success`, `${billingURL}?checkout=canceled`);
-    return { url };
-  });
-
-  app.post<{ Body: { team?: string } }>("/v1/billing/portal", async (request, reply) => {
-    const auth = await requireAuth(options, request, reply);
-    if (!auth) return;
-    const billing = options.billing;
-    if (!billing) {
-      return reply.code(400).send({ id: "bad_request", message: "billing is not enabled on this backend" });
-    }
-    const team = resolveBillingTeam(auth, bodyString(request.body?.team), reply);
-    if (!team) return;
-    if (!orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID))) {
-      return reply.code(403).send({ id: "forbidden", message: "managing a team subscription requires the owner or admin role" });
-    }
-    const record = await options.store.getBillingRecord(team.id);
-    if (!record?.customer_id) {
-      return reply.code(400).send({ id: "bad_request", message: "no billing customer exists yet; subscribe first" });
-    }
-    const url = await billing.createPortalSession(record.customer_id, `${options.appPublicURL || ""}/billing/${encodeURIComponent(team.slug || team.id)}`);
-    return { url };
-  });
-
-  // Stripe signs the exact raw request bytes, so the webhook route lives in
-  // an encapsulated scope whose content type parser keeps the body as a
-  // Buffer instead of parsed JSON.
-  void app.register(async (scope) => {
-    scope.removeAllContentTypeParsers();
-    scope.addContentTypeParser("*", { parseAs: "buffer" }, (_request, body, done) => {
-      done(null, body);
-    });
-    scope.post("/v1/billing/webhook", async (request, reply) => {
-      const billing = options.billing;
-      if (!billing) {
-        return reply.code(400).send({ id: "bad_request", message: "billing is not enabled on this backend" });
-      }
-      const header = request.headers["stripe-signature"];
-      const rawBody = Buffer.isBuffer(request.body) ? request.body : Buffer.from(String(request.body ?? ""), "utf8");
-      if (!billing.verifyWebhookSignature(rawBody, Array.isArray(header) ? header[0] : header)) {
-        return reply.code(400).send({ id: "bad_request", message: "invalid stripe webhook signature" });
-      }
-      let event: StripeEvent;
-      try {
-        event = JSON.parse(rawBody.toString("utf8")) as StripeEvent;
-      } catch {
-        return reply.code(400).send({ id: "bad_request", message: "invalid stripe webhook payload" });
-      }
-      await billing.handleEvent(event);
-      return { received: true };
-    });
   });
 
   app.post("/v1/agent/heartbeat", async (request, reply) => {
@@ -340,15 +271,29 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       body.image = teamImage.id;
       body.image_bootstrapped = teamImage.bootstrapped;
     }
-    // BOXHAVEN_MAX_MACHINES_PER_USER above stays the hard abuse cap; billing
-    // gates the target team's free allowance below it.
-    if (options.billing && team) {
-      const used = (await options.store.listMachinesForOrg(team.id)).length;
-      const free = options.billing.freeAllowance();
-      if (used >= free && !billingRecordAllowsPaidBoxes(await options.store.getBillingRecord(team.id))) {
+    if (team) {
+      let decision;
+      try {
+        decision = await commercialPolicy.checkCreate({
+          team: policyTeam(team),
+          actor: {
+            id: auth.userID,
+            email: auth.email,
+            can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
+          },
+          machine: { id: machinePolicyID(auth.userID, body.name), name: body.name, tier: policyTier(body.tier) },
+        });
+      } catch (policyError) {
+        console.error(`commercial policy create check failed: ${(policyError as Error).message}`);
+        return reply.code(503).send({
+          id: "entitlement_unavailable",
+          message: "New box creation is temporarily unavailable because account policy could not be checked. Existing boxes remain available.",
+        });
+      }
+      if (!decision.allowed) {
         return reply.code(403).send({
-          id: "payment_required",
-          message: `Team ${team.slug || team.name || team.id} is on the free tier (${free} ${free === 1 ? "box" : "boxes"}). A team owner or admin can subscribe at ${options.appPublicURL || ""}/billing to run more boxes.`,
+          id: "entitlement_denied",
+          message: decision.message || "This team is not currently allowed to create another box.",
         });
       }
     }
@@ -603,6 +548,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       if (!provider) return;
       await provider.releaseMachine(existing);
       await options.store.deleteMachine(auth.userID, name);
+      emitMachineFact(commercialPolicy, machineFact("machine.destroyed", auth, existing, auth.teams));
     }
     return reply.code(204).send();
   });
@@ -709,6 +655,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!provider) return;
     await provider.releaseMachine(existing);
     await options.store.deleteMachine(targetUserID, name);
+    emitMachineFact(commercialPolicy, machineFact("machine.destroyed", context.auth, existing, context.auth.teams));
     return reply.code(204).send();
   });
 
@@ -731,6 +678,10 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     }
     const moved = normalizeMachine(options, { ...machine, org_id: found.team.id, updated_at: new Date().toISOString() });
     await options.store.putMachine(moved);
+    emitMachineFact(commercialPolicy, {
+      ...machineFact("machine.moved", auth, moved, auth.teams),
+      previous_team_id: machine.org_id,
+    });
     return { machine: decorateTeam(publicMachine(moved), auth.teams) };
   });
 
@@ -793,6 +744,7 @@ async function createMachine(
     name: body.name,
     user_id: auth.userID,
     org_id: orgID || undefined,
+    tier: policyTier(body.tier),
     provider_name: body.provider_name,
     source_path: body.source_path,
     repo_url: body.repo_url,
@@ -803,6 +755,7 @@ async function createMachine(
   });
   phaseStarted = Date.now();
   await options.store.putMachine(machine);
+  emitMachineFact(options.commercialPolicy || new AllowAllCommercialPolicy(), machineFact("machine.created", auth, machine, teams));
   recordMachineCreateTiming(timings, "store_machine_ms", phaseStarted);
   let ready: RemoteMachine;
   try {
@@ -1174,10 +1127,10 @@ async function requireOrgMembership(
   return { auth, members, role: self.role || "member" };
 }
 
-// Billing routes accept any team reference the caller is a member of;
-// non-members get a 403 so team ids cannot be probed for billing state. An
-// omitted reference targets the session's active team.
-function resolveBillingTeam(
+// Account capabilities accept any team reference the caller is a member of;
+// non-members get a 403 so team ids cannot be probed. An omitted reference
+// targets the session's active team.
+function resolveTeamReference(
   auth: AuthContext,
   reference: string | undefined,
   reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
@@ -1203,10 +1156,6 @@ function resolveBillingTeam(
   return found.team;
 }
 
-function billingTeamInfo(team: TeamInfo): { id: string; slug?: string; name: string } {
-  return { id: team.id, slug: team.slug, name: team.name };
-}
-
 function validateName(name: string): string | undefined {
   if (!namePattern.test(name)) {
     return "invalid machine name; expected lowercase letters, numbers, and hyphens";
@@ -1218,6 +1167,44 @@ function validateMachineTier(tier: string | undefined): string | undefined {
   if (!tier) return undefined;
   if (tier === "small" || tier === "medium" || tier === "large") return undefined;
   return "invalid machine tier; expected small, medium, or large";
+}
+
+function policyTier(tier: string | undefined): PolicyTier {
+  return tier === "medium" || tier === "large" ? tier : "small";
+}
+
+function policyTeam(team: TeamInfo): PolicyTeam {
+  return { id: team.id, name: team.name, ...(team.slug ? { slug: team.slug } : {}) };
+}
+
+function machinePolicyID(userID: string, name: string): string {
+  return `${userID}:${name}`;
+}
+
+function machineFact(
+  type: MachineLifecycleFact["type"],
+  auth: AuthContext,
+  machine: RemoteMachine,
+  teams: TeamInfo[],
+): MachineLifecycleFact {
+  const teamID = machine.org_id || auth.orgID;
+  const team = teams.find((candidate) => candidate.id === teamID);
+  return {
+    type,
+    team: policyTeam(team || { id: teamID, name: teamID }),
+    actor: { id: auth.userID, email: auth.email },
+    machine: {
+      id: machinePolicyID(machine.user_id || auth.userID, machine.name),
+      name: machine.name,
+      tier: policyTier(machine.tier),
+    },
+  };
+}
+
+function emitMachineFact(policy: CommercialPolicy, fact: MachineLifecycleFact): void {
+  void policy.emitMachineFact(fact).catch((error) => {
+    console.error(`commercial policy ${fact.type} fact failed: ${(error as Error).message}`);
+  });
 }
 
 function machineNameConflict(name: string) {

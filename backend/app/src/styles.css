@@ -38,6 +38,7 @@ button {
 .segmented button,
 .rows-clickable tbody tr,
 .side-links a,
+.side-links button,
 input,
 select {
   transition: background 140ms ease, border-color 140ms ease, box-shadow 200ms ease, transform 200ms ease, color 140ms ease;
@@ -793,7 +794,8 @@ a.secondary-button {
   padding: 0 6px 4px;
 }
 
-.side-links a {
+.side-links a,
+.side-links button {
   display: flex;
   align-items: center;
   gap: 11px;
@@ -806,7 +808,15 @@ a.secondary-button {
   transition: background 140ms ease, color 140ms ease;
 }
 
-.side-links a:hover {
+.side-links button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.side-links a:hover,
+.side-links button:hover {
   background: rgba(47, 111, 92, 0.08);
   color: #244f43;
 }
@@ -1165,95 +1175,6 @@ a.secondary-button {
 
 .steps .command-block {
   margin-bottom: 8px;
-}
-
-.billing-body .badge {
-  vertical-align: middle;
-}
-
-.badge.warn {
-  border-color: rgba(194, 132, 38, 0.4);
-  background: rgba(224, 178, 75, 0.2);
-  color: #8a611a;
-}
-
-.billing-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.billing-hint .badge {
-  margin-left: 0;
-}
-
-.usage-meter {
-  display: grid;
-  gap: 8px;
-}
-
-.usage-meter > span {
-  color: #6a776f;
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
-.meter-track {
-  overflow: hidden;
-  height: 10px;
-  border: 1px solid rgba(96, 75, 53, 0.14);
-  border-radius: 999px;
-  background: rgba(96, 75, 53, 0.1);
-}
-
-.meter-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: #2f6f5c;
-}
-
-.meter-fill.over {
-  background: #c2503c;
-}
-
-.billing-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.warning-banner {
-  display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border: 1px solid rgba(194, 132, 38, 0.42);
-  border-radius: 8px;
-  background: rgba(224, 178, 75, 0.18);
-  color: #6e4e12;
-}
-
-.warning-banner strong {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.warning-banner p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.warning-banner .github-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  min-height: 42px;
-  border: 1px solid rgba(36, 53, 47, 0.85);
-  border-radius: 7px;
-  background: #24352f;
-  color: #fffaf0;
-  font-weight: 700;
 }
 
 .github-button:hover {

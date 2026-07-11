@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { ArrowRightLeft, ChevronRight, MonitorDot, Plus, Server, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CommandBlock, installCommand } from "./access";
@@ -121,8 +121,6 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   });
 
   const createError = createMachine.error ? (createMachine.error as Error).message : "";
-  const paymentRequired = createError.includes("/billing") || createError.toLowerCase().includes("free tier");
-
   useEffect(() => {
     if (image && !imageOptions.some((option) => imageValue(option) === image)) setImage("");
   }, [image, imageOptions]);
@@ -235,17 +233,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
             <Plus size={16} />
             {createMachine.isPending ? "Creating" : "Create box"}
           </button>
-          {createError ? (
-            <p className="error">
-              {createError}
-              {paymentRequired ? (
-                <>
-                  {" "}
-                  <Link className="link-button" to="/billing">Upgrade</Link>
-                </>
-              ) : null}
-            </p>
-          ) : null}
+          {createError ? <p className="error">{createError}</p> : null}
         </form>
       </Drawer>
 

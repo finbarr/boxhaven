@@ -21,10 +21,10 @@ agents inside persistent sessions, and operate the backend.
 - [Golden images](/images): create, snapshot, activate, and remove VM runtime images.
 - [Cloud providers](/providers): configure DigitalOcean and Hetzner Cloud provider settings.
 
-## Security and billing
+## Security and operation
 
 - [Security model](/security): short-lived SSH certificates, the backend user CA, and forwarded credentials.
-- [Billing](/billing): how hosted BoxHaven billing is modeled for teams.
+- [External policy service](/operator-policy): optional create policy and account capability integration for operators.
 
 ## Source and license
 

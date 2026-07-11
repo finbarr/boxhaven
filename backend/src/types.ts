@@ -9,6 +9,7 @@ export type RemoteMachine = {
   public_ipv4?: string;
   region?: string;
   size?: string;
+  tier?: "small" | "medium" | "large";
   image?: string;
   ssh_user?: string;
   preview_hostname?: string;
@@ -97,22 +98,11 @@ export type TeamImageRecord = {
   bootstrapped?: boolean;
 };
 
-// Billing records are keyed by organization (team) id so the usage reporter
-// can compute metered usage without a session.
-export type BillingRecord = {
-  customer_id: string;
-  subscription_id?: string;
-  status?: string;
-  last_reported_hour?: string;
-  updated_at?: string;
-};
-
 export type BackendState = {
   version: number;
   provider: string;
   machines: Record<string, RemoteMachine>;
   images?: Record<string, TeamImageRecord>;
-  billing?: Record<string, BillingRecord>;
   updated_at?: string;
 };
 

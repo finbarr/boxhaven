@@ -1,14 +1,12 @@
 # BoxHaven Backend
 
 This is the open-source remote control plane. The CLI always talks to a backend;
-it does not provision cloud machines locally. The hosted backend can offer a free
-account/control-plane layer, let users attach their own cloud credentials, and
-gate BoxHaven-owned VMs behind paid plans. Self-hosters can run this package with
-their own provider credentials.
+it does not provision cloud machines locally. Self-hosters can run this package
+with their own provider credentials and no external commercial service.
 
 The browser app is built with TanStack Router and TanStack Query. It is the
 console/auth surface only: login, signup, CLI device approval, invitations,
-and authenticated box/team/image/billing views. The paid-service website lives
+and authenticated box/team/image views. The paid-service website lives
 outside this repository, and documentation lives in `docs/`, so a self-hosted
 backend does not serve the marketing site.
 
@@ -158,13 +156,10 @@ Environment:
 - `HETZNER_SERVER_TYPE`: default server type for creates without an explicit tier, default `cpx22`. Tiers map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large).
 - `HETZNER_IMAGE`: Hetzner image fallback, default `ubuntu-24.04`.
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
-- `STRIPE_SECRET_KEY`: Stripe API key; setting it enables billing. Self-hosted deployments normally leave it unset, which keeps every billing gate off.
-- `STRIPE_PRICE_ID`: metered Stripe price id used for checkout subscriptions.
-- `STRIPE_WEBHOOK_SECRET`: signing secret for `POST /v1/billing/webhook` deliveries.
-- `STRIPE_METER_EVENT_NAME`: Billing Meter event name for box-hour usage, default `boxhaven_box_hours`.
-- `BOXHAVEN_FREE_MACHINES`: boxes each team can run without a subscription, default `1`.
-- `BOXHAVEN_BILLING_USAGE_REPORTER`: set to `off` to stop this backend from reporting box-hour meter events (for example on a secondary instance).
-- `BOXHAVEN_STRIPE_API_URL`: Stripe API base URL override for tests.
+- `BOXHAVEN_COMMERCIAL_POLICY_URL`: optional external policy service base URL. Unset uses the self-hosted allow-all implementation.
+- `BOXHAVEN_COMMERCIAL_POLICY_TOKEN`: shared bearer credential for the external policy service; must be set with the URL.
+- `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS`: create-decision timeout, default `5000`.
+- `BOXHAVEN_ACCOUNT_LABEL`: optional generic console action label such as `Account` or `Plan`; empty hides it.
 - `RESEND_API_KEY`: Resend API key; setting it enables password reset and team invitation emails.
 - `BOXHAVEN_EMAIL_FROM`: From address for transactional email, default `BoxHaven <noreply@boxhaven.dev>`.
 - `BOXHAVEN_RESEND_API_URL`: Resend API base URL override for tests.
@@ -209,10 +204,7 @@ Routes:
 - `POST /v1/auth/device/deny`
 - `POST /v1/auth/device/token`
 - `GET /v1/auth/whoami`
-- `GET /v1/billing`
-- `POST /v1/billing/checkout`
-- `POST /v1/billing/portal`
-- `POST /v1/billing/webhook`
+- `POST /v1/account-link`
 - `GET /v1/providers`
 - `GET /v1/preview/tls-check`
 - `GET /v1/preview/proxy/:hostname/*` for HTTP and WebSocket preview traffic
@@ -237,24 +229,21 @@ Routes:
 `team` is the session's active team (`{id, name, slug}`, or `null` before the
 default team exists) and `teams` lists every team the user belongs to.
 
-Billing attaches to teams, never users (enabled by setting
-`STRIPE_SECRET_KEY`; every route except the webhook requires a bearer
-session):
+The optional commercial policy boundary is vendor-neutral and versioned. With
+no policy URL and token, `POST /v1/machines` is allowed normally and lifecycle
+facts are no-ops. When configured, the backend calls:
 
-- `GET /v1/billing?team=<id-or-slug>` — `{enabled, team: {id, slug, name}, status, free_machines, machines_used, can_manage, portal_available}` where `status` is `free`, `active`, `past_due`, or `canceled`, `machines_used` counts the boxes in that team, and `can_manage` is whether the caller is a team owner or admin. The team defaults to the session's active team; the caller must be a member of it (`403` otherwise). When billing is disabled the response is `{enabled: false, team}` only.
-- `POST /v1/billing/checkout` — body `{team}`; returns `{url}` for a Stripe Checkout subscription session for that team. `403` unless the caller is a team owner or admin; `400` when billing is disabled or the team's subscription is already active.
-- `POST /v1/billing/portal` — body `{team}`; returns `{url}` for the Stripe customer portal. `403` unless the caller is a team owner or admin; `400` when the team has no Stripe customer yet.
-- `POST /v1/billing/webhook` — Stripe webhook endpoint; deliveries are verified against `STRIPE_WEBHOOK_SECRET` using the raw request body. Subscribe it to `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`. Events are mapped to the team through the subscription's `boxhaven_org_id` metadata and the checkout session's `client_reference_id`.
+- `POST <policy-url>/contract/v1/entitlements/create` before provisioning.
+- `POST <policy-url>/contract/v1/events` after creates, moves, and destroys.
+- `POST <policy-url>/contract/v1/account-link` from the authenticated generic
+  `POST /v1/account-link` endpoint when `BOXHAVEN_ACCOUNT_LABEL` is set.
 
-Each team can run `BOXHAVEN_FREE_MACHINES` boxes (default 1) for free. When
-billing is enabled and the target team is at or over its allowance with no
-active subscription, `POST /v1/machines` returns `403` with
-`{ "id": "payment_required" }`. With an active team subscription, the
-backend reports one `STRIPE_METER_EVENT_NAME` meter event unit per box
-beyond the allowance per started hour (`payload[stripe_customer_id]`,
-`payload[value]`), persisting the last reported hour per team so restarts
-never double-bill. `BOXHAVEN_MAX_MACHINES_PER_USER` stays the hard per-user
-abuse cap above the billing gate.
+All contract bodies contain `version: 1` and calls use the configured bearer
+token. A missing or invalid create decision returns `503 entitlement_unavailable`
+without provisioning. A denied decision returns `403 entitlement_denied`.
+Existing box list, connect, run, sync, move, and destroy operations do not wait
+for the policy service; lifecycle delivery failures are logged. See
+[`docs/operator-policy.md`](../docs/operator-policy.md) for the payload contract.
 
 Transactional email (enabled by setting `RESEND_API_KEY`) sends password
 reset links and team invitation links (`<app_url>/invite?id=<invitation-id>`)
