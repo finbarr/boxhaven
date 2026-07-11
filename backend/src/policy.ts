@@ -109,7 +109,10 @@ export class HTTPCommercialPolicy implements CommercialPolicy {
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`commercial policy ${path} failed with HTTP ${response.status}: ${await response.text()}`);
-      if (!expectJSON) return undefined as T;
+      if (!expectJSON) {
+        await response.arrayBuffer();
+        return undefined as T;
+      }
       return response.json() as Promise<T>;
     } finally {
       clearTimeout(timer);
