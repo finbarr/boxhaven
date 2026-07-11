@@ -17,6 +17,7 @@ test("HTTP commercial policy uses authenticated version 1 contract calls", async
     response.setHeader("content-type", "application/json");
     if (request.url === "/contract/v1/entitlements/create") return response.end(JSON.stringify({ version: 1, allowed: true }));
     if (request.url === "/contract/v1/events") return response.end(JSON.stringify({ version: 1, accepted: true }));
+    if (request.url === "/contract/v1/reconcile") return response.end(JSON.stringify({ version: 1, accepted: true }));
     if (request.url === "/contract/v1/account-link") return response.end(JSON.stringify({ version: 1, url: "https://account.test/link" }));
     response.statusCode = 404;
     response.end("{}");
@@ -39,10 +40,16 @@ test("HTTP commercial policy uses authenticated version 1 contract calls", async
       actor: { id: input.actor.id, email: input.actor.email },
       machine: { id: "user-1:box", name: "box", tier: "small" },
     });
+    await policy.reconcile({
+      version: 1,
+      generated_at: "2026-07-11T00:05:00.000Z",
+      machines: [{ team: input.team, machine: { id: "fake:stable-box", name: "box", tier: "small" } }],
+    });
     assert.equal(await policy.createAccountLink(input), "https://account.test/link");
     assert.deepEqual(calls.map((call) => call.url), [
       "/contract/v1/entitlements/create",
       "/contract/v1/events",
+      "/contract/v1/reconcile",
       "/contract/v1/account-link",
     ]);
     assert.ok(calls.every((call) => call.authorization === "Bearer shared-test"));
@@ -50,6 +57,11 @@ test("HTTP commercial policy uses authenticated version 1 contract calls", async
     assert.equal(calls[1].body.id, "event-1");
     assert.equal(calls[1].body.occurred_at, "2026-07-11T00:00:00.000Z");
     assert.equal(calls[1].idempotencyKey, "event-1");
+    assert.deepEqual(calls[2].body, {
+      version: 1,
+      generated_at: "2026-07-11T00:05:00.000Z",
+      machines: [{ team: { id: "team-1", name: "Acme" }, machine: { id: "fake:stable-box", name: "box", tier: "small" } }],
+    });
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }

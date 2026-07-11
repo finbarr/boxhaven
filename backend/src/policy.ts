@@ -26,11 +26,18 @@ export type MachineLifecycleEvent = MachineLifecycleFact & {
   occurred_at: string;
 };
 
+export type PolicyReconciliation = {
+  version: 1;
+  generated_at: string;
+  machines: Array<{ team: PolicyTeam; machine: PolicyMachine }>;
+};
+
 export interface CommercialPolicy {
   readonly lifecycleEventsEnabled: boolean;
   readonly accountCapability?: { label: string };
   checkCreate(input: CreatePolicyInput): Promise<CreatePolicyDecision>;
   emitMachineFact(event: MachineLifecycleEvent): Promise<void>;
+  reconcile(input: PolicyReconciliation): Promise<void>;
   createAccountLink?(input: { team: PolicyTeam; actor: PolicyActor }): Promise<string>;
 }
 
@@ -42,6 +49,8 @@ export class AllowAllCommercialPolicy implements CommercialPolicy {
   }
 
   async emitMachineFact(): Promise<void> {}
+
+  async reconcile(): Promise<void> {}
 }
 
 export class HTTPCommercialPolicy implements CommercialPolicy {
@@ -67,6 +76,10 @@ export class HTTPCommercialPolicy implements CommercialPolicy {
 
   async emitMachineFact(event: MachineLifecycleEvent): Promise<void> {
     await this.request("/contract/v1/events", event, { "idempotency-key": event.id }, false);
+  }
+
+  async reconcile(input: PolicyReconciliation): Promise<void> {
+    await this.request("/contract/v1/reconcile", input, {}, false);
   }
 
   async createAccountLink(input: { team: PolicyTeam; actor: PolicyActor }): Promise<string> {
@@ -102,6 +115,20 @@ export class HTTPCommercialPolicy implements CommercialPolicy {
       clearTimeout(timer);
     }
   }
+}
+
+export function policyMachineIdentity(machine: {
+  name: string;
+  user_id?: string;
+  provider?: string;
+  provider_name?: string;
+  tier?: string;
+}): PolicyMachine {
+  return {
+    id: machine.provider_name ? `${machine.provider || "provider"}:${machine.provider_name}` : `${machine.user_id || "user"}:${machine.name}`,
+    name: machine.name,
+    tier: machine.tier === "medium" || machine.tier === "large" ? machine.tier : "small",
+  };
 }
 
 export function commercialPolicyFromEnv(env = process.env): CommercialPolicy {

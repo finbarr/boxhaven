@@ -7,7 +7,7 @@ import Fastify, { FastifyInstance } from "fastify";
 import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
 import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
-import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyTeam, PolicyTier } from "./policy.js";
+import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyTeam, PolicyTier, policyMachineIdentity } from "./policy.js";
 import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
@@ -23,6 +23,7 @@ export type BackendOptions = {
   maxMachinesPerUser?: number;
   commercialPolicy?: CommercialPolicy;
   policyEventRetryMs?: number;
+  policyReconcileIntervalMs?: number;
   appDir?: string;
   apiPublicURL?: string;
   appPublicURL?: string;
@@ -146,7 +147,12 @@ const agentRPCSetupTimeout = 30 * 60_000;
 export function createBackend(options: BackendOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const commercialPolicy: CommercialPolicy = options.commercialPolicy || new AllowAllCommercialPolicy();
-  const policyDelivery = new PolicyEventDelivery(options.store, commercialPolicy, options.policyEventRetryMs);
+  const policyDelivery = new PolicyEventDelivery(
+    options.store,
+    commercialPolicy,
+    options.policyEventRetryMs,
+    options.policyReconcileIntervalMs,
+  );
   policyDelivery.start();
   app.addHook("onClose", async () => policyDelivery.stop());
   void app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
@@ -286,16 +292,13 @@ export function createBackend(options: BackendOptions): FastifyInstance {
             email: auth.email,
             can_manage: false,
           },
-          machine: {
-            id: machinePolicyID({
-              name: body.name,
-              user_id: auth.userID,
-              provider: body.provider,
-              provider_name: providerMachineName(auth.userID, body.name),
-            }),
+          machine: policyMachineIdentity({
             name: body.name,
-            tier: policyTier(body.tier),
-          },
+            user_id: auth.userID,
+            provider: body.provider,
+            provider_name: providerMachineName(auth.userID, body.name),
+            tier: body.tier,
+          }),
         });
       } catch (policyError) {
         console.error(`commercial policy create check failed: ${(policyError as Error).message}`);
@@ -698,7 +701,13 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!found.team) {
       return reply.code(400).send({ id: "bad_request", message: `you are not a member of team ${reference}` });
     }
-    const moved = normalizeMachine(options, { ...machine, org_id: found.team.id, updated_at: new Date().toISOString() });
+    const moved = normalizeMachine(options, {
+      ...machine,
+      org_id: found.team.id,
+      org_name: found.team.name,
+      org_slug: found.team.slug,
+      updated_at: new Date().toISOString(),
+    });
     await options.store.putMachine(moved, machineLifecycleEvent(commercialPolicy, {
       ...machineFact("machine.moved", auth, moved, auth.teams),
       previous_team_id: machine.org_id,
@@ -767,6 +776,8 @@ async function createMachine(
     name: body.name,
     user_id: auth.userID,
     org_id: orgID || undefined,
+    org_name: teams.find((team) => team.id === orgID)?.name,
+    org_slug: teams.find((team) => team.id === orgID)?.slug,
     tier: policyTier(body.tier),
     provider_name: body.provider_name,
     source_path: body.source_path,
@@ -860,6 +871,9 @@ async function syncProviderMachines(options: BackendOptions, auth: AuthContext):
         ...item.machine,
         name,
         user_id: auth.userID,
+        org_id: existing?.org_id || auth.orgID,
+        org_name: existing?.org_name || auth.teams.find((team) => team.id === (existing?.org_id || auth.orgID))?.name,
+        org_slug: existing?.org_slug || auth.teams.find((team) => team.id === (existing?.org_id || auth.orgID))?.slug,
       });
       await options.store.putMachine(machine);
       const index = known.findIndex((knownMachine) => knownMachine.name === machine.name);
@@ -943,6 +957,8 @@ function normalizeMachine(options: BackendOptions, machine: RemoteMachine): Remo
 function publicMachine(machine: RemoteMachine): RemoteMachine {
   const safe = { ...machine } as RemoteMachine & Record<string, unknown>;
   delete safe.agent_token_hash;
+  delete safe.org_name;
+  delete safe.org_slug;
   for (const key of Object.keys(safe)) {
     if (key.startsWith("ssh_") && key.endsWith("_key")) delete safe[key];
   }
@@ -1201,11 +1217,6 @@ function policyTeam(team: TeamInfo): PolicyTeam {
   return { id: team.id, name: team.name, ...(team.slug ? { slug: team.slug } : {}) };
 }
 
-function machinePolicyID(machine: Pick<RemoteMachine, "name" | "user_id" | "provider" | "provider_name">): string {
-  if (machine.provider_name) return `${machine.provider || "provider"}:${machine.provider_name}`;
-  return `${machine.user_id || "user"}:${machine.name}`;
-}
-
 function machineFact(
   type: MachineLifecycleFact["type"],
   auth: AuthContext,
@@ -1218,11 +1229,7 @@ function machineFact(
     type,
     team: policyTeam(team || { id: teamID, name: teamID }),
     actor: { id: auth.userID, email: auth.email },
-    machine: {
-      id: machinePolicyID(machine),
-      name: machine.name,
-      tier: policyTier(machine.tier),
-    },
+    machine: policyMachineIdentity(machine),
   };
 }
 
@@ -1536,9 +1543,16 @@ function decorateTeam(machine: RemoteMachine, teams: TeamInfo[]): TeamMachine {
 // owner left it) follow the owner back to their active team. auth.orgID is
 // membership-validated in requireAuth, so healing never targets a stale team.
 async function healMachineTeam(options: BackendOptions, auth: AuthContext, machine: RemoteMachine): Promise<RemoteMachine> {
-  if (machine.org_id && auth.teams.some((team) => team.id === machine.org_id)) return machine;
+  const currentTeam = auth.teams.find((team) => team.id === machine.org_id);
+  if (currentTeam && machine.org_name === currentTeam.name && machine.org_slug === currentTeam.slug) return machine;
   if (!auth.orgID) return machine;
-  const healed = { ...machine, org_id: auth.orgID };
+  const team = currentTeam || auth.teams.find((candidate) => candidate.id === auth.orgID);
+  const healed = {
+    ...machine,
+    org_id: team?.id || auth.orgID,
+    org_name: team?.name,
+    org_slug: team?.slug,
+  };
   await options.store.putMachine(healed);
   return healed;
 }

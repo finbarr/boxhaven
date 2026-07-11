@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { CommercialPolicy, MachineLifecycleEvent } from "./policy.js";
-import { PolicyEventDelivery } from "./policy_delivery.js";
+import { PolicyEventDelivery, reconciliationSnapshot } from "./policy_delivery.js";
 import { StateStore } from "./state.js";
 
 const event: MachineLifecycleEvent = {
@@ -82,6 +82,63 @@ test("a dequeue persistence failure redelivers the same idempotent event ID", as
   assert.deepEqual(deliveredIDs, [event.id, event.id]);
 });
 
+test("reconciliation uses lifecycle team and stable provider machine identity semantics", () => {
+  assert.deepEqual(reconciliationSnapshot([{
+    name: "renamed-box",
+    user_id: "user-1",
+    provider: "fake",
+    provider_name: "stable-provider-name",
+    tier: "large",
+    org_id: "team-1",
+    org_name: "Team One",
+    org_slug: "team-one",
+  }], "2026-07-11T00:05:00.000Z"), {
+    version: 1,
+    generated_at: "2026-07-11T00:05:00.000Z",
+    machines: [{
+      team: { id: "team-1", name: "Team One", slug: "team-one" },
+      machine: { id: "fake:stable-provider-name", name: "renamed-box", tier: "large" },
+    }],
+  });
+});
+
+test("hosted reconciliation runs at startup, retries failures, and remains periodic", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-reconcile-"));
+  const store = new StateStore(join(dir, "state.json"), "fake");
+  await store.putMachine({
+    name: "box",
+    user_id: "user-1",
+    provider: "fake",
+    provider_name: "stable-box",
+    tier: "medium",
+    org_id: "team-1",
+    org_name: "Team One",
+  });
+  const reconciliations: Array<{ version: number; machineIDs: string[] }> = [];
+  let fail = true;
+  const policy: CommercialPolicy = {
+    lifecycleEventsEnabled: true,
+    async checkCreate() { return { allowed: true }; },
+    async emitMachineFact() {},
+    async reconcile(input) {
+      reconciliations.push({ version: input.version, machineIDs: input.machines.map((entry) => entry.machine.id) });
+      if (fail) {
+        fail = false;
+        throw new Error("reconciliation offline");
+      }
+    },
+  };
+  const delivery = new PolicyEventDelivery(store, policy, 5, 10);
+  delivery.start();
+  await waitFor(() => reconciliations.length >= 3);
+  delivery.stop();
+  assert.deepEqual(reconciliations, [
+    { version: 1, machineIDs: ["fake:stable-box"] },
+    { version: 1, machineIDs: ["fake:stable-box"] },
+    { version: 1, machineIDs: ["fake:stable-box"] },
+  ]);
+});
+
 class FlakyDeleteStateStore extends StateStore {
   private fail = true;
 
@@ -99,6 +156,7 @@ function deliveryPolicy(emit: (event: MachineLifecycleEvent) => Promise<void>): 
     lifecycleEventsEnabled: true,
     async checkCreate() { return { allowed: true }; },
     emitMachineFact: emit,
+    async reconcile() {},
   };
 }
 

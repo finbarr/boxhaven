@@ -86,7 +86,9 @@ DigitalOcean token and a CLI login token for the local backend.
 - `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
 - `BOXHAVEN_MAX_MACHINES_PER_USER`: per-user cap on concurrently existing boxes; `0` or unset means unlimited. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. The hosted control plane sets this; self-hosted deployments normally leave it unset.
 - `BOXHAVEN_COMMERCIAL_POLICY_URL` and `BOXHAVEN_COMMERCIAL_POLICY_TOKEN`: optional external create-policy and lifecycle-fact service; leave both unset for the allow-all self-hosted behavior.
-- `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS`: external create-decision timeout, default `5000`.
+- `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS`: external policy request timeout, default `5000`.
+- `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed policy delivery retry delay, default `30000`.
+- `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: complete active-machine reconciliation interval, default `300000`.
 - `BOXHAVEN_ACCOUNT_LABEL`: optional generic external account action; empty hides it from the console.
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
 

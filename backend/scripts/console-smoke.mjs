@@ -130,6 +130,7 @@ async function startSeededBackend() {
     accountCapability: { label: "Account" },
     async checkCreate() { return { allowed: true }; },
     async emitMachineFact() {},
+    async reconcile() {},
     async createAccountLink() { return `${appURL}/?account=opened`; },
   };
   const authOptions = {

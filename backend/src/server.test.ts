@@ -10,6 +10,7 @@ import { WebSocketServer } from "ws";
 import { createBackendAuth, migrateBackendAuth } from "./auth.js";
 import { ProviderRegistry } from "./providers.js";
 import { CommercialPolicy, CreatePolicyDecision, MachineLifecycleEvent } from "./policy.js";
+import { reconciliationSnapshot } from "./policy_delivery.js";
 import { StateStore } from "./state.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
@@ -1125,6 +1126,8 @@ test("backend starts GitHub sign-in", async () => {
 test("hosted policy fails new creates closed while existing box access and destroy stay available", async () => {
   const facts: MachineLifecycleEvent[] = [];
   const checkedMachineIDs: string[] = [];
+  let reconcileCalls = 0;
+  let reconcileFailure = true;
   let createFailure = false;
   const commercialPolicy: CommercialPolicy = {
     lifecycleEventsEnabled: true,
@@ -1136,6 +1139,13 @@ test("hosted policy fails new creates closed while existing box access and destr
     async emitMachineFact(fact) {
       facts.push(fact);
       if (createFailure) throw new Error("policy offline");
+    },
+    async reconcile() {
+      reconcileCalls++;
+      if (reconcileFailure) {
+        reconcileFailure = false;
+        throw new Error("reconciliation offline");
+      }
     },
   };
   const { app, provider, store, token } = await createTestBackend("policy@example.com", "password123", {
@@ -1152,6 +1162,8 @@ test("hosted policy fails new creates closed while existing box access and destr
   assert.equal(typeof facts[0].id, "string");
   assert.equal(facts[0].machine.tier, "large");
   assert.equal(facts[0].machine.id, checkedMachineIDs[0]);
+  const activeSnapshot = reconciliationSnapshot(await store.listMachines(), "2026-07-11T00:00:00.000Z");
+  assert.deepEqual(activeSnapshot.machines[0], { team: facts[0].team, machine: facts[0].machine });
 
   const renamed = await app.inject({ method: "PATCH", url: "/v1/machines/existing", headers, payload: { name: "renamed" } });
   assert.equal(renamed.statusCode, 200, renamed.body);
@@ -1169,6 +1181,7 @@ test("hosted policy fails new creates closed while existing box access and destr
   await waitFor(async () => (await store.listPolicyEvents()).some((event) => event.type === "machine.destroyed"));
   assert.deepEqual(provider.released, ["renamed"]);
   assert.equal((await store.listPolicyEvents()).at(-1)?.machine.id, facts[0].machine.id);
+  await waitFor(() => reconcileCalls >= 2);
   await app.close();
 });
 
@@ -1186,6 +1199,7 @@ test("generic account capability returns an external link without exposing provi
     accountCapability: { label: "Plan" },
     async checkCreate() { return { allowed: true }; },
     async emitMachineFact() {},
+    async reconcile() {},
     async createAccountLink(input) { return `https://account.hosted.test/team/${input.team.id}`; },
   };
   const { app, token } = await createTestBackend("account@example.com", "password123", { commercialPolicy });
@@ -1211,6 +1225,7 @@ async function createTestBackend(
     previewTLSWarmup?: (previewURL: string) => Promise<void>;
     commercialPolicy?: CommercialPolicy;
     policyEventRetryMs?: number;
+    policyReconcileIntervalMs?: number;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -1236,6 +1251,7 @@ async function createTestBackend(
     maxMachinesPerUser: options.maxMachinesPerUser,
     commercialPolicy: options.commercialPolicy,
     policyEventRetryMs: options.policyEventRetryMs,
+    policyReconcileIntervalMs: options.policyReconcileIntervalMs,
     apiPublicURL: "https://api.hosted.test",
     appPublicURL: "https://app.hosted.test",
     previewBaseDomain: "hosted.test",

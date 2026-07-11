@@ -1,20 +1,25 @@
-import type { CommercialPolicy, MachineLifecycleEvent } from "./policy.js";
+import { policyMachineIdentity } from "./policy.js";
+import type { CommercialPolicy, MachineLifecycleEvent, PolicyReconciliation } from "./policy.js";
 import type { StateStore } from "./state.js";
 
 export class PolicyEventDelivery {
   private timer: NodeJS.Timeout | undefined;
+  private reconcileTimer: NodeJS.Timeout | undefined;
   private running = false;
+  private reconciling = false;
   private stopped = false;
 
   constructor(
     private readonly store: StateStore,
     private readonly policy: CommercialPolicy,
     private readonly retryMs = 30_000,
+    private readonly reconcileIntervalMs = 5 * 60_000,
   ) {}
 
   start(): void {
     if (!this.policy.lifecycleEventsEnabled || this.stopped) return;
     this.schedule(0);
+    this.scheduleReconcile(0);
   }
 
   notify(): void {
@@ -25,7 +30,19 @@ export class PolicyEventDelivery {
   stop(): void {
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
+    if (this.reconcileTimer) clearTimeout(this.reconcileTimer);
     this.timer = undefined;
+    this.reconcileTimer = undefined;
+  }
+
+  private scheduleReconcile(delayMs: number): void {
+    if (this.reconciling || this.stopped) return;
+    if (this.reconcileTimer) clearTimeout(this.reconcileTimer);
+    this.reconcileTimer = setTimeout(() => {
+      this.reconcileTimer = undefined;
+      void this.reconcile();
+    }, delayMs);
+    this.reconcileTimer.unref();
   }
 
   private schedule(delayMs: number): void {
@@ -63,4 +80,40 @@ export class PolicyEventDelivery {
     await this.policy.emitMachineFact(event);
     await this.store.deletePolicyEvent(event.id);
   }
+
+  private async reconcile(): Promise<void> {
+    if (this.reconciling || this.stopped) return;
+    this.reconciling = true;
+    let failed = false;
+    try {
+      await this.policy.reconcile(reconciliationSnapshot(await this.store.listMachines()));
+    } catch (error) {
+      failed = true;
+      console.error(`commercial policy reconciliation failed: ${(error as Error).message}`);
+    } finally {
+      this.reconciling = false;
+      if (!this.stopped) this.scheduleReconcile(failed ? this.retryMs : this.reconcileIntervalMs);
+    }
+  }
+}
+
+export function reconciliationSnapshot(
+  machines: Awaited<ReturnType<StateStore["listMachines"]>>,
+  generatedAt = new Date().toISOString(),
+): PolicyReconciliation {
+  return {
+    version: 1,
+    generated_at: generatedAt,
+    machines: machines.map((machine) => {
+      const teamID = machine.org_id || machine.user_id || "unknown";
+      return {
+        team: {
+          id: teamID,
+          name: machine.org_name || teamID,
+          ...(machine.org_slug ? { slug: machine.org_slug } : {}),
+        },
+        machine: policyMachineIdentity(machine),
+      };
+    }),
+  };
 }

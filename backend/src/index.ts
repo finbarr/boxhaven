@@ -52,6 +52,8 @@ const app = createBackend({
   adminEmails: splitList(process.env.BOXHAVEN_ADMIN_EMAILS),
   maxMachinesPerUser: Number(process.env.BOXHAVEN_MAX_MACHINES_PER_USER || 0) || undefined,
   commercialPolicy,
+  policyEventRetryMs: Number(process.env.BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS || 30_000),
+  policyReconcileIntervalMs: Number(process.env.BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS || 5 * 60_000),
   appDir: process.env.BOXHAVEN_BACKEND_APP_DIR || defaultAppDir,
   apiPublicURL,
   appPublicURL,

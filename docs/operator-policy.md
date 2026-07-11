@@ -10,7 +10,9 @@ Operators can connect a separate HTTP service through these settings:
 | --- | --- |
 | `BOXHAVEN_COMMERCIAL_POLICY_URL` | Base URL of the external service. |
 | `BOXHAVEN_COMMERCIAL_POLICY_TOKEN` | Shared bearer credential sent only to that service. |
-| `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS` | Create-decision timeout, default `5000`. |
+| `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS` | External request timeout, default `5000`. |
+| `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS` | Failed event and reconciliation retry delay, default `30000`. |
+| `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS` | Full reconciliation interval, default `300000`. |
 | `BOXHAVEN_ACCOUNT_LABEL` | Optional console label such as `Account` or `Plan`; empty hides the navigation. |
 
 The URL and token must be set together. New box creates fail closed when a
@@ -19,6 +21,9 @@ connecting, running, syncing, moving, and destroying existing boxes do not
 depend on policy availability. Lifecycle facts are durably queued with the
 machine mutation and retried across backend restarts until the service accepts
 them. Local state persistence is still required before a mutation returns.
+The backend also sends a complete active-machine reconciliation at startup and
+periodically. Reconciliation failures are logged and retried without affecting
+box operations.
 
 ## Version 1 Contract
 
@@ -33,6 +38,10 @@ Requests use JSON, `Authorization: Bearer <token>`, a `/contract/v1` path, and
   occurrence time. The complete queued body is `{version: 1, id, occurred_at,
   type, team, actor, machine, previous_team_id?}`. Retries reuse the same body
   and send the event ID as `Idempotency-Key`.
+- `POST /contract/v1/reconcile` receives the authoritative complete set of
+  active machines as `{version: 1, generated_at, machines: [{team: {id, name,
+  slug?}, machine: {id, name, tier}}]}`. Machine IDs use the same stable
+  provider identity as lifecycle events; an absent machine is no longer active.
 - `POST /contract/v1/account-link` receives the current team and actor and
   returns `{version: 1, url}` when the generic account capability is enabled.
 

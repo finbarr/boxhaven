@@ -4,6 +4,8 @@ export type RemoteMachine = {
   name: string;
   user_id?: string;
   org_id?: string;
+  org_name?: string;
+  org_slug?: string;
   provider_label?: string;
   provider_name?: string;
   provider?: string;

@@ -158,7 +158,9 @@ Environment:
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
 - `BOXHAVEN_COMMERCIAL_POLICY_URL`: optional external policy service base URL. Unset uses the self-hosted allow-all implementation.
 - `BOXHAVEN_COMMERCIAL_POLICY_TOKEN`: shared bearer credential for the external policy service; must be set with the URL.
-- `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS`: create-decision timeout, default `5000`.
+- `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS`: external policy request timeout, default `5000`.
+- `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event and reconciliation retry delay, default `30000`.
+- `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: full active-machine reconciliation interval, default `300000`.
 - `BOXHAVEN_ACCOUNT_LABEL`: optional generic console action label such as `Account` or `Plan`; empty hides it.
 - `RESEND_API_KEY`: Resend API key; setting it enables password reset and team invitation emails.
 - `BOXHAVEN_EMAIL_FROM`: From address for transactional email, default `BoxHaven <noreply@boxhaven.dev>`.
@@ -237,6 +239,8 @@ facts are no-ops. When configured, the backend calls:
 - `POST <policy-url>/contract/v1/events` for creates, moves, and destroys. The
   complete versioned payload is committed to a durable local outbox in the same
   state update as the machine mutation, then retried until delivery succeeds.
+- `POST <policy-url>/contract/v1/reconcile` with the complete authoritative set
+  of active machines at startup and periodically thereafter.
 - `POST <policy-url>/contract/v1/account-link` from the authenticated generic
   `POST /v1/account-link` endpoint when `BOXHAVEN_ACCOUNT_LABEL` is set.
 
@@ -249,6 +253,8 @@ queued across backend restarts. Stable event IDs make retries idempotent, even
 when delivery succeeded but the local dequeue commit did not. The allow-all
 self-hosted policy does not create outbox entries. See
 [`docs/operator-policy.md`](../docs/operator-policy.md) for the payload contract.
+Reconciliation failures are logged and retried in the background and do not
+affect box operations.
 
 Transactional email (enabled by setting `RESEND_API_KEY`) sends password
 reset links and team invitation links (`<app_url>/invite?id=<invitation-id>`)
