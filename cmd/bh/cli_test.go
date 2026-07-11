@@ -184,6 +184,16 @@ func TestRemoteVMInstallSupportsGhosttyTerminfo(t *testing.T) {
 	}
 }
 
+func TestRemoteVMInstallPinsCompatibleCodexVersion(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("assets", "remote-vm-install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "@openai/codex@0.144.1") {
+		t.Fatal("remote-vm-install.sh does not pin Codex CLI 0.144.1")
+	}
+}
+
 func TestFormatRemoteProvisionTimings(t *testing.T) {
 	got := formatRemoteProvisionTimings(remoteBackendProvisionTimings{
 		TotalMS:            1234,

@@ -154,6 +154,8 @@ runtime that sources `/run/boxhaven/session.env` for setup commands, direct
 commands, and tmux sessions. Rebuild and publish a new snapshot after changing
 `cmd/bh/assets/remote-vm-install.sh`; otherwise newly created boxes will keep
 the previous runtime behavior.
+The installer pins Codex CLI `0.144.1` so the golden image supports the
+configured `gpt-5.6-sol` model deterministically.
 
 When `BOXHAVEN_REMOTE_IMAGE` is already set in the env file, the builder starts
 from that active snapshot by default. This keeps dependency-heavy image builds

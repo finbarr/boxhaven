@@ -175,7 +175,7 @@ install_ai_clis() {
   step "installing AI CLIs"
   NPM_CONFIG_PREFIX="" npm install -g --no-audit --no-fund \
     @google/gemini-cli \
-    @openai/codex \
+    @openai/codex@0.144.1 \
     opencode-ai \
     @github/copilot \
     @earendil-works/pi-coding-agent

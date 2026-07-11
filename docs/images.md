@@ -41,3 +41,5 @@ Remote runtime dependencies belong in the golden VM image. Self-hosters and
 operators rebuild the default image with the image builder after changing
 `cmd/bh/assets/remote-vm-install.sh`; see
 [Self-Hosting](/self-hosting#golden-image-rotation) for the builder workflow.
+The checked-in installer pins Codex CLI `0.144.1` for deterministic
+compatibility with the configured `gpt-5.6-sol` model.
