@@ -129,9 +129,7 @@ if [ "$local_mode" -ne 1 ]; then
     remote_mode_arg="--verify-only"
   fi
   unset_arg="__boxhaven_unset__"
-
-  echo "Deploying ${deploy_branch} to ${deploy_target}:${deploy_dir}"
-  ssh -A "$deploy_target" "bash -s" -- \
+  printf -v remote_command '%q ' bash -s -- \
     "$deploy_dir" \
     "$deploy_branch" \
     "$remote_mode_arg" \
@@ -140,7 +138,10 @@ if [ "$local_mode" -ne 1 ]; then
     "${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-$unset_arg}" \
     "${BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL:-$unset_arg}" \
     "${compose_overlay_file:-$unset_arg}" \
-    "${compose_overlay_env_file:-$unset_arg}" <<'REMOTE'
+    "${compose_overlay_env_file:-$unset_arg}"
+
+  echo "Deploying ${deploy_branch} to ${deploy_target}:${deploy_dir}"
+  ssh -A "$deploy_target" "$remote_command" <<'REMOTE'
 set -euo pipefail
 
 deploy_dir="$1"

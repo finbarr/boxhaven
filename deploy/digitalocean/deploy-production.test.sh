@@ -31,11 +31,10 @@ exit 0
 EOF
 cat > "${temp_dir}/bin/ssh" <<'EOF'
 #!/usr/bin/env bash
-while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
-  shift
-done
-[ "$#" -gt 0 ] && shift
-exec bash -s -- "$@"
+[ "$1" = "-A" ]
+shift 2
+[ "$#" -eq 1 ]
+exec bash -c "$1"
 EOF
 chmod +x "${temp_dir}/bin/docker" "${temp_dir}/bin/curl" "${temp_dir}/bin/ssh"
 
@@ -86,5 +85,15 @@ run_deploy "$hosted_env" --verify-only --target test-host --dir "$repo_root" \
   --compose-overlay "$overlay_file" \
   --compose-overlay-env-file "$overlay_env" >/dev/null
 assert_contains "$(cat "$docker_log")" "--env-file ${overlay_env} -f ${overlay_file} ps"
+
+special_overlay="${temp_dir}/overlay with spaces & symbols.yml"
+special_env="${temp_dir}/env with spaces & symbols.env"
+cp "$overlay_file" "$special_overlay"
+cp "$overlay_env" "$special_env"
+: > "$docker_log"
+run_deploy "$hosted_env" --verify-only --target test-host --dir "$repo_root" \
+  --compose-overlay "$special_overlay" \
+  --compose-overlay-env-file "$special_env" >/dev/null
+assert_contains "$(cat "$docker_log")" "--env-file ${special_env} -f ${special_overlay} ps"
 
 echo "deploy-production overlay tests passed"
