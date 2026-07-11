@@ -1124,9 +1124,11 @@ test("backend starts GitHub sign-in", async () => {
 
 test("hosted policy fails new creates closed while existing box access and destroy stay available", async () => {
   const facts: MachineLifecycleFact[] = [];
+  const checkedMachineIDs: string[] = [];
   let createFailure = false;
   const commercialPolicy: CommercialPolicy = {
-    async checkCreate(): Promise<CreatePolicyDecision> {
+    async checkCreate(input): Promise<CreatePolicyDecision> {
+      checkedMachineIDs.push(input.machine.id);
       if (createFailure) throw new Error("policy offline");
       return { allowed: true };
     },
@@ -1143,6 +1145,10 @@ test("hosted policy fails new creates closed while existing box access and destr
   await delay(0);
   assert.equal(facts[0].type, "machine.created");
   assert.equal(facts[0].machine.tier, "large");
+  assert.equal(facts[0].machine.id, checkedMachineIDs[0]);
+
+  const renamed = await app.inject({ method: "PATCH", url: "/v1/machines/existing", headers, payload: { name: "renamed" } });
+  assert.equal(renamed.statusCode, 200, renamed.body);
 
   createFailure = true;
   const denied = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "new" } });
@@ -1150,11 +1156,13 @@ test("hosted policy fails new creates closed while existing box access and destr
   assert.equal(denied.json().id, "entitlement_unavailable");
   assert.equal(provider.created.length, 1);
 
-  const connected = await app.inject({ method: "GET", url: "/v1/machines/existing/connect", headers });
+  const connected = await app.inject({ method: "GET", url: "/v1/machines/renamed/connect", headers });
   assert.equal(connected.statusCode, 200, connected.body);
-  const destroyed = await app.inject({ method: "DELETE", url: "/v1/machines/existing", headers });
+  const destroyed = await app.inject({ method: "DELETE", url: "/v1/machines/renamed", headers });
   assert.equal(destroyed.statusCode, 204, destroyed.body);
-  assert.deepEqual(provider.released, ["existing"]);
+  await delay(0);
+  assert.deepEqual(provider.released, ["renamed"]);
+  assert.equal(facts.at(-1)?.machine.id, facts[0].machine.id);
 });
 
 test("generic account capability returns an external link without exposing provider state", async () => {

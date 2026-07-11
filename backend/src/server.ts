@@ -279,9 +279,18 @@ export function createBackend(options: BackendOptions): FastifyInstance {
           actor: {
             id: auth.userID,
             email: auth.email,
-            can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
+            can_manage: false,
           },
-          machine: { id: machinePolicyID(auth.userID, body.name), name: body.name, tier: policyTier(body.tier) },
+          machine: {
+            id: machinePolicyID({
+              name: body.name,
+              user_id: auth.userID,
+              provider: body.provider,
+              provider_name: providerMachineName(auth.userID, body.name),
+            }),
+            name: body.name,
+            tier: policyTier(body.tier),
+          },
         });
       } catch (policyError) {
         console.error(`commercial policy create check failed: ${(policyError as Error).message}`);
@@ -1177,8 +1186,9 @@ function policyTeam(team: TeamInfo): PolicyTeam {
   return { id: team.id, name: team.name, ...(team.slug ? { slug: team.slug } : {}) };
 }
 
-function machinePolicyID(userID: string, name: string): string {
-  return `${userID}:${name}`;
+function machinePolicyID(machine: Pick<RemoteMachine, "name" | "user_id" | "provider" | "provider_name">): string {
+  if (machine.provider_name) return `${machine.provider || "provider"}:${machine.provider_name}`;
+  return `${machine.user_id || "user"}:${machine.name}`;
 }
 
 function machineFact(
@@ -1194,7 +1204,7 @@ function machineFact(
     team: policyTeam(team || { id: teamID, name: teamID }),
     actor: { id: auth.userID, email: auth.email },
     machine: {
-      id: machinePolicyID(machine.user_id || auth.userID, machine.name),
+      id: machinePolicyID(machine),
       name: machine.name,
       tier: policyTier(machine.tier),
     },
