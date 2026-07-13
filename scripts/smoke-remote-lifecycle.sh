@@ -40,6 +40,7 @@ fi
 
 created=()
 project_dir=""
+ssh_config_installed_by_smoke=0
 
 log() {
   printf '==> %s\n' "$*" >&2
@@ -57,6 +58,10 @@ cleanup() {
   fi
   if [ -n "$project_dir" ]; then
     rm -rf "$project_dir"
+  fi
+  if [ "$ssh_config_installed_by_smoke" = "1" ]; then
+    log "uninstalling direct SSH configuration"
+    "$bh_bin" ssh-config uninstall || true
   fi
   exit "$status"
 }
@@ -120,6 +125,48 @@ create_boxes() {
   for name in "${boxes[@]}"; do
     bh list | awk -v name="$name" '$1 == name { found=1 } END { exit(found ? 0 : 1) }'
   done
+}
+
+verify_direct_ssh() {
+  local ssh_config_path="${HOME}/.ssh/config"
+  if ! awk '$1 == "Include" && $2 == "~/.boxhaven/ssh/config" { found=1 } END { exit(found ? 0 : 1) }' "$ssh_config_path" 2>/dev/null; then
+    ssh_config_installed_by_smoke=1
+  fi
+
+  log "installing direct SSH aliases"
+  bh ssh-config install
+
+  for name in "${boxes[@]}"; do
+    local alias="bh-${name}"
+    local certificate_path="${HOME}/.boxhaven/ssh/certs/${alias}-cert.pub"
+    local local_file
+    local_file="$(mktemp "${TMPDIR:-/tmp}/boxhaven-direct-scp.XXXXXX")"
+    printf 'boxhaven direct scp %s\n' "$name" > "$local_file"
+    rm -f "$certificate_path"
+
+    log "verifying plain ssh and scp through ${alias}"
+    ssh "$alias" 'set -euo pipefail; test "$(id -un)" = boxhaven; test -d /opt/boxhaven/project'
+    test -s "$certificate_path"
+    ssh-keygen -L -f "$certificate_path" | grep -Fq 'boxhaven:'
+    scp -q "$local_file" "${alias}:/tmp/boxhaven-direct-scp-smoke"
+    local local_sum remote_sum
+    local_sum="$(sha256_file "$local_file")"
+    remote_sum="$(ssh "$alias" 'sha256sum /tmp/boxhaven-direct-scp-smoke' | awk '{print $1}')"
+    rm -f "$local_file"
+    ssh "$alias" 'rm -f /tmp/boxhaven-direct-scp-smoke'
+    if [ "$local_sum" != "$remote_sum" ]; then
+      printf 'direct scp checksum mismatch for %s: local=%s remote=%s\n' "$name" "$local_sum" "$remote_sum" >&2
+      exit 1
+    fi
+  done
+}
+
+sha256_file() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    sha256sum "$1" | awk '{print $1}'
+  fi
 }
 
 verify_runtime() {
@@ -271,6 +318,9 @@ printf "agent reconnected on %s\n" "$BOXHAVEN_PROJECT_PATH"
 require_command git
 require_command curl
 require_command awk
+require_command ssh
+require_command scp
+require_command ssh-keygen
 ensure_bh
 init_project
 
@@ -278,6 +328,7 @@ log "backend URL: ${backend_url}"
 log "mode: ${mode}"
 log "box names: ${boxes[*]}"
 create_boxes
+verify_direct_ssh
 for name in "${boxes[@]}"; do
   verify_runtime "$name"
   verify_github_auth "$name"

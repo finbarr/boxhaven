@@ -429,6 +429,9 @@ func runRemoteList(args []string, projectDir string) error {
 	if err != nil {
 		return err
 	}
+	if err := refreshInstalledSSHConfig(cfg, machines); err != nil {
+		warn("Could not refresh direct SSH aliases: %v", err)
+	}
 	if len(machines) == 0 {
 		if _, err := fmt.Fprintln(os.Stdout, "No remote machines."); err != nil {
 			return err
@@ -496,6 +499,9 @@ func runRemoteStatus(args []string, projectDir string) error {
 	if err != nil {
 		return err
 	}
+	if err := refreshInstalledSSHConfigFromBackend(cfg); err != nil {
+		warn("Could not refresh direct SSH aliases: %v", err)
+	}
 
 	fmt.Printf("%sname:%s %s\n", colorBold, colorReset, machine.Name)
 	fmt.Printf("%sbackend_url:%s %s\n", colorBold, colorReset, remoteBackendURL(cfg))
@@ -555,6 +561,9 @@ func runRemoteDestroy(args []string, projectDir string) error {
 	if err := releaseRemoteBackendMachine(cfg, name); err != nil {
 		return err
 	}
+	if err := refreshInstalledSSHConfigFromBackend(cfg); err != nil {
+		warn("Could not refresh direct SSH aliases: %v", err)
+	}
 	success("Destroyed remote %s", name)
 	return nil
 }
@@ -578,6 +587,9 @@ func runRemoteRename(args []string, projectDir string) error {
 	machine, err := renameRemoteBackendMachine(cfg, fromName, toName)
 	if err != nil {
 		return err
+	}
+	if err := refreshInstalledSSHConfigFromBackend(cfg); err != nil {
+		warn("Could not refresh direct SSH aliases: %v", err)
 	}
 	success("Renamed remote %s to %s", fromName, machine.Name)
 	return nil
@@ -662,6 +674,9 @@ func createRemoteMachine(cfg Config, projectDir string, opts remoteProvisionOpti
 			}
 		}
 	}
+	if err := refreshInstalledSSHConfigFromBackend(cfg); err != nil {
+		warn("Could not refresh direct SSH aliases: %v", err)
+	}
 	printRemoteReady(machine)
 	return machine, nil
 }
@@ -692,47 +707,10 @@ func readyExistingRemoteMachine(cfg Config, projectDir string, name string, sync
 }
 
 func attachRemoteSSHCertificate(cfg Config, machine *remoteMachine) (func(), error) {
-	if err := requireRemoteClientTools("ssh", "ssh-keygen"); err != nil {
+	if _, err := refreshBoxHavenSSHCertificate(cfg, machine); err != nil {
 		return func() {}, err
 	}
-	dir, err := os.MkdirTemp("", "boxhaven-remote-ssh-*")
-	if err != nil {
-		return func() {}, err
-	}
-	cleanup := func() { _ = os.RemoveAll(dir) }
-	keyPath := filepath.Join(dir, "id_ed25519")
-	keygen := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "boxhaven-"+machine.Name, "-f", keyPath)
-	if output, err := keygen.CombinedOutput(); err != nil {
-		cleanup()
-		return func() {}, fmt.Errorf("generate temporary remote SSH key: %w: %s", err, strings.TrimSpace(string(output)))
-	}
-	publicKey, err := os.ReadFile(keyPath + ".pub")
-	if err != nil {
-		cleanup()
-		return func() {}, fmt.Errorf("read temporary remote SSH public key: %w", err)
-	}
-	cert, err := getRemoteBackendSSHCertificate(cfg, machine.Name, strings.TrimSpace(string(publicKey)))
-	if err != nil {
-		cleanup()
-		return func() {}, err
-	}
-	if strings.TrimSpace(cert.Certificate) == "" {
-		cleanup()
-		return func() {}, fmt.Errorf("remote backend returned no SSH certificate for %s", machine.Name)
-	}
-	certPath := keyPath + "-cert.pub"
-	if err := os.WriteFile(certPath, []byte(strings.TrimSpace(cert.Certificate)+"\n"), 0600); err != nil {
-		cleanup()
-		return func() {}, fmt.Errorf("write temporary remote SSH certificate: %w", err)
-	}
-	machine.SSHKeyPath = keyPath
-	machine.SSHCertificatePath = certPath
-	machine.SSHHost = strings.TrimSpace(cert.Host)
-	machine.SSHPort = cert.Port
-	if strings.TrimSpace(cert.SSHUser) != "" {
-		machine.SSHUser = strings.TrimSpace(cert.SSHUser)
-	}
-	return cleanup, nil
+	return func() {}, nil
 }
 
 func requireRemoteMachineBootstrapped(machine remoteMachine) error {
@@ -744,6 +722,9 @@ func requireRemoteMachineBootstrapped(machine remoteMachine) error {
 
 func printRemoteReady(machine remoteMachine) {
 	success("Remote %s is ready", machine.Name)
+	if installed, _ := boxHavenSSHConfigInstalled(); installed {
+		link("SSH: ssh %s", boxHavenSSHMachineAlias(machine.Name))
+	}
 	if previewURL := strings.TrimSpace(machine.PreviewURL); previewURL != "" {
 		link("Preview: %s", previewURL)
 	}
@@ -1270,7 +1251,7 @@ func runSSHCommand(machine remoteMachine, remoteCommand string, tty bool, forwar
 
 func remoteSSHOptions(machine remoteMachine, forwardAgent bool) ([]string, error) {
 	if strings.TrimSpace(machine.SSHKeyPath) == "" {
-		return nil, fmt.Errorf("remote %s has no temporary SSH key", machine.Name)
+		return nil, fmt.Errorf("remote %s has no SSH key", machine.Name)
 	}
 	if strings.TrimSpace(machine.SSHCertificatePath) == "" {
 		return nil, fmt.Errorf("remote %s has no backend-signed SSH certificate", machine.Name)

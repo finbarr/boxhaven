@@ -54,6 +54,8 @@ func runCmd(args []string) error {
 	switch args[0] {
 	case "create", "run", "connect", "sync", "list", "status", "rename", "move", "destroy":
 		return runRemote(args, projectDir)
+	case "ssh-config":
+		return runSSHConfig(args[1:])
 	case "image":
 		return runImage(args[1:], projectDir)
 	case "team":
@@ -92,6 +94,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  bh sync up <name>")
 	fmt.Fprintln(os.Stderr, "  bh sync down <name> --force")
 	fmt.Fprintln(os.Stderr, "  bh status <name>")
+	fmt.Fprintln(os.Stderr, "  bh ssh-config install|refresh|uninstall")
 	fmt.Fprintln(os.Stderr, "  bh image ls|create|rm [...]")
 	fmt.Fprintln(os.Stderr, "  bh team list|create|switch|status|members|invite|boxes [...]")
 	fmt.Fprintln(os.Stderr, "  bh login [--backend-url <url>] [--no-open]")
