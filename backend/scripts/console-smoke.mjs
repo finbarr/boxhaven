@@ -50,6 +50,7 @@ try {
   const page = await context.newPage();
 
   const deviceFacts = await checkDevicePage(page, deviceUserCode);
+  const gettingStartedFacts = await checkGettingStarted(page);
   const membersFacts = await checkMembersPage(page);
   const teamsFacts = await checkTeamsPage(page);
   const imagesFacts = await checkImagesPage(page);
@@ -65,6 +66,8 @@ try {
     screenshots: {
       access: join(outDir, "access.png"),
       device: join(outDir, "device.png"),
+      boxes: join(outDir, "boxes.png"),
+      mobileBoxes: join(outDir, "mobile-boxes.png"),
       members: join(outDir, "members.png"),
       teams: join(outDir, "teams.png"),
       teamEditor: join(outDir, "team-editor.png"),
@@ -74,6 +77,7 @@ try {
     },
     accessFacts,
     deviceFacts,
+    gettingStartedFacts,
     membersFacts,
     teamsFacts,
     imagesFacts,
@@ -283,6 +287,36 @@ async function checkDevicePage(page, userCode) {
   assert.equal(facts.scrollY, 0);
   assert.ok(facts.allowButtonBottom !== null && facts.allowButtonBottom <= facts.viewportHeight, `Allow button below fold: ${facts.allowButtonBottom} > ${facts.viewportHeight}`);
   return facts;
+}
+
+async function checkGettingStarted(page) {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(appURL, { waitUntil: "domcontentloaded" });
+  await waitForConsole(page);
+  await page.waitForSelector(".getting-started", { timeout: 10_000 });
+  await page.screenshot({ path: join(outDir, "boxes.png"), fullPage: true });
+  const desktop = await page.evaluate(() => ({
+    commands: [...document.querySelectorAll(".getting-started .command-block code")].map((node) => node.textContent?.trim()),
+    bodyScrollWidth: document.documentElement.scrollWidth,
+    viewport: window.innerWidth,
+  }));
+  for (const command of ["bh login", "bh ssh-config install", "bh create work", "bh run work claude", "bh connect work"]) {
+    assert.ok(desktop.commands.includes(command), `getting started missing ${command}`);
+  }
+  assert.ok(desktop.bodyScrollWidth <= desktop.viewport, `desktop boxes page overflows: ${desktop.bodyScrollWidth} > ${desktop.viewport}`);
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.screenshot({ path: join(outDir, "mobile-boxes.png"), fullPage: true });
+  const mobile = await page.evaluate(() => ({
+    bodyScrollWidth: document.documentElement.scrollWidth,
+    viewport: window.innerWidth,
+    clippedCommands: [...document.querySelectorAll(".getting-started .command-block code")]
+      .filter((node) => node.scrollWidth > node.clientWidth)
+      .map((node) => node.textContent?.trim()),
+  }));
+  assert.ok(mobile.bodyScrollWidth <= mobile.viewport, `mobile boxes page overflows: ${mobile.bodyScrollWidth} > ${mobile.viewport}`);
+  assert.deepEqual(mobile.clippedCommands, [], `mobile commands are clipped: ${mobile.clippedCommands.join(", ")}`);
+  return { desktop, mobile };
 }
 
 async function checkMembersPage(page) {

@@ -273,8 +273,9 @@ function GettingStarted({ onCreate }: { onCreate: () => void }) {
         <li>
           <span className="step-num">2</span>
           <div>
-            <strong>Sign in from your terminal</strong>
+            <strong>Sign in and enable direct SSH</strong>
             <CommandBlock label="Login" value="bh login" />
+            <CommandBlock label="SSH setup" value="bh ssh-config install" />
           </div>
         </li>
         <li>
@@ -283,10 +284,11 @@ function GettingStarted({ onCreate }: { onCreate: () => void }) {
             <strong>Create a box and hand it to your agent</strong>
             <CommandBlock label="Create" value="bh create work" />
             <CommandBlock label="Run" value="bh run work claude" />
+            <CommandBlock label="Reattach" value="bh connect work" />
           </div>
         </li>
       </ol>
-      <p className="hint">Mid-conversation locally? <code>bh run work claude --continue</code> resumes it on the box.</p>
+      <p className="hint">Disconnect whenever you like. <code>bh connect work</code> reattaches to the running session.</p>
       <p className="hint">
         Prefer clicking?{" "}
         <button className="link-button" type="button" onClick={onCreate}>Create a box from the console</button>.

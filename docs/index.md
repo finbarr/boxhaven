@@ -11,8 +11,8 @@ agents inside persistent sessions, and operate the backend.
 
 ## Start here
 
-- [Getting started](/getting-started): install `bh`, log in, create a box, run an agent, disconnect, and reattach.
-- [CLI reference](/commands): every command and flag for boxes, sync, teams, images, auth, and config.
+- [Getting started](/getting-started): install `bh`, log in, create a box, run an agent, disconnect, reattach, and use normal SSH clients.
+- [CLI reference](/commands): every command and flag for boxes, direct SSH, sync, teams, images, auth, and config.
 - [Self-hosting](/self-hosting): run the Fastify/Better Auth control plane with your own provider credentials.
 
 ## Operate boxes

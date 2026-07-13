@@ -44,7 +44,9 @@ one-time no-login key during create only to prevent provider password emails,
 then deletes the account key. Cloud-init configures VMs to trust short-lived
 boxhaven SSH certificates instead. The backend SSH user CA is stored at
 `/opt/boxhaven/data/backend/ssh_ca_ed25519` and is included in the backend data
-backups.
+backups. User-side `bh ssh-config install` creates managed `bh-<name>` OpenSSH
+aliases; ordinary `ssh` and `scp` commands refresh a certificate through the
+backend before connecting directly to the VM.
 Set `BOXHAVEN_DOCS_HOST` to the documentation hostname, `BOXHAVEN_DOCS_URL`
 to the public URL the console should link to, and
 `BOXHAVEN_PREVIEW_BASE_DOMAIN` to the wildcard domain above. The default
@@ -235,8 +237,9 @@ make smoke-remote
 ```
 
 `make smoke-remote` is the fast one-box smoke. It creates one machine from the
-active snapshot, syncs a temporary project, verifies direct SSH/runtime/preview
-behavior, and destroys the machine. Use `make smoke-remote-two-box` only when
+active snapshot, syncs a temporary project, removes any cached certificate,
+verifies plain `ssh` and `scp` plus runtime/preview behavior, and destroys the
+machine. Use `make smoke-remote-two-box` only when
 concurrency, provider import, or multiple-machine behavior needs coverage.
 
 For reconnect coverage, pass a backend restart command:

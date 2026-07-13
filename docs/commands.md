@@ -13,6 +13,7 @@ bh run <name> <cmd...>
 bh sync up <name>
 bh sync down <name> --force
 bh status <name>
+bh ssh-config install|refresh|uninstall
 bh image ls|create|rm [...]
 bh team list|create|switch|status|members|invite|boxes [...]
 bh login [--backend-url <url>] [--no-open]
@@ -77,6 +78,29 @@ bh connect <name>
 
 Attaches to the box's managed tmux session over direct SSH, starting a shell
 session if none exists. Disconnecting leaves the session running.
+
+## bh ssh-config
+
+```bash
+bh ssh-config install
+bh ssh-config refresh
+bh ssh-config uninstall
+```
+
+`install` adds a managed include to `~/.ssh/config`, creates a persistent
+device key under `~/.boxhaven/ssh`, and writes `bh-<name>` aliases for ready
+boxes. These aliases work with ordinary OpenSSH clients:
+
+```bash
+ssh bh-work
+scp ./notes.txt bh-work:/opt/boxhaven/project/
+rsync -az ./fixtures/ bh-work:/opt/boxhaven/project/fixtures/
+```
+
+OpenSSH transparently asks `bh` for a fresh short-lived certificate before
+using an alias. Box lifecycle commands keep the generated aliases current;
+`refresh` fetches the current box list explicitly. `uninstall` removes the
+managed include and generated config while retaining the device key.
 
 ## bh sync
 

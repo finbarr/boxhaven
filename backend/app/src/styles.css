@@ -1281,6 +1281,12 @@ a.secondary-button {
     flex-basis: auto;
   }
 
+  .command-block code {
+    overflow-x: visible;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
   .meta div {
     grid-template-columns: 1fr;
     gap: 4px;

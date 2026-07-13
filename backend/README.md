@@ -347,11 +347,14 @@ single managed tmux session.
 
 Every backend-created machine also trusts the backend SSH user CA. The backend
 persists the CA private key, passes the CA public key plus a per-machine
-authorized principal to provider user data, and signs temporary CLI public keys
+authorized principal to provider user data, and signs device public keys
 through `POST /v1/machines/:name/ssh-cert` only after authenticating the machine
-owner. The CLI uses the returned OpenSSH certificate with local `ssh` and
-`rsync` directly against the VM public IP. User SSH bytes do not flow through the
-backend. CLI-side host-key pinning lives in `~/.boxhaven/remote_known_hosts`.
+owner. The CLI keeps one local device key under `~/.boxhaven/ssh`; after
+`bh ssh-config install`, normal `ssh`, `scp`, and `rsync` commands use managed
+`bh-<name>` aliases that transparently request a fresh short-lived certificate.
+Connections go directly to the VM public IP, so user SSH bytes do not flow
+through the backend. CLI-side host-key pinning lives in
+`~/.boxhaven/remote_known_hosts`.
 Project sync excludes common dependency/cache directories by default and reads
 additional rsync-style exclude patterns from `.boxhavenignore`. Sync completion
 reports elapsed time, network bytes, changed bytes, and file counts.

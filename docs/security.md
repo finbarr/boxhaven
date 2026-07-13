@@ -8,16 +8,18 @@ file sync and command bytes go directly over SSH from the CLI to the VM.
 
 User access is based on authenticated backend sessions plus short-lived SSH
 user certificates. User VMs do not receive account-level cloud SSH keys. The
-backend signs temporary CLI public keys for the authenticated machine owner,
-and the VM trusts the backend user CA.
+CLI creates one persistent device key under `~/.boxhaven/ssh`; its private key
+never leaves the user's machine. The backend signs that device's public key for
+the authenticated machine owner, and the VM trusts the backend user CA.
 
 In detail: every backend-created machine trusts the backend SSH user CA. The
 backend persists the CA private key, passes the CA public key plus a
-per-machine authorized principal to provider user data, and signs temporary
-CLI public keys through `POST /v1/machines/:name/ssh-cert` only after
-authenticating the machine owner. The CLI uses the returned OpenSSH
-certificate with local `ssh` and `rsync` directly against the VM public IP.
-User SSH bytes do not flow through the backend. CLI-side host-key pinning
+per-machine authorized principal to provider user data, and signs device
+public keys through `POST /v1/machines/:name/ssh-cert` only after
+authenticating the machine owner. `bh ssh-config install` adds managed
+`bh-<name>` aliases to OpenSSH; each `ssh`, `scp`, or `rsync` invocation obtains
+a fresh short-lived certificate before connecting directly to the VM public
+IP. User SSH bytes do not flow through the backend. CLI-side host-key pinning
 lives in `~/.boxhaven/remote_known_hosts`.
 
 On DigitalOcean, the backend uses a one-time no-login key during create only

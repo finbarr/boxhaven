@@ -85,6 +85,20 @@ grant access. The resulting session token is stored in
 `~/.config/boxhaven/config.toml`. `BOXHAVEN_BACKEND_URL` and `BOXHAVEN_TOKEN`
 override the stored config when set.
 
+## Enable Direct SSH
+
+Install managed OpenSSH aliases once after logging in:
+
+```bash
+bh ssh-config install
+```
+
+This adds an `Include` line to `~/.ssh/config`, creates a device key under
+`~/.boxhaven/ssh`, and manages an alias named `bh-<name>` for each ready box.
+Aliases update after normal box lifecycle commands; run
+`bh ssh-config refresh` to force an update or `bh ssh-config uninstall` to
+remove the managed include.
+
 ## Create A Box
 
 Run this from the project you want to work on remotely:
@@ -127,6 +141,19 @@ Every account automatically gets a default team, and your first box lands
 there: new boxes go to your session's active team, which `bh login` pins to
 that default team until you switch to another one. See
 [Teams](/teams) for sharing boxes with teammates.
+
+Use the box through normal OpenSSH clients:
+
+```bash
+ssh bh-work
+scp ./notes.txt bh-work:/opt/boxhaven/project/
+rsync -az ./fixtures/ bh-work:/opt/boxhaven/project/fixtures/
+```
+
+The same alias works with tools that read OpenSSH configuration, including VS
+Code Remote SSH. Each invocation transparently obtains a new short-lived
+certificate from the backend; the SSH connection itself goes directly to the
+box.
 
 ## Run Commands
 

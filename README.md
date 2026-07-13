@@ -28,6 +28,7 @@ work:
 
 ```bash
 bh login
+bh ssh-config install # one-time setup for normal ssh/scp aliases
 bh create work        # provisions a box and syncs this project once
 bh run work claude    # claude starts working in the box's tmux session
 # close the laptop — the agent keeps going. Reattach any time:
@@ -63,6 +64,25 @@ local sessions for the project, so `claude --continue` on the box picks up
 the conversation exactly where your laptop left it. Interactive commands
 attach to the machine's managed tmux session; noninteractive commands run
 over direct SSH.
+
+## Direct SSH
+
+Run the one-time setup after logging in to add managed `bh-<name>` aliases to
+your normal OpenSSH configuration:
+
+```bash
+bh ssh-config install
+ssh bh-work
+scp ./notes.txt bh-work:/opt/boxhaven/project/
+rsync -az ./fixtures/ bh-work:/opt/boxhaven/project/fixtures/
+```
+
+The aliases also work in tools that use OpenSSH configuration, including VS
+Code Remote SSH. Box aliases update after create, list, status, rename, and
+destroy operations; `bh ssh-config refresh` forces an update. Each connection
+transparently replaces the local short-lived certificate while reusing a
+device key stored under `~/.boxhaven/ssh`. Remove the managed include with
+`bh ssh-config uninstall`.
 
 ## What It Provides
 
@@ -128,8 +148,10 @@ Then jump straight into the quickstart:
 
 ```bash
 bh login
+bh ssh-config install # one-time setup for normal ssh/scp aliases
 bh create work       # provisions the box and syncs this project once
 bh run work claude   # start Claude in the box's tmux session
+bh connect work      # reattach after disconnecting
 ```
 
 ## Configuration
