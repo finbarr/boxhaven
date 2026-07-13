@@ -189,8 +189,8 @@ func TestRemoteVMInstallPinsCompatibleCodexVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "@openai/codex@0.144.1") {
-		t.Fatal("remote-vm-install.sh does not pin Codex CLI 0.144.1")
+	if !strings.Contains(string(data), "@openai/codex@0.144.3") {
+		t.Fatal("remote-vm-install.sh does not pin Codex CLI 0.144.3")
 	}
 }
 
