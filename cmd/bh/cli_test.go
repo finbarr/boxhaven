@@ -184,6 +184,16 @@ func TestRemoteVMInstallSupportsGhosttyTerminfo(t *testing.T) {
 	}
 }
 
+func TestRemoteVMInstallIncludesChromium(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("assets", "remote-vm-install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "chromium-browser") {
+		t.Fatal("remote-vm-install.sh does not install Chromium")
+	}
+}
+
 func TestRemoteVMInstallPinsCompatibleCodexVersion(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("assets", "remote-vm-install.sh"))
 	if err != nil {

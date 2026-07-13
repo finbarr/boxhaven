@@ -164,7 +164,7 @@ configured `gpt-5.6-sol` model deterministically.
 When `BOXHAVEN_REMOTE_IMAGE` is already set in the env file, the builder starts
 from that active snapshot by default. This keeps dependency-heavy image builds
 incremental: changing BoxHaven runtime scripts updates the existing image instead
-of reinstalling Node, Docker, Go, Bun, uv, Codex, Claude, gh, and related
+of reinstalling Node, Docker, Go, Bun, uv, Chromium, Codex, Claude, gh, and related
 packages from Ubuntu. Use `--full-base-image` only when changing base OS or
 toolchain dependencies, or when the active snapshot is intentionally being
 replaced from scratch.

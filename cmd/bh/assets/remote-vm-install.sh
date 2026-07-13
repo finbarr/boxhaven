@@ -52,6 +52,7 @@ apt_install() {
     ca-certificates \
     curl \
     wget \
+    chromium-browser \
     git \
     sudo \
     build-essential \
