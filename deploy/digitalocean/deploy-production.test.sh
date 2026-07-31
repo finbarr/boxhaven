@@ -20,6 +20,7 @@ assert_contains() {
 
 mkdir -p "${temp_dir}/bin"
 docker_log="${temp_dir}/docker.log"
+curl_log="${temp_dir}/curl.log"
 
 cat > "${temp_dir}/bin/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -27,6 +28,7 @@ printf '%s\n' "$*" >> "${DOCKER_LOG}"
 EOF
 cat > "${temp_dir}/bin/curl" <<'EOF'
 #!/usr/bin/env bash
+printf '%s\n' "$*" >> "${CURL_LOG}"
 exit 0
 EOF
 cat > "${temp_dir}/bin/ssh" <<'EOF'
@@ -54,6 +56,7 @@ run_deploy() {
     -u BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE \
     PATH="${temp_dir}/bin:${PATH}" \
     DOCKER_LOG="$docker_log" \
+    CURL_LOG="$curl_log" \
     BOXHAVEN_PRODUCTION_ENV_FILE="$1" \
     BOXHAVEN_PRODUCTION_API_HEALTH_URL=http://api.test/healthz \
     BOXHAVEN_PRODUCTION_APP_HEALTH_URL=http://app.test/healthz \
@@ -62,8 +65,10 @@ run_deploy() {
 }
 
 : > "$docker_log"
+: > "$curl_log"
 run_deploy "$public_env" --local --verify-only >/dev/null
 assert_contains "$(cat "$docker_log")" "compose --env-file ${public_env} -f deploy/digitalocean/docker-compose.yml ps"
+assert_contains "$(cat "$curl_log")" "--retry 20 --retry-delay 1 --retry-all-errors --connect-timeout 5 --max-time 10 -fsS http://api.test/healthz"
 
 : > "$docker_log"
 run_deploy "$protected_env" --local \

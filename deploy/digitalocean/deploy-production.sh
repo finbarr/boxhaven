@@ -227,6 +227,18 @@ fi
 command -v docker >/dev/null 2>&1 || die "docker is required"
 command -v curl >/dev/null 2>&1 || die "curl is required"
 
+check_health() {
+  local url="$1"
+  echo "Checking ${url}"
+  curl \
+    --retry 20 \
+    --retry-delay 1 \
+    --retry-all-errors \
+    --connect-timeout 5 \
+    --max-time 10 \
+    -fsS "$url" >/dev/null
+}
+
 compose_args=(--env-file "$env_file" -f "$compose_file")
 if [ -n "$compose_overlay_env_file" ]; then
   compose_args+=(--env-file "$compose_overlay_env_file")
@@ -269,13 +281,8 @@ fi
 echo "Checking production containers"
 docker compose "${compose_args[@]}" ps
 
-echo "Checking ${api_health_url}"
-curl -fsS "$api_health_url" >/dev/null
-
-echo "Checking ${app_health_url}"
-curl -fsS "$app_health_url" >/dev/null
-
-echo "Checking ${docs_health_url}"
-curl -fsS "$docs_health_url" >/dev/null
+check_health "$api_health_url"
+check_health "$app_health_url"
+check_health "$docs_health_url"
 
 echo "Production deploy verified"
