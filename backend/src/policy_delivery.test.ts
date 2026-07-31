@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, mkdtemp } from "node:fs/promises";
+import { readFile, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -123,6 +123,36 @@ test("concurrent state mutations are serialized without lost machines or outbox 
   const restarted = new StateStore(path, "fake");
   assert.equal((await restarted.listMachines()).length, 20);
   assert.equal((await restarted.listPolicyEvents()).length, 20);
+});
+
+test("concurrent startup reads wait for persisted state initialization", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-load-"));
+  const path = join(dir, "state.json");
+  await writeFile(path, JSON.stringify({
+    version: 1,
+    provider: "fake",
+    machines: {
+      "user-1:box": {
+        name: "box",
+        user_id: "user-1",
+        provider: "fake",
+        provider_name: "stable-box",
+      },
+    },
+    policy_events: { [event.id]: event },
+  }));
+  const store = new StateStore(path, "fake");
+
+  const [loaded, captured, queued] = await Promise.all([
+    store.load(),
+    store.captureMachineSnapshot(() => new Date("2026-07-11T00:10:00.000Z")),
+    store.listPolicyEvents(),
+  ]);
+
+  assert.equal(Object.keys(loaded.machines).length, 1);
+  assert.equal(captured.machines.length, 1);
+  assert.equal(captured.machines[0].provider_name, "stable-box");
+  assert.deepEqual(queued, [event]);
 });
 
 test("reconciliation uses lifecycle team and stable provider machine identity semantics", () => {

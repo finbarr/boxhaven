@@ -6,6 +6,7 @@ import { BackendState, RemoteMachine, TeamImageRecord, stateVersion } from "./ty
 
 export class StateStore {
   private state: BackendState | undefined;
+  private loading: Promise<void> | undefined;
   private pendingUpdate: Promise<void> = Promise.resolve();
 
   constructor(
@@ -14,8 +15,23 @@ export class StateStore {
   ) {}
 
   async load(): Promise<BackendState> {
-    if (this.state) return this.snapshot();
-    this.state = {
+    if (!this.state) {
+      let loading = this.loading;
+      if (!loading) {
+        loading = this.loadFromDisk();
+        this.loading = loading;
+      }
+      try {
+        await loading;
+      } finally {
+        if (this.loading === loading) this.loading = undefined;
+      }
+    }
+    return this.snapshot();
+  }
+
+  private async loadFromDisk(): Promise<void> {
+    let state: BackendState = {
       version: stateVersion,
       provider: this.provider,
       machines: {},
@@ -25,7 +41,7 @@ export class StateStore {
       if (data.trim() !== "") {
         const parsed = JSON.parse(data) as BackendState;
         const policyTimestamp = latestPolicyTimestamp(parsed);
-        this.state = {
+        state = {
           version: parsed.version || stateVersion,
           provider: parsed.provider || this.provider,
           machines: parsed.machines || {},
@@ -36,12 +52,9 @@ export class StateStore {
         };
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        this.state = undefined;
-        throw error;
-      }
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
-    return this.snapshot();
+    this.state = state;
   }
 
   async listMachines(): Promise<RemoteMachine[]> {
