@@ -12,6 +12,16 @@ export type CreatePolicyInput = {
 
 export type CreatePolicyDecision = { allowed: boolean; message?: string };
 
+export type AccountState = "trial" | "active" | "past_due" | "inactive";
+
+export type AccountSummary = {
+  state: AccountState;
+  included_units_remaining: number;
+  active_units: number;
+  can_manage: boolean;
+  primary_action?: "subscribe" | "manage";
+};
+
 export type MachineLifecycleFact = {
   type: "machine.created" | "machine.destroyed" | "machine.moved";
   team: PolicyTeam;
@@ -38,7 +48,8 @@ export interface CommercialPolicy {
   checkCreate(input: CreatePolicyInput): Promise<CreatePolicyDecision>;
   emitMachineFact(event: MachineLifecycleEvent): Promise<void>;
   reconcile(input: PolicyReconciliation): Promise<void>;
-  createAccountLink?(input: { team: PolicyTeam; actor: PolicyActor }): Promise<string>;
+  getAccountSummary?(input: { team: PolicyTeam; actor: PolicyActor }): Promise<AccountSummary>;
+  createAccountAction?(input: { team: PolicyTeam; actor: PolicyActor }): Promise<string>;
 }
 
 export class AllowAllCommercialPolicy implements CommercialPolicy {
@@ -82,10 +93,35 @@ export class HTTPCommercialPolicy implements CommercialPolicy {
     await this.request("/contract/v1/reconcile", input, {}, false);
   }
 
-  async createAccountLink(input: { team: PolicyTeam; actor: PolicyActor }): Promise<string> {
+  async getAccountSummary(input: { team: PolicyTeam; actor: PolicyActor }): Promise<AccountSummary> {
     if (!this.accountCapability) throw new Error("account capability is not configured");
-    const response = await this.request<{ version?: number; url?: string }>("/contract/v1/account-link", { version: 1, ...input });
-    if (response.version !== 1 || !response.url) throw new Error("commercial policy returned an invalid account link");
+    const response = await this.request<{ version?: number } & Partial<AccountSummary>>(
+      "/contract/v1/account/summary",
+      { version: 1, ...input },
+    );
+    if (
+      response.version !== 1
+      || !isAccountState(response.state)
+      || !isNonNegativeInteger(response.included_units_remaining)
+      || !isNonNegativeInteger(response.active_units)
+      || typeof response.can_manage !== "boolean"
+      || (response.primary_action !== undefined && response.primary_action !== "subscribe" && response.primary_action !== "manage")
+    ) {
+      throw new Error("commercial policy returned an invalid account summary");
+    }
+    return {
+      state: response.state,
+      included_units_remaining: response.included_units_remaining,
+      active_units: response.active_units,
+      can_manage: response.can_manage,
+      ...(response.primary_action ? { primary_action: response.primary_action } : {}),
+    };
+  }
+
+  async createAccountAction(input: { team: PolicyTeam; actor: PolicyActor }): Promise<string> {
+    if (!this.accountCapability) throw new Error("account capability is not configured");
+    const response = await this.request<{ version?: number; url?: string }>("/contract/v1/account/action", { version: 1, ...input });
+    if (response.version !== 1 || !response.url) throw new Error("commercial policy returned an invalid account action");
     return response.url;
   }
 
@@ -118,6 +154,14 @@ export class HTTPCommercialPolicy implements CommercialPolicy {
       clearTimeout(timer);
     }
   }
+}
+
+function isAccountState(value: unknown): value is AccountState {
+  return value === "trial" || value === "active" || value === "past_due" || value === "inactive";
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) >= 0;
 }
 
 export function policyMachineIdentity(machine: {

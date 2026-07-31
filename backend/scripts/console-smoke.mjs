@@ -169,7 +169,16 @@ async function startSeededBackend({ accountLabel } = {}) {
     async checkCreate() { return { allowed: true }; },
     async emitMachineFact() {},
     async reconcile() {},
-    async createAccountLink() { return `${appURL}/?account=opened`; },
+    async getAccountSummary() {
+      return {
+        state: "trial",
+        included_units_remaining: 37,
+        active_units: 3,
+        can_manage: true,
+        primary_action: "subscribe",
+      };
+    },
+    async createAccountAction() { return `${appURL}/account?checkout=opened`; },
   } : undefined;
   const authOptions = {
     baseURL: `${apiURL}/v1/auth`,
@@ -486,18 +495,31 @@ async function checkAccountCapability(page, { label, screenshotPrefix }) {
     mobile: { width: 390, height: 900 },
   })) {
     await page.setViewportSize(viewport);
-    await page.goto(appURL, { waitUntil: "domcontentloaded" });
+    await page.goto(label ? `${appURL}/account` : appURL, { waitUntil: "domcontentloaded" });
     await waitForConsole(page);
+    if (label) await page.waitForSelector(".account-status", { timeout: 10_000 });
     await page.waitForTimeout(300);
     await page.screenshot({ path: join(outDir, `${screenshotPrefix}-${viewportName}.png`), fullPage: true });
     facts[viewportName] = await page.evaluate(() => ({
-      accountAction: document.querySelector("nav[aria-label='Global'] button")?.textContent?.trim() || null,
-      allNavigation: [...document.querySelectorAll(".side-links a, .side-links button")].map((item) => item.textContent?.trim()),
+      accountAction: document.querySelector("nav[aria-label='Global'] a[href='/account']")?.textContent?.trim() || null,
+      allNavigation: [...document.querySelectorAll(".side-links a")].map((item) => item.textContent?.trim()),
+      title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
+      planStatus: document.querySelector(".account-state")?.textContent?.trim() || null,
+      includedUnits: document.querySelector(".account-metrics div:first-child strong")?.textContent?.trim() || null,
+      activeUnits: document.querySelector(".account-metrics div:last-child strong")?.textContent?.trim() || null,
+      primaryAction: document.querySelector(".account-actions .primary-button")?.textContent?.trim() || null,
       bodyScrollWidth: document.documentElement.scrollWidth,
       viewport: window.innerWidth,
     }));
     assert.equal(facts[viewportName].accountAction, label || null);
     assert.deepEqual(facts[viewportName].allNavigation, expectedNavigation);
+    if (label) {
+      assert.equal(facts[viewportName].title, "Account");
+      assert.equal(facts[viewportName].planStatus, "Included usage");
+      assert.equal(facts[viewportName].includedUnits, "37");
+      assert.equal(facts[viewportName].activeUnits, "3");
+      assert.equal(facts[viewportName].primaryAction, "Choose a plan");
+    }
     assert.ok(
       facts[viewportName].bodyScrollWidth <= facts[viewportName].viewport,
       `${screenshotPrefix} ${viewportName} overflows: ${facts[viewportName].bodyScrollWidth} > ${facts[viewportName].viewport}`,

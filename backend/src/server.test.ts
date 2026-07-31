@@ -1210,23 +1210,42 @@ test("self-hosted lifecycle mutations do not accumulate policy outbox entries", 
   assert.deepEqual(await store.listPolicyEvents(), []);
 });
 
-test("generic account capability returns an external link without exposing provider state", async () => {
+test("generic account capability returns a summary and action without exposing provider state", async () => {
   const commercialPolicy: CommercialPolicy = {
     lifecycleEventsEnabled: false,
     accountCapability: { label: "Plan" },
     async checkCreate() { return { allowed: true }; },
     async emitMachineFact() {},
     async reconcile() {},
-    async createAccountLink(input) { return `https://account.hosted.test/team/${input.team.id}`; },
+    async getAccountSummary(input) {
+      return {
+        state: "trial",
+        included_units_remaining: input.team.name.length,
+        active_units: 2,
+        can_manage: input.actor.can_manage,
+        primary_action: "subscribe",
+      };
+    },
+    async createAccountAction(input) { return `https://account.hosted.test/team/${input.team.id}`; },
   };
   const { app, token } = await createTestBackend("account@example.com", "password123", { commercialPolicy });
   const headers = { authorization: `Bearer ${token}` };
   const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
   assert.deepEqual(whoami.json().account, { label: "Plan" });
 
-  const link = await app.inject({ method: "POST", url: "/v1/account-link", headers, payload: {} });
-  assert.equal(link.statusCode, 200, link.body);
-  assert.match(link.json().url, /^https:\/\/account\.hosted\.test\/team\//);
+  const summary = await app.inject({ method: "GET", url: "/v1/account", headers });
+  assert.equal(summary.statusCode, 200, summary.body);
+  assert.deepEqual(summary.json(), {
+    state: "trial",
+    included_units_remaining: "account's Team".length,
+    active_units: 2,
+    can_manage: true,
+    primary_action: "subscribe",
+  });
+
+  const action = await app.inject({ method: "POST", url: "/v1/account/action", headers, payload: {} });
+  assert.equal(action.statusCode, 200, action.body);
+  assert.match(action.json().url, /^https:\/\/account\.hosted\.test\/team\//);
 });
 
 async function createTestBackend(

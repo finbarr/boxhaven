@@ -18,6 +18,7 @@ import { Route as AuthGithubRouteImport } from './routes/auth.github'
 import { Route as ConsoleTeamsRouteImport } from './routes/_console/teams'
 import { Route as ConsoleImagesRouteImport } from './routes/_console/images'
 import { Route as ConsoleDeviceRouteImport } from './routes/_console/device'
+import { Route as ConsoleAccountRouteImport } from './routes/_console/account'
 import { Route as ConsoleTeamIndexRouteImport } from './routes/_console/team.index'
 import { Route as ConsoleTeamTeamRouteImport } from './routes/_console/team.$team'
 import { Route as ConsoleBoxesNameRouteImport } from './routes/_console/boxes.$name'
@@ -66,6 +67,11 @@ const ConsoleDeviceRoute = ConsoleDeviceRouteImport.update({
   path: '/device',
   getParentRoute: () => ConsoleRouteRoute,
 } as any)
+const ConsoleAccountRoute = ConsoleAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => ConsoleRouteRoute,
+} as any)
 const ConsoleTeamIndexRoute = ConsoleTeamIndexRouteImport.update({
   id: '/team/',
   path: '/team/',
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/invite': typeof InviteRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/account': typeof ConsoleAccountRoute
   '/device': typeof ConsoleDeviceRoute
   '/images': typeof ConsoleImagesRoute
   '/teams': typeof ConsoleTeamsRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/invite': typeof InviteRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/account': typeof ConsoleAccountRoute
   '/device': typeof ConsoleDeviceRoute
   '/images': typeof ConsoleImagesRoute
   '/teams': typeof ConsoleTeamsRoute
@@ -114,6 +122,7 @@ export interface FileRoutesById {
   '/invite': typeof InviteRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/_console/account': typeof ConsoleAccountRoute
   '/_console/device': typeof ConsoleDeviceRoute
   '/_console/images': typeof ConsoleImagesRoute
   '/_console/teams': typeof ConsoleTeamsRoute
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/reset-password'
     | '/signup'
+    | '/account'
     | '/device'
     | '/images'
     | '/teams'
@@ -142,6 +152,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/reset-password'
     | '/signup'
+    | '/account'
     | '/device'
     | '/images'
     | '/teams'
@@ -156,6 +167,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/reset-password'
     | '/signup'
+    | '/_console/account'
     | '/_console/device'
     | '/_console/images'
     | '/_console/teams'
@@ -239,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleDeviceRouteImport
       parentRoute: typeof ConsoleRouteRoute
     }
+    '/_console/account': {
+      id: '/_console/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof ConsoleAccountRouteImport
+      parentRoute: typeof ConsoleRouteRoute
+    }
     '/_console/team/': {
       id: '/_console/team/'
       path: '/team'
@@ -264,6 +283,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface ConsoleRouteRouteChildren {
+  ConsoleAccountRoute: typeof ConsoleAccountRoute
   ConsoleDeviceRoute: typeof ConsoleDeviceRoute
   ConsoleImagesRoute: typeof ConsoleImagesRoute
   ConsoleTeamsRoute: typeof ConsoleTeamsRoute
@@ -274,6 +294,7 @@ interface ConsoleRouteRouteChildren {
 }
 
 const ConsoleRouteRouteChildren: ConsoleRouteRouteChildren = {
+  ConsoleAccountRoute: ConsoleAccountRoute,
   ConsoleDeviceRoute: ConsoleDeviceRoute,
   ConsoleImagesRoute: ConsoleImagesRoute,
   ConsoleTeamsRoute: ConsoleTeamsRoute,

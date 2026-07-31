@@ -21,6 +21,14 @@ export type WhoamiResponse = {
   account?: { label: string };
 };
 
+export type AccountSummary = {
+  state: "trial" | "active" | "past_due" | "inactive";
+  included_units_remaining: number;
+  active_units: number;
+  can_manage: boolean;
+  primary_action?: "subscribe" | "manage";
+};
+
 export type ProviderInfo = {
   name: string;
   label: string;

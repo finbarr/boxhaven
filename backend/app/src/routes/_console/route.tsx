@@ -33,7 +33,8 @@ function ConsoleLayout() {
   const onTeam = Boolean(matchRoute({ to: "/team" }) || matchRoute({ to: "/team/$team" }));
   const onTeams = Boolean(matchRoute({ to: "/teams" }));
   const onImages = Boolean(matchRoute({ to: "/images" }));
-  const activeSection: ConsoleSection = onTeam ? "team" : onTeams ? "teams" : onImages ? "images" : "boxes";
+  const onAccount = Boolean(matchRoute({ to: "/account" }));
+  const activeSection: ConsoleSection = onTeam ? "team" : onTeams ? "teams" : onImages ? "images" : onAccount ? "account" : "boxes";
   // Surfaced in the sign-in hint when someone deep-links to /device.
   const deviceUserCode = typeof search.user_code === "string" ? search.user_code : "";
   const switchTeam = useMutation({
@@ -56,14 +57,6 @@ function ConsoleLayout() {
       }
     },
   });
-  const accountLink = useMutation({
-    mutationFn: () => apiFetch<{ url: string }>("/v1/account-link", token, {
-      method: "POST",
-      body: { team: session.data?.team?.slug || session.data?.team?.id },
-    }),
-    onSuccess: ({ url }) => window.location.assign(url),
-  });
-
   function handleToken(nextToken: string) {
     localStorage.setItem(tokenKey, nextToken);
     setToken(nextToken);
@@ -131,13 +124,8 @@ function ConsoleLayout() {
         activeTeam={consoleValue.activeTeam}
         teamSwitching={switchTeam.isPending}
         teamSwitchError={switchTeam.error ? (switchTeam.error as Error).message : ""}
-        account={session.data?.account ? {
-          label: session.data.account.label,
-          pending: accountLink.isPending,
-          error: accountLink.error ? (accountLink.error as Error).message : "",
-        } : undefined}
+        account={session.data?.account}
         onTeamSwitch={handleTeamSwitch}
-        onAccount={() => accountLink.mutate()}
         onLogout={handleLogout}
       >
         <Outlet />

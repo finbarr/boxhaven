@@ -202,16 +202,16 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
   });
 
-  app.post<{ Body: { team?: string } }>("/v1/account-link", async (request, reply) => {
+  app.get<{ Querystring: { team?: string } }>("/v1/account", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
-    if (!commercialPolicy.accountCapability || !commercialPolicy.createAccountLink) {
+    if (!commercialPolicy.accountCapability || !commercialPolicy.getAccountSummary) {
       return reply.code(404).send({ id: "not_found", message: "account management is not configured" });
     }
-    const team = resolveTeamReference(auth, bodyString(request.body?.team), reply);
+    const team = resolveTeamReference(auth, bodyString(request.query?.team), reply);
     if (!team) return;
     try {
-      const url = await commercialPolicy.createAccountLink({
+      return await commercialPolicy.getAccountSummary({
         team: policyTeam(team),
         actor: {
           id: auth.userID,
@@ -219,9 +219,32 @@ export function createBackend(options: BackendOptions): FastifyInstance {
           can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
         },
       });
-      return { url };
     } catch (error) {
-      console.error(`commercial policy account link failed: ${(error as Error).message}`);
+      console.error(`commercial policy account summary failed: ${(error as Error).message}`);
+      return reply.code(503).send({ id: "account_unavailable", message: "Account management is temporarily unavailable." });
+    }
+  });
+
+  app.post<{ Body: { team?: string } }>("/v1/account/action", async (request, reply) => {
+    const auth = await requireAuth(options, request, reply);
+    if (!auth) return;
+    if (!commercialPolicy.accountCapability || !commercialPolicy.createAccountAction) {
+      return reply.code(404).send({ id: "not_found", message: "account management is not configured" });
+    }
+    const team = resolveTeamReference(auth, bodyString(request.body?.team), reply);
+    if (!team) return;
+    const actor = {
+      id: auth.userID,
+      email: auth.email,
+      can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
+    };
+    if (!actor.can_manage) {
+      return reply.code(403).send({ id: "forbidden", message: "Only team owners and admins can manage the plan." });
+    }
+    try {
+      return { url: await commercialPolicy.createAccountAction({ team: policyTeam(team), actor }) };
+    } catch (error) {
+      console.error(`commercial policy account action failed: ${(error as Error).message}`);
       return reply.code(503).send({ id: "account_unavailable", message: "Account management is temporarily unavailable." });
     }
   });

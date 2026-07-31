@@ -24,7 +24,7 @@ agents inside persistent sessions, and operate the backend.
 ## Security and operation
 
 - [Security model](/security): short-lived SSH certificates, the backend user CA, and forwarded credentials.
-- [External policy service](/operator-policy): optional create policy and account capability integration for operators.
+- [External policy service](/operator-policy): optional create policy and native account-page integration for operators.
 
 ## Source and license
 

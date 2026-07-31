@@ -13,7 +13,7 @@ Operators can connect a separate HTTP service through these settings:
 | `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS` | External request timeout, default `5000`. |
 | `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS` | Failed event and reconciliation retry delay, default `30000`. |
 | `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS` | Full reconciliation interval, default `300000`. |
-| `BOXHAVEN_ACCOUNT_LABEL` | Optional console label such as `Account` or `Plan`; empty hides the navigation. |
+| `BOXHAVEN_ACCOUNT_LABEL` | Optional native account-page navigation label such as `Account` or `Plan`; empty hides the navigation. |
 
 The URL and token must be set together. New box creates fail closed when a
 configured service is unavailable or returns an invalid decision. Listing,
@@ -49,10 +49,14 @@ Requests use JSON, `Authorization: Bearer <token>`, a `/contract/v1` path, and
   active machines as `{version: 1, generated_at, machines: [{team: {id, name,
   slug?}, machine: {id, name, tier}}]}`. Machine IDs use the same stable
   provider identity as lifecycle events; an absent machine is no longer active.
-- `POST /contract/v1/account-link` receives the current team and actor and
-  returns `{version: 1, url}` when the generic account capability is enabled.
+- `POST /contract/v1/account/summary` receives the current team and actor and
+  returns `{version: 1, state, included_units_remaining, active_units,
+  can_manage, primary_action?}`. `state` is `trial`, `active`, `past_due`, or
+  `inactive`; `primary_action` is `subscribe` or `manage`.
+- `POST /contract/v1/account/action` receives the current team and a managing
+  actor and returns `{version: 1, url}` for the configured provider action.
 
-The public backend stores only the generic pending policy-event payloads needed
-for durable delivery; it deliberately stores no provider-specific commercial
-state.
+The public backend renders the native account page from this generic summary
+and stores only the pending policy-event payloads needed for durable delivery.
+It deliberately stores no provider-specific commercial state.
 Use TLS, a long random token, and network controls between the two services.

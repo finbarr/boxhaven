@@ -937,6 +937,85 @@ a.secondary-button {
   min-width: 0;
 }
 
+.account-workspace {
+  max-width: 760px;
+}
+
+.account-panel {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.account-status,
+.account-actions {
+  padding: 18px;
+}
+
+.account-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.account-status > span,
+.account-metrics span {
+  color: #6a776f;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.account-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #2f6f5c;
+}
+
+.account-state::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.account-state-past_due,
+.account-state-inactive {
+  color: #9d3f30;
+}
+
+.account-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.account-metrics div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 22px 18px;
+}
+
+.account-metrics div + div {
+  border-left: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.account-metrics strong {
+  color: #24352f;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.account-actions {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
 .workspace-foot {
   display: grid;
   gap: 8px;
@@ -1269,6 +1348,15 @@ a.secondary-button {
 
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .account-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .account-metrics div + div {
+    border-top: 1px solid rgba(96, 75, 53, 0.12);
+    border-left: 0;
   }
 
   .drawer-panel,

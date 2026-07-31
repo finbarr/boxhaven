@@ -18,7 +18,17 @@ test("HTTP commercial policy uses authenticated version 1 contract calls", async
     if (request.url === "/contract/v1/entitlements/create") return response.end(JSON.stringify({ version: 1, allowed: true }));
     if (request.url === "/contract/v1/events") return response.end(JSON.stringify({ version: 1, accepted: true }));
     if (request.url === "/contract/v1/reconcile") return response.end(JSON.stringify({ version: 1, accepted: true }));
-    if (request.url === "/contract/v1/account-link") return response.end(JSON.stringify({ version: 1, url: "https://account.test/link" }));
+    if (request.url === "/contract/v1/account/summary") {
+      return response.end(JSON.stringify({
+        version: 1,
+        state: "trial",
+        included_units_remaining: 42,
+        active_units: 3,
+        can_manage: true,
+        primary_action: "subscribe",
+      }));
+    }
+    if (request.url === "/contract/v1/account/action") return response.end(JSON.stringify({ version: 1, url: "https://account.test/action" }));
     response.statusCode = 404;
     response.end("{}");
   });
@@ -45,12 +55,20 @@ test("HTTP commercial policy uses authenticated version 1 contract calls", async
       generated_at: "2026-07-11T00:05:00.000Z",
       machines: [{ team: input.team, machine: { id: "fake:stable-box", name: "box", tier: "small" } }],
     });
-    assert.equal(await policy.createAccountLink(input), "https://account.test/link");
+    assert.deepEqual(await policy.getAccountSummary(input), {
+      state: "trial",
+      included_units_remaining: 42,
+      active_units: 3,
+      can_manage: true,
+      primary_action: "subscribe",
+    });
+    assert.equal(await policy.createAccountAction(input), "https://account.test/action");
     assert.deepEqual(calls.map((call) => call.url), [
       "/contract/v1/entitlements/create",
       "/contract/v1/events",
       "/contract/v1/reconcile",
-      "/contract/v1/account-link",
+      "/contract/v1/account/summary",
+      "/contract/v1/account/action",
     ]);
     assert.ok(calls.every((call) => call.authorization === "Bearer shared-test"));
     assert.ok(calls.every((call) => call.body.version === 1));

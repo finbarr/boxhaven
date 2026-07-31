@@ -215,7 +215,8 @@ Routes:
 - `POST /v1/auth/device/deny`
 - `POST /v1/auth/device/token`
 - `GET /v1/auth/whoami`
-- `POST /v1/account-link`
+- `GET /v1/account`
+- `POST /v1/account/action`
 - `GET /v1/providers`
 - `GET /v1/preview/tls-check`
 - `GET /v1/preview/proxy/:hostname/*` for HTTP and WebSocket preview traffic
@@ -250,8 +251,10 @@ facts are no-ops. When configured, the backend calls:
   state update as the machine mutation, then retried until delivery succeeds.
 - `POST <policy-url>/contract/v1/reconcile` with the complete authoritative set
   of active machines at startup and periodically thereafter.
-- `POST <policy-url>/contract/v1/account-link` from the authenticated generic
-  `POST /v1/account-link` endpoint when `BOXHAVEN_ACCOUNT_LABEL` is set.
+- `POST <policy-url>/contract/v1/account/summary` from the authenticated generic
+  `GET /v1/account` endpoint when `BOXHAVEN_ACCOUNT_LABEL` is set.
+- `POST <policy-url>/contract/v1/account/action` from the authenticated generic
+  `POST /v1/account/action` endpoint for team owners and admins.
 
 All contract bodies contain `version: 1` and calls use the configured bearer
 token. A missing or invalid create decision returns `503 entitlement_unavailable`
@@ -263,7 +266,9 @@ when delivery succeeded but the local dequeue commit did not. The allow-all
 self-hosted policy does not create outbox entries. See
 [`docs/operator-policy.md`](../docs/operator-policy.md) for the payload contract.
 Reconciliation failures are logged and retried in the background and do not
-affect box operations.
+affect box operations. The public account surface contains only generic plan
+state and usage counts; provider-specific billing records stay behind the
+external policy boundary.
 
 Transactional email (enabled by setting `RESEND_API_KEY`) sends password
 reset links and team invitation links (`<app_url>/invite?id=<invitation-id>`)

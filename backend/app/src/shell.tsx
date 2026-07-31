@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Building2, ExternalLink, Layers, LogOut, Server, Users } from "lucide-react";
+import { Building2, CreditCard, Layers, LogOut, Server, Users } from "lucide-react";
 import { ReactNode } from "react";
 import { TeamInfo } from "./api";
 import logoURL from "./assets/boxhaven-logo.png";
@@ -10,21 +10,20 @@ export const termsURL = "https://boxhaven.dev/terms/";
 export const privacyURL = "https://boxhaven.dev/privacy/";
 export const isHostedService = typeof window !== "undefined" && window.location.hostname === "app.boxhaven.dev";
 
-export type ConsoleSection = "boxes" | "team" | "teams" | "images";
+export type ConsoleSection = "boxes" | "team" | "teams" | "images" | "account";
 
 // Authed console frame: a persistent left nav sidebar plus the workspace where
 // each section renders its full-width tables. activeSection drives the
 // highlighted nav item (so /boxes/$name keeps "Boxes" lit).
-export function ConsoleShell({ activeSection, email, teams = [], activeTeam, teamSwitching = false, teamSwitchError = "", account, onTeamSwitch, onAccount, onLogout, children }: {
+export function ConsoleShell({ activeSection, email, teams = [], activeTeam, teamSwitching = false, teamSwitchError = "", account, onTeamSwitch, onLogout, children }: {
   activeSection: ConsoleSection;
   email?: string;
   teams?: TeamInfo[];
   activeTeam?: TeamInfo;
   teamSwitching?: boolean;
   teamSwitchError?: string;
-  account?: { label: string; pending?: boolean; error?: string };
+  account?: { label: string };
   onTeamSwitch?: (teamId: string) => void;
-  onAccount?: () => void;
   onLogout: () => void;
   children: ReactNode;
 }) {
@@ -66,12 +65,11 @@ export function ConsoleShell({ activeSection, email, teams = [], activeTeam, tea
             Teams
           </Link>
           {account ? (
-            <button type="button" onClick={onAccount} disabled={account.pending}>
-              <ExternalLink size={17} />
-              {account.pending ? "Opening" : account.label}
-            </button>
+            <Link to="/account" className={activeSection === "account" ? "active" : undefined}>
+              <CreditCard size={17} />
+              {account.label}
+            </Link>
           ) : null}
-          {account?.error ? <p className="error side-account-error">{account.error}</p> : null}
         </nav>
         <div className="side-foot">
           <div className="side-account">
