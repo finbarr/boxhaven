@@ -101,8 +101,9 @@ hosted split:
 
 Enable DigitalOcean Droplet backups for machine-level recovery, then install the
 repo backup timer for application state recovery. The backend data backup uses
-SQLite's online backup command for `auth.sqlite` and includes `backend.json` plus
-Caddy data.
+SQLite's online backup command and requires `auth.sqlite`, `backend.json`, and
+the SSH CA keypair. It validates the copied state before atomically publishing
+the archive and includes Caddy data when present.
 
 Deploy the hosted production stack from the repository root:
 

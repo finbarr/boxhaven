@@ -178,8 +178,9 @@ sudo systemctl status boxhaven-backend-backup.timer --no-pager
 
 Backups are installed through `deploy/digitalocean/install-backups.sh` and
 write archives under `/opt/boxhaven/backups`. The backend data backup uses
-SQLite's online backup command for `auth.sqlite` and includes `backend.json`
-plus Caddy data.
+SQLite's online backup command and requires `auth.sqlite`, `backend.json`, and
+the SSH CA keypair. It validates the copied state before atomically publishing
+the archive and includes Caddy data when present.
 
 ## Golden Image Rotation
 

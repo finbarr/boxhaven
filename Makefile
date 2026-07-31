@@ -5,12 +5,12 @@ BINDIR ?= $(PREFIX)/bin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
-.PHONY: build test go-test backend-test backend-build lint smoke-remote smoke-remote-fast smoke-remote-full smoke-remote-two-box install uninstall clean
+.PHONY: build test go-test backend-test backup-test backend-build lint smoke-remote smoke-remote-fast smoke-remote-full smoke-remote-two-box install uninstall clean
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) $(CMD_DIR)
 
-test: go-test backend-test
+test: go-test backend-test backup-test
 
 go-test:
 	go test -v ./...
@@ -18,6 +18,9 @@ go-test:
 backend-test:
 	npm --prefix backend ci
 	npm --prefix backend test
+
+backup-test:
+	deploy/digitalocean/backup-backend.test.sh
 
 backend-build:
 	npm --prefix backend ci
