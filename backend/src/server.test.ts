@@ -654,6 +654,23 @@ test("backend login and logout are handled by Better Auth", async () => {
   assert.equal(afterLogout.statusCode, 401);
 });
 
+test("backend sessions remain valid for 30 days", async () => {
+  const beforeSignup = Date.now();
+  const { app, token } = await createTestBackend("session-lifetime@example.com");
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/auth/get-session",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+
+  const expiresAt = Date.parse(response.json().session.expiresAt);
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  assert.ok(expiresAt >= beforeSignup + thirtyDaysMs - 5_000);
+  assert.ok(expiresAt <= Date.now() + thirtyDaysMs + 5_000);
+});
+
 test("backend supports browser-approved CLI device login", async () => {
   const { app, token } = await createTestBackend("cli@example.com");
 

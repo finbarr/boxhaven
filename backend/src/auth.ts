@@ -6,6 +6,9 @@ import { bearer, deviceAuthorization, organization } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { EmailService } from "./email.js";
 
+const sessionExpiresInSeconds = 60 * 60 * 24 * 30;
+const sessionUpdateAgeSeconds = 60 * 60 * 24;
+
 export type BackendAuthOptions = {
   baseURL: string;
   databasePath: string;
@@ -37,6 +40,10 @@ function authConfig(options: BackendAuthOptions) {
     baseURL: options.baseURL,
     secret: options.secret,
     trustedOrigins: [...trustedOrigins],
+    session: {
+      expiresIn: sessionExpiresInSeconds,
+      updateAge: sessionUpdateAgeSeconds,
+    },
     ...(options.github ? { socialProviders: { github: options.github } } : {}),
     account: {
       accountLinking: {
