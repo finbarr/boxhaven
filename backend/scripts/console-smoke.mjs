@@ -30,8 +30,9 @@ let vite;
 let browser;
 
 try {
-  const { app, token, deviceUserCode } = await startSeededBackend();
-  backend = app;
+  const disabledAccountBackend = await startSeededBackend();
+  const { token, deviceUserCode } = disabledAccountBackend;
+  backend = disabledAccountBackend.app;
   vite = await startViteApp();
   browser = await chromium.launch({
     executablePath: chromeExecutable,
@@ -55,8 +56,28 @@ try {
   const teamsFacts = await checkTeamsPage(page);
   const imagesFacts = await checkImagesPage(page);
   const boxCreateFacts = await checkBoxCreateDrawer(page);
-  const accountFacts = await checkAccountCapability(page);
   const mobileFacts = await checkMobileTeams(page);
+  const disabledAccountFacts = await checkAccountCapability(page, {
+    screenshotPrefix: "account-disabled",
+  });
+  assert.equal(disabledAccountBackend.whoami.account, undefined);
+  await context.close();
+
+  await backend.close();
+  backend = undefined;
+  const enabledAccountBackend = await startSeededBackend({ accountLabel: "Plan" });
+  backend = enabledAccountBackend.app;
+  assert.deepEqual(enabledAccountBackend.whoami.account, { label: "Plan" });
+  const enabledAccountContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+  await enabledAccountContext.addInitScript((value) => {
+    localStorage.setItem("boxhaven.backend.token", value);
+  }, enabledAccountBackend.token);
+  const enabledAccountPage = await enabledAccountContext.newPage();
+  const enabledAccountFacts = await checkAccountCapability(enabledAccountPage, {
+    label: "Plan",
+    screenshotPrefix: "account-enabled",
+  });
+  await enabledAccountContext.close();
 
   console.log(JSON.stringify({
     ok: true,
@@ -74,6 +95,10 @@ try {
       images: join(outDir, "images.png"),
       boxCreate: join(outDir, "box-create.png"),
       mobileTeams: join(outDir, "mobile-teams.png"),
+      accountDisabledDesktop: join(outDir, "account-disabled-desktop.png"),
+      accountDisabledMobile: join(outDir, "account-disabled-mobile.png"),
+      accountEnabledDesktop: join(outDir, "account-enabled-desktop.png"),
+      accountEnabledMobile: join(outDir, "account-enabled-mobile.png"),
     },
     accessFacts,
     deviceFacts,
@@ -82,8 +107,17 @@ try {
     teamsFacts,
     imagesFacts,
     boxCreateFacts,
-    accountFacts,
     mobileFacts,
+    accountCapabilityFacts: {
+      disabled: {
+        whoamiAccount: disabledAccountBackend.whoami.account || null,
+        ...disabledAccountFacts,
+      },
+      enabled: {
+        whoamiAccount: enabledAccountBackend.whoami.account,
+        ...enabledAccountFacts,
+      },
+    },
   }, null, 2));
 } finally {
   await browser?.close().catch(() => undefined);
@@ -91,7 +125,7 @@ try {
   await backend?.close().catch(() => undefined);
 }
 
-async function startSeededBackend() {
+async function startSeededBackend({ accountLabel } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "boxhaven-console-smoke-"));
   const fakeImages = [{
     id: "img-acme",
@@ -129,14 +163,14 @@ async function startSeededBackend() {
   const providers = new ProviderRegistry([fakeProvider], fakeProvider.name);
   const store = new StateStore(join(dir, "state.json"), providers.defaultName);
   const sshCA = new SSHCertificateAuthority(join(dir, "ssh_ca_ed25519"));
-  const commercialPolicy = {
+  const commercialPolicy = accountLabel ? {
     lifecycleEventsEnabled: false,
-    accountCapability: { label: "Account" },
+    accountCapability: { label: accountLabel },
     async checkCreate() { return { allowed: true }; },
     async emitMachineFact() {},
     async reconcile() {},
     async createAccountLink() { return `${appURL}/?account=opened`; },
-  };
+  } : undefined;
   const authOptions = {
     baseURL: `${apiURL}/v1/auth`,
     databasePath: join(dir, "auth.sqlite"),
@@ -153,7 +187,7 @@ async function startSeededBackend() {
     store,
     sshCA,
     adminEmails: ["admin@example.com"],
-    commercialPolicy,
+    ...(commercialPolicy ? { commercialPolicy } : {}),
     apiPublicURL: apiURL,
     appPublicURL: appURL,
     corsOrigins: [appURL],
@@ -173,6 +207,8 @@ async function startSeededBackend() {
     payload: { organizationId: acme.id },
   });
   assert.equal(active.statusCode, 200, active.body);
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  assert.equal(whoami.statusCode, 200, whoami.body);
   await store.putImage({
     id: "img-acme",
     name: "boxhaven-remote-acme-tools",
@@ -194,7 +230,7 @@ async function startSeededBackend() {
   assert.equal(device.statusCode, 200, device.body);
   assert.equal(typeof device.json().user_code, "string");
   await app.listen({ host: "127.0.0.1", port: apiPort });
-  return { app, token, deviceUserCode: device.json().user_code };
+  return { app, token, deviceUserCode: device.json().user_code, whoami: whoami.json() };
 }
 
 async function signUp(app, email, password = "password123") {
@@ -442,16 +478,31 @@ async function checkBoxCreateDrawer(page) {
   return facts;
 }
 
-async function checkAccountCapability(page) {
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(appURL, { waitUntil: "domcontentloaded" });
-  await waitForConsole(page);
-  const facts = await page.evaluate(() => ({
-    accountAction: document.querySelector("nav[aria-label='Global'] button")?.textContent?.trim(),
-    allNavigation: [...document.querySelectorAll(".side-links a, .side-links button")].map((item) => item.textContent?.trim()),
-  }));
-  assert.equal(facts.accountAction, "Account");
-  assert.deepEqual(facts.allNavigation, ["Boxes", "Members", "Images", "Teams", "Account"]);
+async function checkAccountCapability(page, { label, screenshotPrefix }) {
+  const expectedNavigation = ["Boxes", "Members", "Images", "Teams", ...(label ? [label] : [])];
+  const facts = {};
+  for (const [viewportName, viewport] of Object.entries({
+    desktop: { width: 1440, height: 1000 },
+    mobile: { width: 390, height: 900 },
+  })) {
+    await page.setViewportSize(viewport);
+    await page.goto(appURL, { waitUntil: "domcontentloaded" });
+    await waitForConsole(page);
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: join(outDir, `${screenshotPrefix}-${viewportName}.png`), fullPage: true });
+    facts[viewportName] = await page.evaluate(() => ({
+      accountAction: document.querySelector("nav[aria-label='Global'] button")?.textContent?.trim() || null,
+      allNavigation: [...document.querySelectorAll(".side-links a, .side-links button")].map((item) => item.textContent?.trim()),
+      bodyScrollWidth: document.documentElement.scrollWidth,
+      viewport: window.innerWidth,
+    }));
+    assert.equal(facts[viewportName].accountAction, label || null);
+    assert.deepEqual(facts[viewportName].allNavigation, expectedNavigation);
+    assert.ok(
+      facts[viewportName].bodyScrollWidth <= facts[viewportName].viewport,
+      `${screenshotPrefix} ${viewportName} overflows: ${facts[viewportName].bodyScrollWidth} > ${facts[viewportName].viewport}`,
+    );
+  }
   return facts;
 }
 
