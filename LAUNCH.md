@@ -1,73 +1,165 @@
-# Public Launch Checklist
+# Public Paid Launch Gates
 
-Working checklist for taking the hosted BoxHaven at `app.boxhaven.dev` to a
-public, paid launch. Items marked **(you)** need Finbarr; everything else is
-done or scripted.
+This document tracks the remaining work required before opening hosted BoxHaven
+at `app.boxhaven.dev` to unrestricted public signups. A gate is complete only
+when its production behavior has been verified. Code, CI, health endpoints, or
+configured credentials alone are not sufficient evidence.
 
-## Done
+Last audited: 2026-07-31.
 
-- [x] Multi-provider backend (DigitalOcean live; Hetzner ready behind
-  `HCLOUD_TOKEN`), teams with shareable invites, admin-managed golden images.
-- [x] Team-centric box ownership with membership-validated sessions.
-- [x] Per-user box cap (`BOXHAVEN_MAX_MACHINES_PER_USER`) as the hard abuse
-  stop; auth rate limiting via Better Auth production defaults.
-- [x] CI (test/lint/build), tag-triggered release workflow with checksums,
-  `SECURITY.md`, credential-free local smoke, production lifecycle smoke that
-  executes the agents (not just `command -v`).
-- [x] Golden image verified end to end: claude and codex run as the box user,
-  codex pre-trusts the project path, incremental rebuilds actually rebuild.
-- [x] Daily state backups on the droplet (systemd timer, verified armed).
-- [x] Installer script, Homebrew tap formula, VitePress docs site, and
-  transactional email plumbing — all landed in this release; see sections
-  below for the pieces only you can finish.
+## Verified production state
 
-## Needs you: accounts and keys
+- [x] The public application and private hosted services are deployed from the
+  intended commits, and CI is green in both repositories.
+- [x] `boxhaven.dev`, `app.boxhaven.dev`, `api.boxhaven.dev`,
+  `account.boxhaven.dev`, `admin.boxhaven.dev`, and `docs.boxhaven.dev` resolve
+  and their HTTPS health checks pass where applicable.
+- [x] GitHub OAuth, Resend transactional email, live Stripe Checkout, the live
+  Stripe webhook, the native account page, and the admin console are enabled.
+- [x] Production uses a restricted live Stripe key rather than an unrestricted
+  secret key.
+- [x] DigitalOcean backups are enabled. The daily application archive includes
+  public backend state, shared authentication, hosted billing and admin state,
+  Caddy state, and the SSH CA keypair.
+- [x] DigitalOcean allows 100 droplets, leaving adequate initial quota
+  headroom.
+- [x] A new production box was created from the active image and passed project
+  sync, plain SSH, SCP, HTTPS preview, a real GitHub push and branch deletion,
+  and an actual `gpt-5.6-sol` Codex invocation. The disposable box and team were
+  destroyed afterward.
+- [x] The Terms of Service and Privacy Policy are live, linked during signup,
+  and explicitly accepted for hosted accounts.
 
-- [x] **Resend**: `mail.boxhaven.dev` verified; production sends from
-  `BoxHaven <hello@mail.boxhaven.dev>` (password reset and invitation emails
-  deliver to all users).
-- [x] **DNS**: `docs.boxhaven.dev` live with enforced HTTPS.
-- [ ] **(you) GitHub sign-in**: create a GitHub OAuth App (Settings →
-  Developer settings → OAuth Apps) with homepage `https://app.boxhaven.dev`
-  and callback URL `https://api.boxhaven.dev/v1/auth/callback/github`, then
-  set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in
-  `deploy/digitalocean/.env.production` and redeploy. The "Continue with
-  GitHub" button appears automatically once they are set; accounts with a
-  matching verified email link to the existing account.
+## 1. Control trial and infrastructure abuse
 
-## Needs you: launch decisions
+This is the first launch gate. The hosted policy currently grants 50 included
+units to every new team. A user can create additional teams to obtain additional
+credits. Email verification is disabled, and the production value of
+`BOXHAVEN_MAX_MACHINES_PER_USER` is unset.
 
-- [x] **Terms of Service + Privacy Policy.** Live at
-  `https://boxhaven.dev/terms/` and `https://boxhaven.dev/privacy/`; linked
-  from the marketing site and hosted console, with explicit acceptance on
-  account creation. Have counsel review before a broad paid launch.
-- [ ] **(you) Support channel.** `support@boxhaven.dev` forwarding to your
-  inbox, mentioned in docs and the console footer.
+- [ ] Grant included usage once per verified user or other durable billing
+  identity, not once per newly created team.
+- [ ] Require a payment method before the first hosted machine is provisioned.
+  Included units should still be consumed before metered charges begin.
+- [ ] Require email verification for password signups. GitHub sign-in may rely
+  on GitHub's verified email assertion.
+- [ ] Set `BOXHAVEN_MAX_MACHINES_PER_USER=5` in production for the initial
+  launch. Raise it after observing real usage and cost.
+- [ ] Verify that creating more teams cannot obtain more included usage and
+  that the machine cap applies across all of a user's teams.
 
-## Strongly recommended before announcing
+## 2. Make deletion billing-safe
 
-- [ ] Offsite backups: the daily archives live on the droplet itself. Ship
-  them to DO Spaces or any S3 bucket (one `s3cmd put` line in
-  `deploy/digitalocean/backup-backend.sh`); a dead droplet must not take the
-  backups with it. Run one restore drill.
-- [ ] Uptime monitoring on `https://api.boxhaven.dev/healthz` and
-  `https://app.boxhaven.dev/healthz` (UptimeRobot/healthchecks.io — five
-  minutes to set up) plus DigitalOcean droplet alerts (CPU/disk).
-- [ ] Account deletion path: Better Auth supports `deleteUser`; v1 can be a
-  documented support-email flow, but decide before collecting payments.
-- [ ] Provider quota headroom: confirm the DO account's droplet limit is
-  comfortably above expected box count; same for Hetzner if enabled.
-- [ ] Turn on email verification for new signups once Resend is configured
-  (`requireEmailVerification` in `backend/src/auth.ts`) — also unblocks
-  upgrading better-auth past 1.6.x (see the pin note in backend/README.md).
-- [ ] Cut `v0.1.0` (`git tag v0.1.0 && git push --tags`), confirm the release
-  workflow publishes binaries, and fill the Homebrew formula checksums
-  (`packaging/homebrew/README.md` has the procedure).
+The console currently sends Better Auth's organization-delete request directly.
+It does not first prove that the team has no active machines or subscription.
+Deleting such a team can orphan provider resources or recurring billing.
 
-## Nice to have, not blocking
+- [ ] Reject team deletion while the team owns any active machine.
+- [ ] Reject or coordinate team deletion while the team has an active or
+  recoverable Stripe subscription.
+- [ ] Define one deletion workflow that destroys machines, cancels billing,
+  records the administrative action, and only then removes team data.
+- [ ] Keep account deletion as a verified support request for launch, and
+  document the procedure and retention behavior for the operator.
+- [ ] Exercise the complete deletion workflow against a disposable production
+  account, subscription, team, and machine.
 
-- [ ] Error tracking (Sentry) in the backend.
-- [ ] Status page.
-- [ ] Analytics on the docs/landing (Plausible or similar).
-- [ ] Per-team access controls beyond owner/admin/member roles.
-- [ ] `apt`/distro packages — the install script and brew cover launch.
+## 3. Publish pricing and payment policy
+
+The live marketing site has no pricing page. The account page shows units but
+does not define their price, tier weights, rounding, trial expiry, or card
+requirements.
+
+- [ ] Publish the launch price before signup and beside the account action:
+  `$0.10` per unit, with small at 1 unit/hour, medium at 2 units/hour, and large
+  at 4 units/hour.
+- [ ] State that usage is measured in started machine-hours and that 50
+  included units expire after 14 days.
+- [ ] State when a card is required, when metered charges begin, how to cancel,
+  and what happens to machines after cancellation.
+- [ ] Change the `past_due` policy to block new machine creation immediately.
+  Define a short operator-managed grace period for existing machines so unpaid
+  infrastructure cannot run indefinitely.
+- [ ] Verify the published wording against a real live Checkout Session and
+  Customer Portal session.
+
+## 4. Publish the current CLI
+
+The latest GitHub release and Homebrew formula are still `v0.1.0`, while the
+deployed product and `master` contain substantial newer CLI behavior.
+
+- [ ] Finish the launch-blocking changes above and write a versioned changelog
+  section.
+- [ ] Tag the next release, expected to be `v0.2.0`, and verify that GitHub
+  publishes all four platform archives plus `SHA256SUMS`.
+- [ ] Update `finbarr/homebrew-tap` using the procedure in
+  [packaging/homebrew/README.md](packaging/homebrew/README.md).
+- [ ] On a clean machine, test both `install.sh` and Homebrew, then run login,
+  create, agent start, disconnect, SSH/SCP, reconnect, and destroy.
+
+## 5. Add detection and prove recovery
+
+DigitalOcean machine backups and complete daily application archives are an
+acceptable initial backup baseline. They are not proven recoverable until a
+restore succeeds. DigitalOcean currently has no monitoring alert policies.
+
+- [ ] Add external uptime checks for `api.boxhaven.dev`, `app.boxhaven.dev`,
+  and `account.boxhaven.dev`.
+- [ ] Add DigitalOcean CPU and disk alerts for the production control-plane
+  droplet and route them to an inbox that is actively monitored.
+- [ ] Restore the latest production archive into a disposable host. Verify
+  database integrity, user login, hosted account state, and SSH certificate
+  issuance before destroying it.
+- [ ] Record the restore command and expected validation output in the operator
+  documentation.
+- [ ] After launch, copy application archives to storage outside the production
+  droplet. Storage outside the DigitalOcean account is preferred but is not a
+  blocker for the initial limited beta.
+
+## 6. Complete owner-operated launch checks
+
+These checks require access to business, payment, email, or legal accounts and
+cannot be established by repository tests.
+
+- [ ] In Stripe, confirm that the Default Alive LLC account and payouts are
+  fully activated and that the bank account, statement descriptor, customer
+  support details, and failed-payment notifications are correct.
+- [ ] Confirm that Customer Portal permits payment-method updates and
+  cancellation as described by the Terms.
+- [ ] Decide the sales-tax approach with an accountant. Stripe automatic tax is
+  currently disabled; configure the business address, product tax code,
+  registrations, and Checkout behavior before collecting tax.
+- [ ] Send test messages to `support@boxhaven.dev`, `legal@boxhaven.dev`, and
+  `security@boxhaven.dev` and confirm they arrive in the monitored inbox.
+- [ ] Add `support@boxhaven.dev` to the docs and console footer.
+- [ ] Have counsel review the Terms, Privacy Policy, arbitration language, and
+  support-based deletion procedure before a broad paid announcement.
+- [ ] Confirm Default Alive LLC's initial Statement of Information, tax
+  calendar, business bank account, and bookkeeping are in place.
+
+## Final launch proof
+
+Run this only after every gate above is complete.
+
+- [ ] Run all public and private CI suites from clean worktrees.
+- [ ] Run the canonical combined production deployment. Do not deploy the
+  public Compose stack by itself because that can orphan the private hosted
+  services.
+- [ ] Verify the deployed immutable commits, live Stripe price and webhook,
+  account and admin authentication boundaries, backup timer, and monitoring.
+- [ ] Create a new paid production account through the public UI, provision a
+  box, run the reusable production smoke, inspect metered usage, cancel through
+  Customer Portal, and complete the deletion workflow.
+- [ ] Confirm the box, provider resources, Stripe objects, temporary Git branch,
+  account, and test team are cleaned up.
+
+## Explicitly deferred
+
+These are useful follow-ups but must not delay the initial launch:
+
+- Warm pools. Current production provisioning is under one minute; collect
+  real latency and abandonment data before adding idle infrastructure.
+- Persistent home-directory synchronization between boxes.
+- Additional machine sizes beyond small, medium, and large.
+- Sentry, a public status page, product analytics, distro packages, and more
+  granular roles beyond owner, admin, and member.
