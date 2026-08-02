@@ -18,7 +18,7 @@ Options:
   --branch NAME    Branch to fast-forward on the remote checkout.
                    Default: BOXHAVEN_DEPLOY_BRANCH or master.
   --compose-overlay FILE
-                   Additional Docker Compose file for externally managed services.
+                   Additional Docker Compose file for distribution overrides.
   --compose-overlay-env-file FILE
                    Additional Compose env file used with the overlay.
   -h, --help       Show this help.
@@ -42,27 +42,6 @@ EOF
 die() {
   echo "deploy-production: $*" >&2
   exit 1
-}
-
-env_file_value() {
-  local key="$1"
-  local file="$2"
-  awk -v key="$key" '
-    {
-      line = $0
-      sub(/\r$/, "", line)
-    }
-    line ~ "^[[:space:]]*(export[[:space:]]+)?" key "[[:space:]]*=" {
-      sub("^[[:space:]]*(export[[:space:]]+)?" key "[[:space:]]*=[[:space:]]*", "", line)
-      sub(/[[:space:]]+$/, "", line)
-      if ((substr(line, 1, 1) == "\"" && substr(line, length(line), 1) == "\"") ||
-          (substr(line, 1, 1) == "\047" && substr(line, length(line), 1) == "\047")) {
-        line = substr(line, 2, length(line) - 2)
-      }
-      value = line
-    }
-    END { print value }
-  ' "$file"
 }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -215,14 +194,6 @@ fi
 [ -f "$env_file" ] || die "missing ${env_file}; copy deploy/digitalocean/env.production.example and fill in production secrets"
 [ -z "$compose_overlay_file" ] || [ -f "$compose_overlay_file" ] || die "missing overlay Compose file ${compose_overlay_file}"
 [ -z "$compose_overlay_env_file" ] || [ -f "$compose_overlay_env_file" ] || die "missing overlay env file ${compose_overlay_env_file}"
-
-configured_policy_url="${BOXHAVEN_COMMERCIAL_POLICY_URL:-}"
-if [ -z "$configured_policy_url" ]; then
-  configured_policy_url="$(env_file_value BOXHAVEN_COMMERCIAL_POLICY_URL "$env_file")"
-fi
-if [ -n "$configured_policy_url" ] && [ -z "$compose_overlay_file" ]; then
-  die "BOXHAVEN_COMMERCIAL_POLICY_URL is configured but no Compose overlay was supplied; refusing to remove the external policy service"
-fi
 
 command -v docker >/dev/null 2>&1 || die "docker is required"
 command -v curl >/dev/null 2>&1 || die "curl is required"

@@ -125,8 +125,8 @@ forking the open-source console.
 
 ## Production DigitalOcean Deployment
 
-The repository includes a production bundle in `deploy/digitalocean/` for the
-hosted split:
+The repository includes a production bundle in `deploy/digitalocean/` for a
+self-hosted installation:
 
 - `app.boxhaven.dev` for the browser console/auth app
 - `api.boxhaven.dev` for API and Better Auth routes
@@ -157,13 +157,10 @@ endpoints. It forwards your SSH agent so the Droplet can fetch the private
 GitHub repo without storing a GitHub token. On the Droplet itself, use
 `npm run deploy:production:local`.
 
-When `BOXHAVEN_COMMERCIAL_POLICY_URL` points at a service in the same Compose
-project, pass its additional Compose file through
+Distributions can pass additional build and deployment wiring through
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` or `--compose-overlay`, plus an
 optional `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE` or
-`--compose-overlay-env-file`. The canonical deploy refuses to invoke Compose
-with a configured policy URL and no overlay, so `--remove-orphans` cannot
-remove that service.
+`--compose-overlay-env-file`.
 
 Then sign up or sign in from another shell. The CLI prints a browser URL, tries
 to open it, and waits for the web app to grant access:
@@ -202,12 +199,8 @@ Environment:
 - `HETZNER_SERVER_TYPE`: default server type for creates without an explicit tier, default `cpx22`. Tiers map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large).
 - `HETZNER_IMAGE`: Hetzner image fallback, default `ubuntu-24.04`.
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
-- `BOXHAVEN_COMMERCIAL_POLICY_URL`: optional external policy service base URL. Unset uses the self-hosted allow-all implementation.
-- `BOXHAVEN_COMMERCIAL_POLICY_TOKEN`: shared bearer credential for the external policy service; must be set with the URL.
-- `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS`: external policy request timeout, default `5000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event and reconciliation retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: full active-machine reconciliation interval, default `300000`.
-- `BOXHAVEN_ACCOUNT_LABEL`: optional generic console action label such as `Account` or `Plan`; empty hides it.
 - `RESEND_API_KEY`: Resend API key; setting it enables password reset and team invitation emails.
 - `BOXHAVEN_EMAIL_FROM`: From address for transactional email, default `BoxHaven <noreply@boxhaven.dev>`.
 - `BOXHAVEN_RESEND_API_URL`: Resend API base URL override for tests.
@@ -278,34 +271,19 @@ Routes:
 `team` is the session's active team (`{id, name, slug}`, or `null` before the
 default team exists) and `teams` lists every team the user belongs to.
 
-The optional commercial policy boundary is vendor-neutral and versioned. With
-no policy URL and token, `POST /v1/machines` is allowed normally and lifecycle
-facts are no-ops. When configured, the backend calls:
-
-- `POST <policy-url>/contract/v1/entitlements/create` before provisioning.
-- `POST <policy-url>/contract/v1/events` for creates, moves, and destroys. The
-  complete versioned payload is committed to a durable local outbox in the same
-  state update as the machine mutation, then retried until delivery succeeds.
-- `POST <policy-url>/contract/v1/reconcile` with the complete authoritative set
-  of active machines at startup and periodically thereafter.
-- `POST <policy-url>/contract/v1/account/summary` from the authenticated generic
-  `GET /v1/account` endpoint when `BOXHAVEN_ACCOUNT_LABEL` is set.
-- `POST <policy-url>/contract/v1/account/action` from the authenticated generic
-  `POST /v1/account/action` endpoint for team owners and admins.
-
-All contract bodies contain `version: 1` and calls use the configured bearer
-token. A missing or invalid create decision returns `503 entitlement_unavailable`
+The open-source entrypoint uses an in-process allow-all commercial policy, so
+`POST /v1/machines` is allowed normally and lifecycle facts are no-ops. A
+distribution can supply a different policy through a build-time
+`BackendModule`. A missing or invalid create decision returns `503 entitlement_unavailable`
 without provisioning. A denied decision returns `403 entitlement_denied`.
 Existing box list, connect, run, sync, move, and destroy operations do not wait
-for the policy service. Lifecycle delivery failures are logged and remain
+for policy delivery. Lifecycle delivery failures are logged and remain
 queued across backend restarts. Stable event IDs make retries idempotent, even
 when delivery succeeded but the local dequeue commit did not. The allow-all
 self-hosted policy does not create outbox entries. See
 [`docs/operator-policy.md`](../docs/operator-policy.md) for the payload contract.
 Reconciliation failures are logged and retried in the background and do not
-affect box operations. The public account surface contains only generic plan
-state and usage counts; provider-specific billing records stay behind the
-external policy boundary.
+affect box operations.
 
 Transactional email (enabled by setting `RESEND_API_KEY`) sends password
 reset links and team invitation links (`<app_url>/invite?id=<invitation-id>`)

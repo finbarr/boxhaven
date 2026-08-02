@@ -82,7 +82,7 @@ Docker Compose deploy on the Droplet, and check
 `https://api.boxhaven.dev/healthz`, `https://app.boxhaven.dev/healthz`, and
 `https://docs.boxhaven.dev/`. They do not rebuild the remote VM image.
 
-If an external policy service is part of the deployment, supply its generic
+If a distribution changes the production build or service wiring, supply its
 Compose overlay and optional overlay env file on every app or runtime deploy:
 
 ```bash
@@ -94,13 +94,8 @@ npm run deploy:app
 The equivalent flags are `--compose-overlay FILE` and
 `--compose-overlay-env-file FILE` (after `--` when invoked through npm). Remote
 deploy paths refer to files on the remote checkout. The deploy combines both
-Compose files for `up --remove-orphans`, Caddy recreation, and verification so
-overlay services are preserved. Keep `BOXHAVEN_COMMERCIAL_POLICY_URL` in the
-primary production env after activating an external service, even if the
-overlay supplies its secret token. This URL is a durable marker: running the
-public deploy later without the overlay fails before Docker Compose can remove
-the external service. With no policy URL or overlay, the normal
-public/self-hosted deployment is unchanged.
+Compose files for `up --remove-orphans`, Caddy recreation, and verification.
+With no overlay, the normal public self-hosted deployment is unchanged.
 
 After changing the VM runtime or image-builder code, explicitly rebuild and
 publish the remote VM image:

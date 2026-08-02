@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { createBackendAuth, migrateBackendAuth } from "./auth.js";
 import { emailServiceFromEnv } from "./email.js";
 import type { BackendModule } from "./module.js";
-import { commercialPolicyFromEnv } from "./policy.js";
 import { providerRegistryFromEnv } from "./providers.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
@@ -35,10 +34,6 @@ export async function startBackendFromEnv(runtime: BackendRuntimeOptions = {}) {
   const github = process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
     ? { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET }
     : undefined;
-  const externalPolicyConfigured = !!(
-    process.env.BOXHAVEN_COMMERCIAL_POLICY_URL?.trim()
-    || process.env.BOXHAVEN_COMMERCIAL_POLICY_TOKEN?.trim()
-  );
   const authOptions = {
     baseURL: authBaseURL,
     databasePath,
@@ -58,7 +53,6 @@ export async function startBackendFromEnv(runtime: BackendRuntimeOptions = {}) {
     sshCA,
     adminEmails: splitList(process.env.BOXHAVEN_ADMIN_EMAILS),
     maxMachinesPerUser: Number(process.env.BOXHAVEN_MAX_MACHINES_PER_USER || 0) || undefined,
-    commercialPolicy: externalPolicyConfigured ? commercialPolicyFromEnv() : undefined,
     policyEventRetryMs: Number(process.env.BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS || 30_000),
     policyReconcileIntervalMs: Number(process.env.BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS || 5 * 60_000),
     appDir: runtime.appDir || process.env.BOXHAVEN_BACKEND_APP_DIR || defaultAppDir,

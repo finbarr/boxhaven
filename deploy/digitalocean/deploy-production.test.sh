@@ -41,17 +41,14 @@ EOF
 chmod +x "${temp_dir}/bin/docker" "${temp_dir}/bin/curl" "${temp_dir}/bin/ssh"
 
 public_env="${temp_dir}/public.env"
-protected_env="${temp_dir}/protected.env"
 overlay_env="${temp_dir}/overlay.env"
 overlay_file="${temp_dir}/compose.overlay.yml"
-printf 'BOXHAVEN_COMMERCIAL_POLICY_URL=\n' > "$public_env"
-printf 'BOXHAVEN_COMMERCIAL_POLICY_URL="http://hosted:8790"\n' > "$protected_env"
+printf 'BOXHAVEN_APP_HOST=app.test\n' > "$public_env"
 printf 'POLICY_IMAGE=example/policy:test\n' > "$overlay_env"
 printf 'services:\n  policy:\n    image: ${POLICY_IMAGE}\n' > "$overlay_file"
 
 run_deploy() {
   env \
-    -u BOXHAVEN_COMMERCIAL_POLICY_URL \
     -u BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE \
     -u BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE \
     PATH="${temp_dir}/bin:${PATH}" \
@@ -71,7 +68,7 @@ assert_contains "$(cat "$docker_log")" "compose --env-file ${public_env} -f depl
 assert_contains "$(cat "$curl_log")" "--retry 20 --retry-delay 1 --retry-all-errors --connect-timeout 5 --max-time 10 -fsS http://api.test/healthz"
 
 : > "$docker_log"
-run_deploy "$protected_env" --local \
+run_deploy "$public_env" --local \
   --compose-overlay "$overlay_file" \
   --compose-overlay-env-file "$overlay_env" >/dev/null
 assert_contains "$(cat "$docker_log")" "--env-file ${overlay_env} -f ${overlay_file} build"
@@ -90,15 +87,7 @@ assert_contains "$(cat "$docker_log")" "stop backend"
 assert_contains "$(cat "$docker_log")" "run --rm --no-deps -v ${legacy_dir}:/legacy-auth:ro -v ${legacy_dir}:/legacy-state:ro backend node dist/migrate-legacy.js --database /data/boxhaven.sqlite --auth-db /legacy-auth/auth.sqlite --state /legacy-state/backend.json"
 
 : > "$docker_log"
-if run_deploy "$protected_env" --local >"${temp_dir}/guard.out" 2>&1; then
-  echo "expected a public-only deploy after overlay activation to fail" >&2
-  exit 1
-fi
-assert_contains "$(cat "${temp_dir}/guard.out")" "no Compose overlay was supplied"
-[ ! -s "$docker_log" ] || { echo "guard invoked docker before failing" >&2; exit 1; }
-
-: > "$docker_log"
-run_deploy "$protected_env" --verify-only --target test-host --dir "$repo_root" \
+run_deploy "$public_env" --verify-only --target test-host --dir "$repo_root" \
   --compose-overlay "$overlay_file" \
   --compose-overlay-env-file "$overlay_env" >/dev/null
 assert_contains "$(cat "$docker_log")" "--env-file ${overlay_env} -f ${overlay_file} ps"
@@ -108,7 +97,7 @@ special_env="${temp_dir}/env with spaces & symbols.env"
 cp "$overlay_file" "$special_overlay"
 cp "$overlay_env" "$special_env"
 : > "$docker_log"
-run_deploy "$protected_env" --verify-only --target test-host --dir "$repo_root" \
+run_deploy "$public_env" --verify-only --target test-host --dir "$repo_root" \
   --compose-overlay "$special_overlay" \
   --compose-overlay-env-file "$special_env" >/dev/null
 assert_contains "$(cat "$docker_log")" "--env-file ${special_env} -f ${special_overlay} ps"

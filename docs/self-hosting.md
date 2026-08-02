@@ -120,23 +120,20 @@ need to duplicate the core API, auth, provider, SSH, or CLI implementations.
 - `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_DATABASE_PATH`.
 - `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
 - `BOXHAVEN_MAX_MACHINES_PER_USER`: per-user cap on concurrently existing boxes; `0` or unset means unlimited. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. The hosted control plane sets this; self-hosted deployments normally leave it unset.
-- `BOXHAVEN_COMMERCIAL_POLICY_URL` and `BOXHAVEN_COMMERCIAL_POLICY_TOKEN`: optional external create-policy and lifecycle-fact service; leave both unset for the allow-all self-hosted behavior.
-- `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS`: external policy request timeout, default `5000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed policy delivery retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: complete active-machine reconciliation interval, default `300000`.
-- `BOXHAVEN_ACCOUNT_LABEL`: optional generic external account action; empty hides it from the console.
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
 
 Provider credentials and image variables (`DIGITALOCEAN_*`, `HCLOUD_TOKEN`,
 `HETZNER_*`, `BOXHAVEN_REMOTE_IMAGE*`) are documented on the
 [Cloud Providers](/providers) page.
-The [external policy service](/operator-policy) page documents the optional
-versioned HTTP contract and its outage behavior.
+The [backend modules](/operator-policy) page documents the build-time extension
+boundary for distributions that add private models, routes, or policy.
 
 ## Production DigitalOcean Deployment
 
-The repository includes a production bundle in `deploy/digitalocean/` for the
-hosted split:
+The repository includes a production bundle in `deploy/digitalocean/` for a
+self-hosted installation:
 
 - `app.boxhaven.dev` for the browser console/auth app
 - `api.boxhaven.dev` for API and Better Auth routes
@@ -196,13 +193,10 @@ GitHub repo without storing a GitHub token. Override the SSH target with
 for self-hosted installs. On the Droplet itself, use
 `npm run deploy:production:local`.
 
-Deployments that run an external policy service in the same Compose project
-must set `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and may set
+Distributions can add a build-time module or replace deployment wiring with
+`BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and an optional
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE`. The corresponding flags are
-`--compose-overlay` and `--compose-overlay-env-file`. The deploy script refuses
-to run Compose when `BOXHAVEN_COMMERCIAL_POLICY_URL` is set without an overlay,
-preventing `--remove-orphans` from deleting the external service. Public
-self-hosted deployments with no external policy need no extra settings.
+`--compose-overlay` and `--compose-overlay-env-file`.
 
 ### Health Checks And Backups
 

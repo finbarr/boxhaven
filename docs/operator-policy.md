@@ -1,62 +1,60 @@
-# External Policy Service
+# Backend Modules
 
-BoxHaven is fully functional without a commercial policy service. The default
-self-hosted behavior allows all creates (subject to the ordinary operator-set
-per-user cap) and shows no account or plan navigation in the console.
+BoxHaven can add private or deployment-specific behavior at build time through
+the `BackendModule` interface exported by `@boxhaven/backend`. The standard
+open-source entrypoint loads no modules and uses the in-process allow-all
+commercial policy.
 
-Operators can connect a separate HTTP service through these settings:
+A module can contribute ordered SQLite migrations, authenticated API routes,
+and a `CommercialPolicy` implementation. It receives the core database,
+provider registry, state store, authentication helpers, and team authorization
+helpers in process. This keeps provisioning, auth, SSH, and lifecycle behavior
+in the open core while allowing a distribution to add its own models and UI.
 
-| Variable | Purpose |
-| --- | --- |
-| `BOXHAVEN_COMMERCIAL_POLICY_URL` | Base URL of the external service. |
-| `BOXHAVEN_COMMERCIAL_POLICY_TOKEN` | Shared bearer credential sent only to that service. |
-| `BOXHAVEN_COMMERCIAL_POLICY_TIMEOUT_MS` | External request timeout, default `5000`. |
-| `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS` | Failed event and reconciliation retry delay, default `30000`. |
-| `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS` | Full reconciliation interval, default `300000`. |
-| `BOXHAVEN_ACCOUNT_LABEL` | Optional native account-page navigation label such as `Account` or `Plan`; empty hides the navigation. |
+## Database Ownership
 
-The URL and token must be set together. New box creates fail closed when a
-configured service is unavailable or returns an invalid decision. Listing,
-connecting, running, syncing, moving, and destroying existing boxes do not
-depend on policy availability. Lifecycle facts are durably queued with the
-machine mutation and retried across backend restarts until the service accepts
-them. Local state persistence is still required before a mutation returns.
-The backend also sends a complete active-machine reconciliation at startup and
-periodically. Reconciliation failures are logged and retried without affecting
-box operations.
+Every module migration has a stable integer version. The backend applies core
+and module migrations before listening and records them in the shared
+`boxhaven_migrations` table. It refuses duplicate module names, missing
+versions, migration downgrades, and changed migration history.
 
-When the external service runs in the canonical deployment's Compose project,
-set `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and optionally
-`BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE`, or pass the matching
-`--compose-overlay` and `--compose-overlay-env-file` flags. A configured policy
-URL without an overlay makes the deploy fail before Compose, preventing
-`--remove-orphans` from deleting the policy service.
+Use a prefix unique to the module for every private table and index. A module
+must not modify tables owned by the core or another module. The backend process
+is the sole owner of the SQLite connection and closes module runtimes before
+closing core storage.
 
-## Version 1 Contract
+## Commercial Policy
 
-Requests use JSON, `Authorization: Bearer <token>`, a `/contract/v1` path, and
-`version: 1` in the body:
+A module can return a `CommercialPolicy` from `start()`. The policy can:
 
-- `POST /contract/v1/entitlements/create` receives the team, actor, machine
-  identity, and `small`, `medium`, or `large` tier; it returns
-  `{version: 1, allowed: boolean, message?: string}`.
-- `POST /contract/v1/events` receives idempotent `machine.created`,
-  `machine.destroyed`, and `machine.moved` facts with a stable event ID and
-  occurrence time. The complete queued body is `{version: 1, id, occurred_at,
-  type, team, actor, machine, previous_team_id?}`. Retries reuse the same body
-  and send the event ID as `Idempotency-Key`.
-- `POST /contract/v1/reconcile` receives the authoritative complete set of
-  active machines as `{version: 1, generated_at, machines: [{team: {id, name,
-  slug?}, machine: {id, name, tier}}]}`. Machine IDs use the same stable
-  provider identity as lifecycle events; an absent machine is no longer active.
-- `POST /contract/v1/account/summary` receives the current team and actor and
-  returns `{version: 1, state, included_units_remaining, active_units,
-  can_manage, primary_action?}`. `state` is `trial`, `active`, `past_due`, or
-  `inactive`; `primary_action` is `subscribe` or `manage`.
-- `POST /contract/v1/account/action` receives the current team and a managing
-  actor and returns `{version: 1, url}` for the configured provider action.
+- authorize a create before provisioning;
+- receive idempotent `machine.created`, `machine.destroyed`, and
+  `machine.moved` lifecycle facts;
+- reconcile against the authoritative active-machine set;
+- provide an account summary and account action to its own routes or UI.
 
-The public backend renders the native account page from this generic summary
-and stores only the pending policy-event payloads needed for durable delivery.
-It deliberately stores no provider-specific commercial state.
-Use TLS, a long random token, and network controls between the two services.
+The complete lifecycle event is written to the shared SQLite database in the
+same transaction as the machine mutation. Delivery happens asynchronously;
+failures remain in the durable outbox and retry after restarts. Stable event
+IDs make duplicate delivery safe.
+
+If a policy throws or returns an invalid create decision, BoxHaven returns
+`503 entitlement_unavailable` and does not provision the box. An explicit
+denial returns `403 entitlement_denied`. Listing, connecting, running, syncing,
+moving, and destroying existing boxes do not wait for policy delivery.
+
+## Building A Distribution
+
+Import `startBackendFromEnv` and pass modules explicitly from a distribution's
+entrypoint:
+
+```ts
+import { startBackendFromEnv } from "@boxhaven/backend";
+import { hostedModule } from "./hosted-module.js";
+
+await startBackendFromEnv({ modules: [hostedModule] });
+```
+
+The standard `@boxhaven/backend` entrypoint always starts with zero modules.
+There is no environment variable that enables private functionality in the
+open-source image.
