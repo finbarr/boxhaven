@@ -210,37 +210,6 @@ check_health() {
     -fsS "$url" >/dev/null
 }
 
-migrate_legacy_database() {
-  local database="/opt/boxhaven/data/backend/boxhaven.sqlite"
-  local legacy_auth="${BOXHAVEN_LEGACY_AUTH_DATABASE_PATH:-/opt/boxhaven/data/backend/auth.sqlite}"
-  local legacy_state="${BOXHAVEN_LEGACY_STATE_PATH:-/opt/boxhaven/data/backend/backend.json}"
-
-  if [ -e "$database" ]; then
-    [ -f "$database" ] && [ ! -L "$database" ] && [ -s "$database" ] \
-      || die "BoxHaven database is invalid: ${database}"
-    return
-  fi
-  if [ ! -e "$legacy_auth" ] && [ ! -e "$legacy_state" ]; then
-    return
-  fi
-  [ -f "$legacy_auth" ] && [ ! -L "$legacy_auth" ] && [ -s "$legacy_auth" ] \
-    || die "legacy auth database is missing or invalid: ${legacy_auth}"
-  [ -f "$legacy_state" ] && [ ! -L "$legacy_state" ] && [ -s "$legacy_state" ] \
-    || die "legacy backend state is missing or invalid: ${legacy_state}"
-
-  echo "Stopping the backend for one-time database migration"
-  docker compose "${compose_args[@]}" stop backend
-  echo "Migrating legacy auth and state into ${database}"
-  docker compose "${compose_args[@]}" run --rm --no-deps \
-    -v "$(dirname "$legacy_auth"):/legacy-auth:ro" \
-    -v "$(dirname "$legacy_state"):/legacy-state:ro" \
-    backend \
-    node dist/migrate-legacy.js \
-      --database /data/boxhaven.sqlite \
-      --auth-db "/legacy-auth/$(basename "$legacy_auth")" \
-      --state "/legacy-state/$(basename "$legacy_state")"
-}
-
 compose_args=(--env-file "$env_file" -f "$compose_file")
 if [ -n "$compose_overlay_env_file" ]; then
   compose_args+=(--env-file "$compose_overlay_env_file")
@@ -276,7 +245,6 @@ if [ "$verify_only" -ne 1 ]; then
 
   echo "Building production containers"
   docker compose "${compose_args[@]}" build
-  migrate_legacy_database
   echo "Starting production containers"
   docker compose "${compose_args[@]}" up -d --no-build --remove-orphans
   echo "Recreating Caddy to apply mounted configuration"

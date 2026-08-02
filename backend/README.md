@@ -85,24 +85,6 @@ A dummy `DIGITALOCEAN_ACCESS_TOKEN` is enough for build, startup, health, and
 read-only API checks. Creating boxes from this stack still requires a real
 DigitalOcean token and a CLI login token for the local backend.
 
-Existing installs that have both `auth.sqlite` and `backend.json` must migrate
-them once while the backend is stopped:
-
-```bash
-docker compose -f docker-compose.backend.yml stop backend
-docker compose -f docker-compose.backend.yml build backend
-docker compose -f docker-compose.backend.yml run --rm --no-deps backend \
-  node dist/migrate-legacy.js \
-  --database /data/boxhaven.sqlite \
-  --auth-db /data/auth.sqlite \
-  --state /data/backend.json
-docker compose -f docker-compose.backend.yml up -d --no-build
-```
-
-The migration verifies the legacy auth database, imports all core state into a
-temporary copy, runs SQLite integrity checks, and only then atomically publishes
-`boxhaven.sqlite`. Keep the legacy files until the first new backup is verified.
-
 ## Compile-Time Modules
 
 Private or internal distributions can depend on this directory as the

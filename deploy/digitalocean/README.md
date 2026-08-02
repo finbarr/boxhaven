@@ -223,10 +223,7 @@ tar -tzf "$(find /opt/boxhaven/backups -maxdepth 1 -type f -name 'boxhaven-backe
 
 The application backup fails without `boxhaven.sqlite` or the SSH CA keypair.
 It validates the copied database and matching CA keys, then atomically publishes
-the archive. Caddy data is included when present. On the first deploy after an
-upgrade from the split `auth.sqlite` and `backend.json` layout, the deploy stops
-the backend and atomically migrates both files into `boxhaven.sqlite` before it
-starts the new container.
+the archive. Caddy data is included when present.
 
 After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or
 agent reconnect behavior, run the reusable lifecycle smoke from a machine with a

@@ -134,23 +134,16 @@ test("concurrent state mutations are serialized without lost machines or outbox 
   assert.equal((await restarted.listPolicyEvents()).length, 20);
 });
 
-test("legacy state import is available to all SQLite readers", async () => {
+test("persisted state is available to all SQLite readers", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-load-"));
   const path = join(dir, "boxhaven.sqlite");
   const store = new StateStore(path, "fake");
-  await store.importLegacyState({
-    version: 1,
+  await store.putMachine({
+    name: "box",
+    user_id: "user-1",
     provider: "fake",
-    machines: {
-      "user-1:box": {
-        name: "box",
-        user_id: "user-1",
-        provider: "fake",
-        provider_name: "stable-box",
-      },
-    },
-    policy_events: { [event.id]: event },
-  });
+    provider_name: "stable-box",
+  }, event);
 
   const [loaded, captured, queued] = await Promise.all([
     store.load(),

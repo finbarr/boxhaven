@@ -141,25 +141,6 @@ export class StateStore {
     });
   }
 
-  async importLegacyState(state: BackendState): Promise<void> {
-    await this.mutate(() => {
-      const existing = this.db.prepare(`
-        SELECT
-          (SELECT COUNT(*) FROM core_machines)
-          + (SELECT COUNT(*) FROM core_images)
-          + (SELECT COUNT(*) FROM core_policy_events) AS count
-      `).get() as { count: number };
-      if (existing.count > 0) throw new Error("core database already contains state");
-      for (const machine of Object.values(state.machines || {})) this.writeMachine(machine);
-      for (const image of Object.values(state.images || {})) this.writeImage(image);
-      for (const policyEvent of Object.values(state.policy_events || {})) this.writePolicyEvent(policyEvent, false);
-      const timestamp = latestPolicyTimestamp(state);
-      if (timestamp) this.setMetadata("policy_timestamp", timestamp);
-      if (state.provider) this.setMetadata("provider", state.provider);
-      this.setMetadata("legacy_state_version", String(state.version || stateVersion));
-    });
-  }
-
   protected async beforeMutation(): Promise<void> {}
 
   private async mutate(fn: () => void): Promise<void> {
@@ -328,21 +309,6 @@ function normalizedTimestamp(value: string): string {
   const timestamp = new Date(value);
   if (!Number.isFinite(timestamp.getTime())) throw new Error(`invalid policy timestamp: ${value}`);
   return timestamp.toISOString();
-}
-
-function latestPolicyTimestamp(state: BackendState): string | undefined {
-  const persistedMs = Date.parse(state.policy_timestamp || "");
-  if (Number.isFinite(persistedMs)) return new Date(persistedMs).toISOString();
-  const candidates = [
-    state.updated_at,
-    ...Object.values(state.policy_events || {}).map((event) => event.occurred_at),
-  ];
-  let latestMs = Number.NEGATIVE_INFINITY;
-  for (const candidate of candidates) {
-    const parsed = Date.parse(candidate || "");
-    if (Number.isFinite(parsed)) latestMs = Math.max(latestMs, parsed);
-  }
-  return Number.isFinite(latestMs) ? new Date(latestMs).toISOString() : undefined;
 }
 
 function machineKey(userID: string, name: string): string {
