@@ -1267,11 +1267,12 @@ async function createTestBackend(
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
   const provider = new FakeProvider();
   const providers = new ProviderRegistry([provider, ...(options.extraProviders || [])], provider.name);
-  const store = new StateStore(join(dir, "state.json"), provider.name);
+  const databasePath = join(dir, "boxhaven.sqlite");
+  const store = new StateStore(databasePath, provider.name);
   const sshCA = new SSHCertificateAuthority(join(dir, "ssh_ca_ed25519"));
   const authOptions = {
     baseURL: "http://127.0.0.1/v1/auth",
-    databasePath: join(dir, "auth.sqlite"),
+    databasePath,
     secret: "test-secret-with-at-least-thirty-two-bytes",
     deviceVerificationURL: "http://127.0.0.1/device",
     ...(options.github ? { github: { clientId: "test-client-id", clientSecret: "test-client-secret" } } : {}),

@@ -26,8 +26,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
   BOXHAVEN_BACKEND_LISTEN=0.0.0.0:8787 \
-  BOXHAVEN_BACKEND_STATE=/data/backend.json \
-  BOXHAVEN_BACKEND_AUTH_DB=/data/auth.sqlite
+  BOXHAVEN_DATABASE_PATH=/data/boxhaven.sqlite
 
 RUN mkdir -p /data \
   && apt-get update \

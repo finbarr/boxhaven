@@ -161,7 +161,8 @@ async function startSeededBackend({ accountLabel } = {}) {
     },
   };
   const providers = new ProviderRegistry([fakeProvider], fakeProvider.name);
-  const store = new StateStore(join(dir, "state.json"), providers.defaultName);
+  const databasePath = join(dir, "boxhaven.sqlite");
+  const store = new StateStore(databasePath, providers.defaultName);
   const sshCA = new SSHCertificateAuthority(join(dir, "ssh_ca_ed25519"));
   const commercialPolicy = accountLabel ? {
     lifecycleEventsEnabled: false,
@@ -182,7 +183,7 @@ async function startSeededBackend({ accountLabel } = {}) {
   } : undefined;
   const authOptions = {
     baseURL: `${apiURL}/v1/auth`,
-    databasePath: join(dir, "auth.sqlite"),
+    databasePath,
     secret: "console-smoke-secret-with-at-least-thirty-two-bytes",
     trustedOrigins: [appURL],
     deviceVerificationURL: `${appURL}/device`,

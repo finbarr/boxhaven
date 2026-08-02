@@ -22,13 +22,11 @@ require_file() {
 
 backend_dir="${data_root}/backend"
 caddy_dir="${data_root}/caddy"
-auth_db="${backend_dir}/auth.sqlite"
-backend_state="${backend_dir}/backend.json"
+database="${backend_dir}/boxhaven.sqlite"
 ca_private="${backend_dir}/ssh_ca_ed25519"
 ca_public="${backend_dir}/ssh_ca_ed25519.pub"
 
-require_file "$auth_db" "Better Auth SQLite database"
-require_file "$backend_state" "backend state"
+require_file "$database" "BoxHaven SQLite database"
 require_file "$ca_private" "SSH CA private key"
 require_file "$ca_public" "SSH CA public key"
 
@@ -45,15 +43,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-sqlite3 "$auth_db" ".backup '${staging}/auth.sqlite'"
-install -m 0600 "$backend_state" "${staging}/backend.json"
+sqlite3 "$database" ".backup '${staging}/boxhaven.sqlite'"
 install -m 0600 "$ca_private" "${staging}/ssh_ca_ed25519"
 install -m 0644 "$ca_public" "${staging}/ssh_ca_ed25519.pub"
 
-[ "$(sqlite3 "${staging}/auth.sqlite" "PRAGMA quick_check;")" = "ok" ] \
-  || fail "copied auth database failed SQLite quick_check"
-jq -e 'type == "object"' "${staging}/backend.json" >/dev/null \
-  || fail "copied backend state is not a JSON object"
+[ "$(sqlite3 "${staging}/boxhaven.sqlite" "PRAGMA quick_check;")" = "ok" ] \
+  || fail "copied BoxHaven database failed SQLite quick_check"
 
 derived_public="$(ssh-keygen -y -f "${staging}/ssh_ca_ed25519" 2>/dev/null)" \
   || fail "copied SSH CA private key is invalid"

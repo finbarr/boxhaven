@@ -21,22 +21,26 @@ export type BackendAuthOptions = {
 };
 
 export function createBackendAuth(options: BackendAuthOptions) {
-  return betterAuth(authConfig(options));
+  return betterAuth(authConfig(options, openAuthDatabase(options.databasePath)));
 }
 
 export type BackendAuth = ReturnType<typeof createBackendAuth>;
 
 export async function migrateBackendAuth(options: BackendAuthOptions): Promise<void> {
-  await (await getMigrations(authConfig(options))).runMigrations();
+  const database = openAuthDatabase(options.databasePath);
+  try {
+    await (await getMigrations(authConfig(options, database))).runMigrations();
+  } finally {
+    database.close();
+  }
 }
 
-function authConfig(options: BackendAuthOptions) {
-  mkdirSync(dirname(options.databasePath), { recursive: true });
+function authConfig(options: BackendAuthOptions, database: Database.Database) {
   const trustedOrigins = new Set((options.trustedOrigins || []).map((origin) => origin.trim()).filter(Boolean));
   const deviceOrigin = urlOrigin(options.deviceVerificationURL);
   if (deviceOrigin) trustedOrigins.add(deviceOrigin);
   return {
-    database: new Database(options.databasePath),
+    database,
     baseURL: options.baseURL,
     secret: options.secret,
     trustedOrigins: [...trustedOrigins],
@@ -103,6 +107,16 @@ function authConfig(options: BackendAuthOptions) {
       }),
     ],
   };
+}
+
+function openAuthDatabase(path: string): Database.Database {
+  mkdirSync(dirname(path), { recursive: true });
+  const database = new Database(path);
+  database.pragma("journal_mode = WAL");
+  database.pragma("synchronous = FULL");
+  database.pragma("busy_timeout = 5000");
+  database.pragma("foreign_keys = ON");
+  return database;
 }
 
 // Email delivery is best-effort: invitations stay shareable as copyable links

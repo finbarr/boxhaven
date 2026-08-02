@@ -33,15 +33,13 @@ assert_fails_without_archive() {
 make_fixture() {
   local root="$1"
   mkdir -p "${root}/data/backend" "${root}/data/caddy/data" "${root}/backups"
-  printf '%s\n' '{"version":1,"provider":"digitalocean","machines":{}}' \
-    > "${root}/data/backend/backend.json"
-  sqlite3 "${root}/data/backend/auth.sqlite" \
-    "CREATE TABLE session (id TEXT PRIMARY KEY, user_id TEXT NOT NULL); INSERT INTO session VALUES ('session-1', 'user-1');"
+  sqlite3 "${root}/data/backend/boxhaven.sqlite" \
+    "CREATE TABLE session (id TEXT PRIMARY KEY, user_id TEXT NOT NULL); INSERT INTO session VALUES ('session-1', 'user-1'); CREATE TABLE core_machines (user_id TEXT, name TEXT); INSERT INTO core_machines VALUES ('user-1', 'box-1');"
   ssh-keygen -q -t ed25519 -N '' -C boxhaven-remote-user-ca \
     -f "${root}/data/backend/ssh_ca_ed25519"
   printf '%s\n' 'caddy-state' > "${root}/data/caddy/data/state"
-  printf '%s\n' 'must-not-be-copied' > "${root}/data/backend/auth.sqlite-wal"
-  printf '%s\n' 'must-not-be-copied' > "${root}/data/backend/auth.sqlite-shm"
+  printf '%s\n' 'must-not-be-copied' > "${root}/data/backend/boxhaven.sqlite-wal"
+  printf '%s\n' 'must-not-be-copied' > "${root}/data/backend/boxhaven.sqlite-shm"
 }
 
 run_backup() {
@@ -60,36 +58,31 @@ archive="$(run_backup "$main_root")"
   || fail "backup left temporary files behind"
 
 inventory="$(tar -tzf "$archive")"
-for member in auth.sqlite backend.json ssh_ca_ed25519 ssh_ca_ed25519.pub caddy-data.tar.gz; do
+for member in boxhaven.sqlite ssh_ca_ed25519 ssh_ca_ed25519.pub caddy-data.tar.gz; do
   assert_contains "$inventory" "./${member}"
 done
 case "$inventory" in
-  *auth.sqlite-wal*|*auth.sqlite-shm*) fail "backup included live SQLite sidecar files" ;;
+  *boxhaven.sqlite-wal*|*boxhaven.sqlite-shm*) fail "backup included live SQLite sidecar files" ;;
 esac
 
 extracted="${temp_dir}/extracted"
 mkdir "$extracted"
 tar -C "$extracted" -xzf "$archive"
-[ "$(sqlite3 "${extracted}/auth.sqlite" "SELECT user_id FROM session WHERE id = 'session-1';")" = "user-1" ] \
+[ "$(sqlite3 "${extracted}/boxhaven.sqlite" "SELECT user_id FROM session WHERE id = 'session-1';")" = "user-1" ] \
   || fail "SQLite online backup did not preserve data"
-jq -e 'type == "object"' "${extracted}/backend.json" >/dev/null \
-  || fail "archived backend state is invalid"
+[ "$(sqlite3 "${extracted}/boxhaven.sqlite" "SELECT name FROM core_machines WHERE user_id = 'user-1';")" = "box-1" ] \
+  || fail "SQLite online backup did not preserve core state"
 derived_public="$(ssh-keygen -y -f "${extracted}/ssh_ca_ed25519" | awk 'NF >= 2 { print $1 " " $2; exit }')"
 stored_public="$(awk 'NF >= 2 { print $1 " " $2; exit }' "${extracted}/ssh_ca_ed25519.pub")"
 [ "$derived_public" = "$stored_public" ] \
   || fail "archived SSH CA keys do not match"
 
-for missing in auth.sqlite backend.json ssh_ca_ed25519 ssh_ca_ed25519.pub; do
+for missing in boxhaven.sqlite ssh_ca_ed25519 ssh_ca_ed25519.pub; do
   root="${temp_dir}/missing-${missing}"
   make_fixture "$root"
   rm "${root}/data/backend/${missing}"
   assert_fails_without_archive "$root" "required"
 done
-
-invalid_json_root="${temp_dir}/invalid-json"
-make_fixture "$invalid_json_root"
-printf '%s\n' 'not JSON' > "${invalid_json_root}/data/backend/backend.json"
-assert_fails_without_archive "$invalid_json_root" "not a JSON object"
 
 mismatch_root="${temp_dir}/mismatched-ca"
 make_fixture "$mismatch_root"
@@ -99,7 +92,7 @@ assert_fails_without_archive "$mismatch_root" "do not match"
 
 invalid_db_root="${temp_dir}/invalid-db"
 make_fixture "$invalid_db_root"
-printf '%s\n' 'not SQLite' > "${invalid_db_root}/data/backend/auth.sqlite"
+printf '%s\n' 'not SQLite' > "${invalid_db_root}/data/backend/boxhaven.sqlite"
 assert_fails_without_archive "$invalid_db_root" "file is not a database"
 
 echo "backup integrity tests passed"

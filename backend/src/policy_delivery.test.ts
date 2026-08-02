@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
-import { readFile, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { CommercialPolicy, MachineLifecycleEvent } from "./policy.js";
 import { PolicyEventDelivery, reconciliationSnapshot } from "./policy_delivery.js";
 import { StateStore } from "./state.js";
-import type { BackendState } from "./types.js";
 
 const event: MachineLifecycleEvent = {
   version: 1,
@@ -20,13 +19,13 @@ const event: MachineLifecycleEvent = {
 
 test("machine state and its policy event survive restart in one state commit", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-state-"));
-  const path = join(dir, "state.json");
+  const path = join(dir, "boxhaven.sqlite");
   const store = new StateStore(path, "fake");
   await store.putMachine({ name: "box", user_id: "user-1", provider: "fake" }, event);
 
-  const persisted = JSON.parse(await readFile(path, "utf8"));
-  assert.equal(persisted.machines["user-1:box"].name, "box");
-  assert.deepEqual(persisted.policy_events[event.id], event);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_machines").get() as { count: number }).count, 1);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_policy_events").get() as { count: number }).count, 1);
+  store.close();
 
   const restarted = new StateStore(path, "fake");
   assert.equal((await restarted.getMachine("user-1", "box"))?.name, "box");
@@ -34,9 +33,8 @@ test("machine state and its policy event survive restart in one state commit", a
 
   const destroyed = { ...event, id: "event-stable-2", type: "machine.destroyed" as const };
   await restarted.deleteMachine("user-1", "box", destroyed);
-  const afterDestroy = JSON.parse(await readFile(path, "utf8"));
-  assert.equal(afterDestroy.machines["user-1:box"], undefined);
-  assert.deepEqual(afterDestroy.policy_events[destroyed.id], {
+  assert.equal(await restarted.getMachine("user-1", "box"), undefined);
+  assert.deepEqual((await restarted.listPolicyEvents()).find((queued) => queued.id === destroyed.id), {
     ...destroyed,
     occurred_at: "2026-07-11T00:00:00.001Z",
   });
@@ -44,7 +42,7 @@ test("machine state and its policy event survive restart in one state commit", a
 
 test("failed delivery remains queued and is retried after process restart", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-restart-"));
-  const path = join(dir, "state.json");
+  const path = join(dir, "boxhaven.sqlite");
   const store = new StateStore(path, "fake");
   await store.putMachine({ name: "box", user_id: "user-1", provider: "fake" }, event);
 
@@ -75,7 +73,7 @@ test("failed delivery remains queued and is retried after process restart", asyn
 
 test("a dequeue persistence failure redelivers the same idempotent event ID", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-idempotent-"));
-  const path = join(dir, "state.json");
+  const path = join(dir, "boxhaven.sqlite");
   const store = new FlakyDeleteStateStore(path, "fake");
   await store.putMachine({ name: "box", user_id: "user-1", provider: "fake" }, event);
   const deliveredIDs: string[] = [];
@@ -88,27 +86,38 @@ test("a dequeue persistence failure redelivers the same idempotent event ID", as
   assert.deepEqual(deliveredIDs, [event.id, event.id]);
 });
 
-test("a post-rename sync failure cannot make a later state write lose the committed outbox", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-sync-failure-"));
-  const path = join(dir, "state.json");
-  const store = new FlakyDirectorySyncStateStore(path, "fake");
-  await store.load();
+test("a failed outbox insert rolls back its machine mutation", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-transaction-failure-"));
+  const path = join(dir, "boxhaven.sqlite");
+  const store = new StateStore(path, "fake");
+  store.db.exec(`
+    CREATE TRIGGER fail_policy_insert
+    BEFORE INSERT ON core_policy_events
+    BEGIN
+      SELECT RAISE(ABORT, 'simulated policy insert failure');
+    END;
+  `);
   await assert.rejects(
     store.putMachine({ name: "first", user_id: "user-1", provider: "fake" }, event),
-    /simulated directory sync failure/,
+    /simulated policy insert failure/,
   );
+  assert.equal(await store.getMachine("user-1", "first"), undefined);
+  assert.deepEqual(await store.listPolicyEvents(), []);
+
+  store.db.exec("DROP TRIGGER fail_policy_insert");
   const second = { ...event, id: "event-stable-second", machine: { ...event.machine, id: "provider:second", name: "second" } };
   await store.putMachine({ name: "second", user_id: "user-1", provider: "fake" }, second);
+  store.close();
 
   const restarted = new StateStore(path, "fake");
-  assert.equal((await restarted.getMachine("user-1", "first"))?.name, "first");
+  assert.equal(await restarted.getMachine("user-1", "first"), undefined);
   assert.equal((await restarted.getMachine("user-1", "second"))?.name, "second");
-  assert.deepEqual((await restarted.listPolicyEvents()).map((queued) => queued.id).sort(), [event.id, second.id].sort());
+  assert.deepEqual((await restarted.listPolicyEvents()).map((queued) => queued.id), [second.id]);
 });
 
 test("concurrent state mutations are serialized without lost machines or outbox entries", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-concurrent-"));
-  const path = join(dir, "state.json");
+  const path = join(dir, "boxhaven.sqlite");
   const store = new StateStore(path, "fake");
   await Promise.all(Array.from({ length: 20 }, (_, index) => {
     const queued = {
@@ -125,10 +134,11 @@ test("concurrent state mutations are serialized without lost machines or outbox 
   assert.equal((await restarted.listPolicyEvents()).length, 20);
 });
 
-test("concurrent startup reads wait for persisted state initialization", async () => {
+test("legacy state import is available to all SQLite readers", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-load-"));
-  const path = join(dir, "state.json");
-  await writeFile(path, JSON.stringify({
+  const path = join(dir, "boxhaven.sqlite");
+  const store = new StateStore(path, "fake");
+  await store.importLegacyState({
     version: 1,
     provider: "fake",
     machines: {
@@ -140,8 +150,7 @@ test("concurrent startup reads wait for persisted state initialization", async (
       },
     },
     policy_events: { [event.id]: event },
-  }));
-  const store = new StateStore(path, "fake");
+  });
 
   const [loaded, captured, queued] = await Promise.all([
     store.load(),
@@ -177,7 +186,7 @@ test("reconciliation uses lifecycle team and stable provider machine identity se
 
 test("reconciliation capture is serialized with lifecycle state commits", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-capture-"));
-  const store = new StateStore(join(dir, "state.json"), "fake");
+  const store = new StateStore(join(dir, "boxhaven.sqlite"), "fake");
   const beforeCreate = store.captureMachineSnapshot(() => new Date("2026-07-11T10:00:00.000Z"));
   const create = store.putMachine({
     name: "box",
@@ -196,7 +205,7 @@ test("reconciliation capture is serialized with lifecycle state commits", async 
 
 test("snapshot and lifecycle timestamps follow queue reservation order behind a slow write", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-reservation-"));
-  const path = join(dir, "state.json");
+  const path = join(dir, "boxhaven.sqlite");
   const store = new SlowFirstWriteStateStore(path, "fake");
   const slowUpdate = store.putImage({ name: "base", provider: "fake", org_id: "team-1" });
   await store.firstWriteStarted;
@@ -224,7 +233,7 @@ test("snapshot and lifecycle timestamps follow queue reservation order behind a 
 
 test("hosted reconciliation runs at startup, retries failures, and remains periodic", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-reconcile-"));
-  const store = new StateStore(join(dir, "state.json"), "fake");
+  const store = new StateStore(join(dir, "boxhaven.sqlite"), "fake");
   await store.putMachine({
     name: "box",
     user_id: "user-1",
@@ -288,25 +297,13 @@ class SlowFirstWriteStateStore extends StateStore {
     this.resumeFirstWrite();
   }
 
-  protected override async writeState(state: BackendState): Promise<void> {
+  protected override async beforeMutation(): Promise<void> {
     if (this.firstWrite) {
       this.firstWrite = false;
       this.markFirstWriteStarted();
       await this.firstWriteReleased;
     }
-    await super.writeState(state);
-  }
-}
-
-class FlakyDirectorySyncStateStore extends StateStore {
-  private fail = true;
-
-  protected override async syncStateDirectory(): Promise<void> {
-    if (this.fail) {
-      this.fail = false;
-      throw new Error("simulated directory sync failure");
-    }
-    await super.syncStateDirectory();
+    await super.beforeMutation();
   }
 }
 

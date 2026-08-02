@@ -1,260 +1,335 @@
-import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import Database from "better-sqlite3";
 import type { MachineLifecycleEvent } from "./policy.js";
 import { BackendState, RemoteMachine, TeamImageRecord, stateVersion } from "./types.js";
 
+type PayloadRow = { payload_json: string };
+type MetadataRow = { value: string };
+
 export class StateStore {
-  private state: BackendState | undefined;
-  private loading: Promise<void> | undefined;
+  readonly db: Database.Database;
   private pendingUpdate: Promise<void> = Promise.resolve();
 
   constructor(
-    private readonly path: string,
+    readonly path: string,
     private readonly provider: string,
-  ) {}
+  ) {
+    mkdirSync(dirname(path), { recursive: true });
+    this.db = new Database(path);
+    this.db.pragma("journal_mode = WAL");
+    this.db.pragma("synchronous = FULL");
+    this.db.pragma("busy_timeout = 5000");
+    this.db.pragma("foreign_keys = ON");
+    this.migrate();
+  }
+
+  close(): void {
+    if (this.db.open) this.db.close();
+  }
 
   async load(): Promise<BackendState> {
-    if (!this.state) {
-      let loading = this.loading;
-      if (!loading) {
-        loading = this.loadFromDisk();
-        this.loading = loading;
-      }
-      try {
-        await loading;
-      } finally {
-        if (this.loading === loading) this.loading = undefined;
-      }
-    }
     return this.snapshot();
   }
 
-  private async loadFromDisk(): Promise<void> {
-    let state: BackendState = {
-      version: stateVersion,
-      provider: this.provider,
-      machines: {},
-    };
-    try {
-      const data = await readFile(this.path, "utf8");
-      if (data.trim() !== "") {
-        const parsed = JSON.parse(data) as BackendState;
-        const policyTimestamp = latestPolicyTimestamp(parsed);
-        state = {
-          version: parsed.version || stateVersion,
-          provider: parsed.provider || this.provider,
-          machines: parsed.machines || {},
-          images: parsed.images || {},
-          policy_events: parsed.policy_events || {},
-          ...(policyTimestamp ? { policy_timestamp: policyTimestamp } : {}),
-          updated_at: parsed.updated_at,
-        };
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    this.state = state;
-  }
-
   async listMachines(): Promise<RemoteMachine[]> {
-    const state = await this.load();
-    return Object.values(state.machines);
+    return this.payloads<RemoteMachine>("SELECT payload_json FROM core_machines ORDER BY rowid");
   }
 
   async captureMachineSnapshot(now = () => new Date()): Promise<{ generatedAt: string; machines: RemoteMachine[] }> {
-    const capture = this.pendingUpdate.then(async () => {
-      const state = await this.load();
-      const generatedAt = reservePolicyTimestamp(state, now().toISOString());
-      await this.commit(state);
-      return {
-        generatedAt,
-        machines: Object.values(state.machines).map((machine) => ({ ...machine })),
-      };
+    return this.enqueue(async () => {
+      await this.beforeMutation();
+      return this.db.transaction(() => {
+        const generatedAt = this.reservePolicyTimestamp(now().toISOString());
+        this.touch();
+        return { generatedAt, machines: this.listMachinesSync() };
+      })();
     });
-    this.pendingUpdate = capture.then(() => {}, () => {});
-    return capture;
   }
 
   async listMachinesForUser(userID: string): Promise<RemoteMachine[]> {
-    const state = await this.load();
-    return Object.values(state.machines).filter((machine) => machine.user_id === userID);
+    return this.payloads<RemoteMachine>(
+      "SELECT payload_json FROM core_machines WHERE user_id = ? ORDER BY rowid",
+      userID,
+    );
   }
 
   async listMachinesForOrg(orgID: string): Promise<RemoteMachine[]> {
-    const state = await this.load();
-    return Object.values(state.machines).filter((machine) => machine.org_id === orgID);
+    return this.payloads<RemoteMachine>(
+      "SELECT payload_json FROM core_machines WHERE org_id = ? ORDER BY rowid",
+      orgID,
+    );
   }
 
   async getMachine(userID: string, name: string): Promise<RemoteMachine | undefined> {
-    const state = await this.load();
-    return state.machines[machineKey(userID, name)];
+    const row = this.db.prepare(
+      "SELECT payload_json FROM core_machines WHERE user_id = ? AND name = ?",
+    ).get(userID, name) as PayloadRow | undefined;
+    return row ? parsePayload<RemoteMachine>(row.payload_json, "machine") : undefined;
   }
 
   async putMachine(machine: RemoteMachine, policyEvent?: MachineLifecycleEvent): Promise<void> {
     if (!machine.user_id) throw new Error("machine user_id is required");
-    await this.update((state) => {
-      state.machines[machineKey(machine.user_id as string, machine.name)] = machine;
-      if (policyEvent) {
-        const persistedEvent = {
-          ...policyEvent,
-          occurred_at: reservePolicyTimestamp(state, policyEvent.occurred_at),
-        };
-        state.policy_events = { ...(state.policy_events || {}), [policyEvent.id]: persistedEvent };
-      }
+    await this.mutate(() => {
+      this.writeMachine(machine);
+      if (policyEvent) this.writePolicyEvent(policyEvent, true);
     });
   }
 
   async renameMachine(userID: string, fromName: string, machine: RemoteMachine): Promise<void> {
     if (!machine.user_id) throw new Error("machine user_id is required");
     if (machine.user_id !== userID) throw new Error("machine user_id does not match rename owner");
-    await this.update((state) => {
-      delete state.machines[machineKey(userID, fromName)];
-      state.machines[machineKey(userID, machine.name)] = machine;
+    await this.mutate(() => {
+      this.db.prepare("DELETE FROM core_machines WHERE user_id = ? AND name = ?").run(userID, fromName);
+      this.writeMachine(machine);
     });
   }
 
   async deleteMachine(userID: string, name: string, policyEvent?: MachineLifecycleEvent): Promise<void> {
-    await this.update((state) => {
-      delete state.machines[machineKey(userID, name)];
-      if (policyEvent) {
-        const persistedEvent = {
-          ...policyEvent,
-          occurred_at: reservePolicyTimestamp(state, policyEvent.occurred_at),
-        };
-        state.policy_events = { ...(state.policy_events || {}), [policyEvent.id]: persistedEvent };
-      }
+    await this.mutate(() => {
+      this.db.prepare("DELETE FROM core_machines WHERE user_id = ? AND name = ?").run(userID, name);
+      if (policyEvent) this.writePolicyEvent(policyEvent, true);
     });
   }
 
   async listPolicyEvents(): Promise<MachineLifecycleEvent[]> {
-    const state = await this.load();
-    return Object.values(state.policy_events || {});
+    return this.payloads<MachineLifecycleEvent>(
+      "SELECT payload_json FROM core_policy_events ORDER BY occurred_at, event_id",
+    );
   }
 
   async deletePolicyEvent(id: string): Promise<void> {
-    await this.update((state) => {
-      if (!state.policy_events?.[id]) return;
-      state.policy_events = { ...state.policy_events };
-      delete state.policy_events[id];
+    await this.mutate(() => {
+      this.db.prepare("DELETE FROM core_policy_events WHERE event_id = ?").run(id);
     });
   }
 
   async listImagesForOrg(orgID: string): Promise<TeamImageRecord[]> {
-    const state = await this.load();
-    return Object.values(state.images || {}).filter((image) => image.org_id === orgID);
+    return this.payloads<TeamImageRecord>(
+      "SELECT payload_json FROM core_images WHERE org_id = ? ORDER BY rowid",
+      orgID,
+    );
   }
 
   async getImageForOrg(orgID: string, provider: string, idOrName: string): Promise<TeamImageRecord | undefined> {
     const want = idOrName.trim();
     if (!want) return undefined;
-    const state = await this.load();
-    return Object.values(state.images || {}).find((image) => (
-      image.org_id === orgID
-      && image.provider === provider
-      && (image.id === want || image.name === want)
-    ));
+    const rows = this.db.prepare(`
+      SELECT payload_json FROM core_images
+      WHERE org_id = ? AND provider = ? AND (image_id = ? OR name = ?)
+      ORDER BY rowid LIMIT 1
+    `).all(orgID, provider, want, want) as PayloadRow[];
+    return rows[0] ? parsePayload<TeamImageRecord>(rows[0].payload_json, "image") : undefined;
   }
 
   async putImage(image: TeamImageRecord): Promise<void> {
     if (!image.org_id) throw new Error("image org_id is required");
     if (!image.provider) throw new Error("image provider is required");
     if (!image.name) throw new Error("image name is required");
-    await this.update((state) => {
-      state.images = { ...(state.images || {}) };
-      for (const [key, existing] of Object.entries(state.images)) {
-        if (
-          existing.org_id === image.org_id
-          && existing.provider === image.provider
-          && (existing.name === image.name || (!!image.id && existing.id === image.id))
-        ) {
-          delete state.images[key];
-        }
-      }
-      state.images[imageKey(image)] = image;
-    });
+    await this.mutate(() => this.writeImage(image));
   }
 
   async deleteImageForOrg(orgID: string, provider: string, idOrName: string): Promise<void> {
     const want = idOrName.trim();
     if (!want) return;
-    await this.update((state) => {
-      if (!state.images) return;
-      for (const [key, image] of Object.entries(state.images)) {
-        if (image.org_id === orgID && image.provider === provider && (image.id === want || image.name === want)) {
-          delete state.images[key];
-        }
-      }
+    await this.mutate(() => {
+      this.db.prepare(`
+        DELETE FROM core_images
+        WHERE org_id = ? AND provider = ? AND (image_id = ? OR name = ?)
+      `).run(orgID, provider, want, want);
     });
   }
 
-  private async update(fn: (state: BackendState) => void): Promise<void> {
-    const update = this.pendingUpdate.then(async () => {
-      const state = await this.load();
-      fn(state);
-      await this.commit(state);
+  async importLegacyState(state: BackendState): Promise<void> {
+    await this.mutate(() => {
+      const existing = this.db.prepare(`
+        SELECT
+          (SELECT COUNT(*) FROM core_machines)
+          + (SELECT COUNT(*) FROM core_images)
+          + (SELECT COUNT(*) FROM core_policy_events) AS count
+      `).get() as { count: number };
+      if (existing.count > 0) throw new Error("core database already contains state");
+      for (const machine of Object.values(state.machines || {})) this.writeMachine(machine);
+      for (const image of Object.values(state.images || {})) this.writeImage(image);
+      for (const policyEvent of Object.values(state.policy_events || {})) this.writePolicyEvent(policyEvent, false);
+      const timestamp = latestPolicyTimestamp(state);
+      if (timestamp) this.setMetadata("policy_timestamp", timestamp);
+      if (state.provider) this.setMetadata("provider", state.provider);
+      this.setMetadata("legacy_state_version", String(state.version || stateVersion));
     });
-    this.pendingUpdate = update.catch(() => {});
-    await update;
   }
 
-  private async commit(state: BackendState): Promise<void> {
-    state.version = stateVersion;
-    state.updated_at = new Date().toISOString();
-    await this.writeState(state);
-    this.state = state;
-    await this.syncStateDirectory();
+  protected async beforeMutation(): Promise<void> {}
+
+  private async mutate(fn: () => void): Promise<void> {
+    await this.enqueue(async () => {
+      await this.beforeMutation();
+      this.db.transaction(() => {
+        fn();
+        this.touch();
+      })();
+    });
   }
 
-  protected async writeState(state: BackendState): Promise<void> {
-    const directory = dirname(this.path);
-    const temporaryPath = `${this.path}.${process.pid}.${randomUUID()}.tmp`;
-    await mkdir(directory, { recursive: true });
-    try {
-      const file = await open(temporaryPath, "wx", 0o600);
-      try {
-        await file.writeFile(`${JSON.stringify(state, null, 2)}\n`);
-        await file.sync();
-      } finally {
-        await file.close();
-      }
-      await rename(temporaryPath, this.path);
-    } catch (error) {
-      await rm(temporaryPath, { force: true }).catch(() => {});
-      throw error;
-    }
+  private enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    const update = this.pendingUpdate.then(fn);
+    this.pendingUpdate = update.then(() => {}, () => {});
+    return update;
   }
 
-  protected async syncStateDirectory(): Promise<void> {
-    const directoryHandle = await open(dirname(this.path), "r");
-    try {
-      await directoryHandle.sync();
-    } finally {
-      await directoryHandle.close();
-    }
+  private writeMachine(machine: RemoteMachine): void {
+    const userID = machine.user_id;
+    if (!userID) throw new Error("machine user_id is required");
+    this.db.prepare(`
+      INSERT INTO core_machines (user_id, name, org_id, provider, payload_json)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, name) DO UPDATE SET
+        org_id = excluded.org_id,
+        provider = excluded.provider,
+        payload_json = excluded.payload_json
+    `).run(userID, machine.name, machine.org_id || null, machine.provider || null, JSON.stringify(machine));
+  }
+
+  private writeImage(image: TeamImageRecord): void {
+    if (!image.org_id || !image.provider || !image.name) throw new Error("image identity is required");
+    this.db.prepare(`
+      DELETE FROM core_images
+      WHERE org_id = ? AND provider = ? AND (name = ? OR (? IS NOT NULL AND image_id = ?))
+    `).run(image.org_id, image.provider, image.name, image.id || null, image.id || null);
+    this.db.prepare(`
+      INSERT INTO core_images (org_id, provider, identity, image_id, name, payload_json)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      image.org_id,
+      image.provider,
+      image.id || image.name,
+      image.id || null,
+      image.name,
+      JSON.stringify(image),
+    );
+  }
+
+  private writePolicyEvent(event: MachineLifecycleEvent, reserveTimestamp: boolean): void {
+    const occurredAt = reserveTimestamp ? this.reservePolicyTimestamp(event.occurred_at) : normalizedTimestamp(event.occurred_at);
+    const persisted = { ...event, occurred_at: occurredAt };
+    this.db.prepare(`
+      INSERT INTO core_policy_events (event_id, occurred_at, payload_json)
+      VALUES (?, ?, ?)
+      ON CONFLICT(event_id) DO UPDATE SET
+        occurred_at = excluded.occurred_at,
+        payload_json = excluded.payload_json
+    `).run(event.id, occurredAt, JSON.stringify(persisted));
+  }
+
+  private reservePolicyTimestamp(candidate: string): string {
+    const candidateMs = Date.parse(candidate);
+    if (!Number.isFinite(candidateMs)) throw new Error(`invalid policy timestamp: ${candidate}`);
+    const previous = this.metadata("policy_timestamp");
+    const previousMs = Date.parse(previous || "");
+    const reservedMs = Number.isFinite(previousMs) ? Math.max(candidateMs, previousMs + 1) : candidateMs;
+    const reserved = new Date(reservedMs).toISOString();
+    this.setMetadata("policy_timestamp", reserved);
+    return reserved;
+  }
+
+  private touch(): void {
+    this.setMetadata("updated_at", new Date().toISOString());
+  }
+
+  private metadata(key: string): string | undefined {
+    return (this.db.prepare("SELECT value FROM core_metadata WHERE key = ?").get(key) as MetadataRow | undefined)?.value;
+  }
+
+  private setMetadata(key: string, value: string): void {
+    this.db.prepare(`
+      INSERT INTO core_metadata (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(key, value);
+  }
+
+  private payloads<T>(sql: string, ...params: unknown[]): T[] {
+    const rows = this.db.prepare(sql).all(...params) as PayloadRow[];
+    return rows.map((row) => parsePayload<T>(row.payload_json, "state"));
+  }
+
+  private listMachinesSync(): RemoteMachine[] {
+    return this.payloads<RemoteMachine>("SELECT payload_json FROM core_machines ORDER BY rowid");
   }
 
   private snapshot(): BackendState {
-    if (!this.state) {
-      return { version: stateVersion, provider: this.provider, machines: {} };
-    }
     return {
-      ...this.state,
-      machines: { ...this.state.machines },
-      images: { ...(this.state.images || {}) },
-      policy_events: { ...(this.state.policy_events || {}) },
+      version: stateVersion,
+      provider: this.metadata("provider") || this.provider,
+      machines: Object.fromEntries(this.listMachinesSync().map((machine) => [machineKey(machine.user_id || "", machine.name), machine])),
+      images: Object.fromEntries(this.payloads<TeamImageRecord>(
+        "SELECT payload_json FROM core_images ORDER BY rowid",
+      ).map((image) => [imageKey(image), image])),
+      policy_events: Object.fromEntries(this.payloads<MachineLifecycleEvent>(
+        "SELECT payload_json FROM core_policy_events ORDER BY occurred_at, event_id",
+      ).map((event) => [event.id, event])),
+      ...(this.metadata("policy_timestamp") ? { policy_timestamp: this.metadata("policy_timestamp") } : {}),
+      ...(this.metadata("updated_at") ? { updated_at: this.metadata("updated_at") } : {}),
     };
+  }
+
+  private migrate(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS boxhaven_migrations (
+        module TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        applied_at TEXT NOT NULL,
+        PRIMARY KEY(module, version)
+      );
+      CREATE TABLE IF NOT EXISTS core_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS core_machines (
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        org_id TEXT,
+        provider TEXT,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY(user_id, name)
+      );
+      CREATE INDEX IF NOT EXISTS core_machines_org ON core_machines(org_id);
+      CREATE INDEX IF NOT EXISTS core_machines_provider ON core_machines(provider);
+      CREATE TABLE IF NOT EXISTS core_images (
+        org_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        identity TEXT NOT NULL,
+        image_id TEXT,
+        name TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY(org_id, provider, identity)
+      );
+      CREATE INDEX IF NOT EXISTS core_images_lookup ON core_images(org_id, provider, name, image_id);
+      CREATE TABLE IF NOT EXISTS core_policy_events (
+        event_id TEXT PRIMARY KEY,
+        occurred_at TEXT NOT NULL,
+        payload_json TEXT NOT NULL
+      );
+    `);
+    this.db.prepare(`
+      INSERT OR IGNORE INTO boxhaven_migrations (module, version, applied_at)
+      VALUES ('core', 1, ?)
+    `).run(new Date().toISOString());
+    this.db.prepare("INSERT OR IGNORE INTO core_metadata (key, value) VALUES ('provider', ?)").run(this.provider);
   }
 }
 
-function reservePolicyTimestamp(state: BackendState, candidate: string): string {
-  const candidateMs = Date.parse(candidate);
-  if (!Number.isFinite(candidateMs)) throw new Error(`invalid policy timestamp: ${candidate}`);
-  const previousMs = Date.parse(state.policy_timestamp || "");
-  const reservedMs = Number.isFinite(previousMs) ? Math.max(candidateMs, previousMs + 1) : candidateMs;
-  const reserved = new Date(reservedMs).toISOString();
-  state.policy_timestamp = reserved;
-  return reserved;
+function parsePayload<T>(value: string, label: string): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    throw new Error(`invalid ${label} JSON in BoxHaven database`);
+  }
+}
+
+function normalizedTimestamp(value: string): string {
+  const timestamp = new Date(value);
+  if (!Number.isFinite(timestamp.getTime())) throw new Error(`invalid policy timestamp: ${value}`);
+  return timestamp.toISOString();
 }
 
 function latestPolicyTimestamp(state: BackendState): string | undefined {

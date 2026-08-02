@@ -34,9 +34,9 @@ Run the web app during development from a second shell:
 npm run dev:app
 ```
 
-By default the server listens on `127.0.0.1:8787` and stores state at
-`~/.local/state/boxhaven/backend.json`. Better Auth users and sessions are
-stored in SQLite at `~/.local/state/boxhaven/auth.sqlite`.
+By default the server listens on `127.0.0.1:8787`. Better Auth data, machines,
+images, and the lifecycle outbox share one SQLite database at
+`~/.local/state/boxhaven/boxhaven.sqlite`.
 
 Then point the CLI at it:
 
@@ -68,6 +68,28 @@ A dummy `DIGITALOCEAN_ACCESS_TOKEN` is enough for build, startup, health, and
 read-only API checks. Creating boxes from this stack still requires a real
 DigitalOcean token and a CLI login token for the local backend.
 
+### Migrate An Existing Install
+
+Installs that have both `auth.sqlite` and `backend.json` must migrate them once
+while the backend is stopped:
+
+```bash
+docker compose -f docker-compose.backend.yml stop backend
+docker compose -f docker-compose.backend.yml build backend
+docker compose -f docker-compose.backend.yml run --rm --no-deps backend \
+  node dist/migrate-legacy.js \
+  --database /data/boxhaven.sqlite \
+  --auth-db /data/auth.sqlite \
+  --state /data/backend.json
+docker compose -f docker-compose.backend.yml up -d --no-build
+```
+
+The migration verifies the legacy auth database, imports the JSON state into a
+temporary copy, runs SQLite integrity checks, and only then atomically publishes
+`boxhaven.sqlite`. Keep the legacy files until the first new backup is verified.
+The included DigitalOcean production deploy detects and performs this migration
+automatically.
+
 ## Environment Variables
 
 - `BETTER_AUTH_SECRET`: required signing secret for Better Auth sessions.
@@ -79,10 +101,9 @@ DigitalOcean token and a CLI login token for the local backend.
 - `BOXHAVEN_BACKEND_CORS_ORIGINS`: comma-separated browser origins allowed to call the API.
 - `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.boxhaven.dev`.
 - `BOXHAVEN_PREVIEW_TARGET_PORT`: machine port that preview hosts proxy to, default `80`.
-- `BOXHAVEN_BACKEND_AUTH_DB`: SQLite auth database path.
+- `BOXHAVEN_DATABASE_PATH`: shared SQLite database path, default `~/.local/state/boxhaven/boxhaven.sqlite`.
 - `BOXHAVEN_BACKEND_LISTEN`: listen address, default `127.0.0.1:8787`.
-- `BOXHAVEN_BACKEND_STATE`: JSON state file path.
-- `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_BACKEND_STATE`.
+- `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_DATABASE_PATH`.
 - `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
 - `BOXHAVEN_MAX_MACHINES_PER_USER`: per-user cap on concurrently existing boxes; `0` or unset means unlimited. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. The hosted control plane sets this; self-hosted deployments normally leave it unset.
 - `BOXHAVEN_COMMERCIAL_POLICY_URL` and `BOXHAVEN_COMMERCIAL_POLICY_TOKEN`: optional external create-policy and lifecycle-fact service; leave both unset for the allow-all self-hosted behavior.
@@ -178,9 +199,9 @@ sudo systemctl status boxhaven-backend-backup.timer --no-pager
 
 Backups are installed through `deploy/digitalocean/install-backups.sh` and
 write archives under `/opt/boxhaven/backups`. The backend data backup uses
-SQLite's online backup command and requires `auth.sqlite`, `backend.json`, and
-the SSH CA keypair. It validates the copied state before atomically publishing
-the archive and includes Caddy data when present.
+SQLite's online backup command and requires `boxhaven.sqlite` and the SSH CA
+keypair. It validates the copied database before atomically publishing the
+archive and includes Caddy data when present.
 
 ## Golden Image Rotation
 

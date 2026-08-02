@@ -17,9 +17,9 @@ if (!authSecret) {
 
 const providers = providerRegistryFromEnv();
 
-const statePath = process.env.BOXHAVEN_BACKEND_STATE || join(homedir(), ".local", "state", "boxhaven", "backend.json");
-const store = new StateStore(statePath, providers.defaultName);
-const sshCA = new SSHCertificateAuthority(process.env.BOXHAVEN_SSH_CA_KEY || join(dirname(statePath), "ssh_ca_ed25519"));
+const databasePath = process.env.BOXHAVEN_DATABASE_PATH || join(homedir(), ".local", "state", "boxhaven", "boxhaven.sqlite");
+const store = new StateStore(databasePath, providers.defaultName);
+const sshCA = new SSHCertificateAuthority(process.env.BOXHAVEN_SSH_CA_KEY || join(dirname(databasePath), "ssh_ca_ed25519"));
 const { host, port } = parseListen(listen);
 const defaultAppDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "dist-app");
 const publicHost = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
@@ -34,7 +34,7 @@ const github = process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
 const commercialPolicy = commercialPolicyFromEnv();
 const authOptions = {
   baseURL: authBaseURL,
-  databasePath: process.env.BOXHAVEN_BACKEND_AUTH_DB || join(homedir(), ".local", "state", "boxhaven", "auth.sqlite"),
+  databasePath,
   secret: authSecret,
   trustedOrigins: splitList(process.env.BETTER_AUTH_TRUSTED_ORIGINS),
   deviceVerificationURL: `${appPublicURL}/device`,

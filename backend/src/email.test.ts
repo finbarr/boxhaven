@@ -153,11 +153,12 @@ async function createEmailTestBackend(email: EmailService | undefined) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-email-"));
   const provider = new IdleProvider();
   const providers = new ProviderRegistry([provider], provider.name);
-  const store = new StateStore(join(dir, "state.json"), provider.name);
+  const databasePath = join(dir, "boxhaven.sqlite");
+  const store = new StateStore(databasePath, provider.name);
   const sshCA = new SSHCertificateAuthority(join(dir, "ssh_ca_ed25519"));
   const authOptions = {
     baseURL: "http://127.0.0.1/v1/auth",
-    databasePath: join(dir, "auth.sqlite"),
+    databasePath,
     secret: "test-secret-with-at-least-thirty-two-bytes",
     deviceVerificationURL: "http://127.0.0.1/device",
     appURL: "https://app.hosted.test",

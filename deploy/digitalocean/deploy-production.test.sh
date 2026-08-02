@@ -74,8 +74,20 @@ assert_contains "$(cat "$curl_log")" "--retry 20 --retry-delay 1 --retry-all-err
 run_deploy "$protected_env" --local \
   --compose-overlay "$overlay_file" \
   --compose-overlay-env-file "$overlay_env" >/dev/null
-assert_contains "$(cat "$docker_log")" "--env-file ${overlay_env} -f ${overlay_file} up -d --build --remove-orphans"
+assert_contains "$(cat "$docker_log")" "--env-file ${overlay_env} -f ${overlay_file} build"
+assert_contains "$(cat "$docker_log")" "--env-file ${overlay_env} -f ${overlay_file} up -d --no-build --remove-orphans"
 assert_contains "$(cat "$docker_log")" "--env-file ${overlay_env} -f ${overlay_file} up -d --force-recreate --no-deps caddy"
+
+legacy_dir="${temp_dir}/legacy"
+mkdir -p "$legacy_dir"
+printf 'legacy-auth\n' > "${legacy_dir}/auth.sqlite"
+printf '{}\n' > "${legacy_dir}/backend.json"
+: > "$docker_log"
+BOXHAVEN_LEGACY_AUTH_DATABASE_PATH="${legacy_dir}/auth.sqlite" \
+BOXHAVEN_LEGACY_STATE_PATH="${legacy_dir}/backend.json" \
+  run_deploy "$public_env" --local >/dev/null
+assert_contains "$(cat "$docker_log")" "stop backend"
+assert_contains "$(cat "$docker_log")" "run --rm --no-deps -v ${legacy_dir}:/legacy-auth:ro -v ${legacy_dir}:/legacy-state:ro backend node dist/migrate-legacy.js --database /data/boxhaven.sqlite --auth-db /legacy-auth/auth.sqlite --state /legacy-state/backend.json"
 
 : > "$docker_log"
 if run_deploy "$protected_env" --local >"${temp_dir}/guard.out" 2>&1; then
