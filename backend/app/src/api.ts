@@ -1,132 +1,26 @@
-export type AuthUser = {
-  id: string;
-  email: string;
-};
+import { apiRequest, type APIRequestInit } from "../../src/client";
 
-export type TeamInfo = {
-  id: string;
-  name: string;
-  slug?: string;
-};
-
-export type WhoamiResponse = {
-  authenticated: boolean;
-  provider: string;
-  providers?: string[];
-  admin?: boolean;
-  app_url?: string;
-  team?: TeamInfo | null;
-  teams?: TeamInfo[];
-  user: AuthUser;
-  account?: { label: string };
-};
-
-export type AccountSummary = {
-  state: "trial" | "active" | "past_due" | "inactive";
-  included_units_remaining: number;
-  active_units: number;
-  can_manage: boolean;
-  primary_action?: "subscribe" | "manage";
-};
-
-export type ProviderInfo = {
-  name: string;
-  label: string;
-  capabilities: string[];
-  default?: boolean;
-};
-
-export type Machine = {
-  name: string;
-  user_id?: string;
-  org_id?: string;
-  team_id?: string;
-  team_slug?: string;
-  team_name?: string;
-  provider?: string;
-  provider_label?: string;
-  provider_id?: string;
-  public_ipv4?: string;
-  region?: string;
-  size?: string;
-  image?: string;
-  ssh_user?: string;
-  preview_hostname?: string;
-  preview_url?: string;
-  source_path?: string;
-  project_path?: string;
-  repo_url?: string;
-  branch?: string;
-  last_synced_at?: string;
-  bootstrap_complete?: boolean;
-  created_at?: string;
-  updated_at?: string;
-};
-
-export type MachineImage = {
-  id: string;
-  name: string;
-  provider?: string;
-  org_id?: string;
-  org_slug?: string;
-  org_name?: string;
-  status?: string;
-  created_at?: string;
-  size_gb?: number;
-  bootstrapped?: boolean;
-};
-
-export type ImagesResponse = {
-  images: MachineImage[];
-};
-
-export type LoginResponse = {
-  token: string;
-  user?: AuthUser;
-};
-
-export type MachineResponse = {
-  machine: Machine;
-  status?: string;
-};
-
-export type MachinesResponse = {
-  machines: Machine[];
-};
-
-export type ProvidersResponse = {
-  providers: ProviderInfo[];
-};
+export type {
+  AccountSummary,
+  AuthUser,
+  ImagesResponse,
+  LoginResponse,
+  Machine,
+  MachineImage,
+  MachineResponse,
+  MachinesResponse,
+  ProviderInfo,
+  ProvidersResponse,
+  TeamInfo,
+  WhoamiResponse,
+} from "../../src/client";
 
 const configuredAPIURL = (import.meta.env.VITE_BOXHAVEN_API_URL || "").replace(/\/+$/, "");
 export const apiBaseURL = configuredAPIURL || (window.location.hostname === "app.boxhaven.dev" ? "https://api.boxhaven.dev" : "");
 export const tokenKey = "boxhaven.backend.token";
 
-export async function apiFetch<T = unknown>(path: string, token = "", init: { method?: string; body?: unknown; credentials?: RequestCredentials } = {}): Promise<T> {
-  const response = await fetch(`${apiBaseURL}${path}`, {
-    method: init.method || "GET",
-    ...(init.credentials ? { credentials: init.credentials } : {}),
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
-    },
-    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-  });
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(readError(detail) || response.statusText);
-  }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
-}
-
-function readError(detail: string): string {
-  try {
-    const parsed = JSON.parse(detail);
-    return parsed.message || parsed.error_description || parsed.error || detail;
-  } catch {
-    return detail;
-  }
+export function apiFetch<T = unknown>(path: string, token = "", init: APIRequestInit = {}): Promise<T> {
+  return apiRequest<T>(apiBaseURL, path, token, init);
 }
 
 export function slugName(value: string): string {

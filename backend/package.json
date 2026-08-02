@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/public.d.ts",
       "import": "./dist/public.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
     }
   },
   "scripts": {
