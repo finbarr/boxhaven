@@ -7,6 +7,8 @@ import Fastify, { FastifyInstance } from "fastify";
 import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
 import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
+import { applyBackendMigrations } from "./database.js";
+import { BackendModule, BackendModuleContext, BackendModuleRuntime, BackendTeam, BackendUserContext } from "./module.js";
 import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyTeam, PolicyTier, policyMachineIdentity } from "./policy.js";
 import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
@@ -32,20 +34,11 @@ export type BackendOptions = {
   previewTargetPort?: number;
   previewTLSWarmup?: (previewURL: string) => Promise<void>;
   machineReadyTimeoutMs?: number;
+  modules?: BackendModule[];
 };
 
-type AuthContext = {
-  userID: string;
-  email: string;
-  orgID: string;
-  teams: TeamInfo[];
-};
-
-type TeamInfo = {
-  id: string;
-  name: string;
-  slug?: string;
-};
+type AuthContext = BackendUserContext;
+type TeamInfo = BackendTeam;
 
 type TeamMachine = RemoteMachine & {
   team_id?: string;
@@ -145,8 +138,10 @@ const agentRPCDefaultTimeout = 60_000;
 const agentRPCSetupTimeout = 30 * 60_000;
 
 export function createBackend(options: BackendOptions): FastifyInstance {
+  const moduleContext = createModuleContext(options);
+  const moduleRuntimes = startModules(options.modules || [], moduleContext);
   const app = Fastify({ logger: false });
-  const commercialPolicy: CommercialPolicy = options.commercialPolicy || new AllowAllCommercialPolicy();
+  const commercialPolicy = resolveCommercialPolicy(options.commercialPolicy, moduleRuntimes);
   const policyDelivery = new PolicyEventDelivery(
     options.store,
     commercialPolicy,
@@ -155,6 +150,9 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   );
   policyDelivery.start();
   app.addHook("onClose", async () => policyDelivery.stop());
+  app.addHook("onClose", async () => {
+    for (const runtime of [...moduleRuntimes].reverse()) await runtime.close?.();
+  });
   void app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
   registerCors(app, options.corsOrigins || []);
   const agents = new Map<string, AgentConnection>();
@@ -337,7 +335,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
         });
       }
     }
-    return createMachine(options, agents, auth, provider, body, orgID, auth.teams, policyDelivery, reply);
+    return createMachine(options, agents, auth, provider, body, orgID, auth.teams, commercialPolicy, policyDelivery, reply);
   });
 
   app.get("/v1/machines", async (request, reply) => {
@@ -739,11 +737,54 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     return { machine: decorateTeam(publicMachine(moved), auth.teams) };
   });
 
+  for (const runtime of moduleRuntimes) {
+    if (!runtime.registerRoutes) continue;
+    void app.register(async (scope) => runtime.registerRoutes?.(scope, moduleContext));
+  }
+
   if (options.appDir) {
     registerAppRoutes(app, options.appDir);
   }
 
   return app;
+}
+
+function startModules(modules: BackendModule[], context: BackendModuleContext): BackendModuleRuntime[] {
+  const names = new Set<string>();
+  return modules.map((module) => {
+    if (module.name === "core") throw new Error("backend module name core is reserved");
+    if (names.has(module.name)) throw new Error(`duplicate backend module name: ${module.name}`);
+    names.add(module.name);
+    applyBackendMigrations(context.database, module.name, module.migrations);
+    return module.start(context);
+  });
+}
+
+function resolveCommercialPolicy(
+  configured: CommercialPolicy | undefined,
+  modules: BackendModuleRuntime[],
+): CommercialPolicy {
+  const policies = modules.flatMap((module) => module.commercialPolicy ? [module.commercialPolicy] : []);
+  if (configured && policies.length > 0) {
+    throw new Error("commercial policy cannot be configured both externally and by a backend module");
+  }
+  if (policies.length > 1) throw new Error("only one backend module may provide commercial policy");
+  return configured || policies[0] || new AllowAllCommercialPolicy();
+}
+
+function createModuleContext(options: BackendOptions): BackendModuleContext {
+  return {
+    database: options.store.db,
+    store: options.store,
+    providers: options.providers,
+    apiPublicURL: options.apiPublicURL || "",
+    appPublicURL: options.appPublicURL || "",
+    authenticate: (request, reply) => requireAuth(options, request, reply),
+    resolveTeam: (user, reference) => findTeam(user.teams, reference),
+    teamRole: (request, teamID, userID) => orgRoleForUser(options, request.headers, teamID, userID),
+    roleCanManage: orgRoleCanManage,
+    isAdministrator: (user) => isAdmin(options, user),
+  };
 }
 
 async function createMachine(
@@ -754,6 +795,7 @@ async function createMachine(
   body: CreateMachineRequest,
   orgID: string,
   teams: TeamInfo[],
+  commercialPolicy: CommercialPolicy,
   policyDelivery: PolicyEventDelivery,
   reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
 ) {
@@ -811,7 +853,6 @@ async function createMachine(
     ssh_principal: sshPrincipal,
   });
   phaseStarted = Date.now();
-  const commercialPolicy = options.commercialPolicy || new AllowAllCommercialPolicy();
   await options.store.putMachine(machine, machineLifecycleEvent(commercialPolicy, machineFact("machine.created", auth, machine, teams)));
   policyDelivery.notify();
   recordMachineCreateTiming(timings, "store_machine_ms", phaseStarted);

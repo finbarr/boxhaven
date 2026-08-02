@@ -103,6 +103,26 @@ The migration verifies the legacy auth database, imports all core state into a
 temporary copy, runs SQLite integrity checks, and only then atomically publishes
 `boxhaven.sqlite`. Keep the legacy files until the first new backup is verified.
 
+## Compile-Time Modules
+
+Private or internal distributions can depend on this directory as the
+`@boxhaven/backend` package and call `startBackendFromEnv({ modules, appDir })`.
+The normal `src/index.ts` entrypoint passes no modules and keeps serving the
+open-source console from `dist-app`.
+
+A module declares a stable name, sequential database migrations starting at
+version 1, and a synchronous startup function. Startup can provide one
+in-process commercial policy, register Fastify routes through authenticated
+core helpers, and clean up background work on shutdown. All migrations are
+transactionally recorded in the shared `boxhaven_migrations` ledger before the
+server accepts traffic. Module tables must use a module-specific prefix; core
+tables use `core_`. Only one module may supply commercial policy, and an
+in-process policy cannot be combined with the external HTTP policy.
+
+The package boundary is backend-only. A hosted distribution supplies its own
+`appDir`, so its browser UI can be completely different without copying or
+forking the open-source console.
+
 ## Production DigitalOcean Deployment
 
 The repository includes a production bundle in `deploy/digitalocean/` for the

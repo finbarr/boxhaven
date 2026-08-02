@@ -90,6 +90,20 @@ temporary copy, runs SQLite integrity checks, and only then atomically publishes
 The included DigitalOcean production deploy detects and performs this migration
 automatically.
 
+### Build A Distribution
+
+The backend is also a local npm package named `@boxhaven/backend`. An internal
+or hosted distribution can depend on it and call
+`startBackendFromEnv({ modules, appDir })` from its own entrypoint. Compile-time
+modules can add sequential migrations, private tables, authenticated Fastify
+routes, and one in-process commercial policy. Their migrations share the
+`boxhaven_migrations` ledger and SQLite database with core, while a separately
+built `appDir` replaces the open-source browser UI for that distribution.
+
+The standard entrypoint loads no modules. There is no runtime switch that can
+enable private functionality in a self-hosted build, and private modules do not
+need to duplicate the core API, auth, provider, SSH, or CLI implementations.
+
 ## Environment Variables
 
 - `BETTER_AUTH_SECRET`: required signing secret for Better Auth sessions.

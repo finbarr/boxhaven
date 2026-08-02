@@ -4,12 +4,21 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/public.d.ts",
+      "import": "./dist/public.js"
+    }
+  },
   "scripts": {
     "dev": "tsx src/index.ts",
     "dev:api": "tsx src/index.ts",
     "dev:app": "vite --host 0.0.0.0 --port 5173",
     "start": "node dist/index.js",
-    "build": "tsc -p tsconfig.json && npm run app:build",
+    "build": "rm -rf dist && tsc -p tsconfig.json && npm run app:build",
     "app:build": "vite build",
     "migrate:legacy": "tsx src/migrate-legacy.ts",
     "smoke:console": "tsx scripts/console-smoke.mjs",

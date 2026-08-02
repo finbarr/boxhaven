@@ -11,6 +11,7 @@ import { createBackendAuth, migrateBackendAuth } from "./auth.js";
 import { ProviderRegistry } from "./providers.js";
 import { CommercialPolicy, CreatePolicyDecision, MachineLifecycleEvent } from "./policy.js";
 import { reconciliationSnapshot } from "./policy_delivery.js";
+import type { BackendModule } from "./module.js";
 import { StateStore } from "./state.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
@@ -1248,6 +1249,65 @@ test("generic account capability returns a summary and action without exposing p
   assert.match(action.json().url, /^https:\/\/account\.hosted\.test\/team\//);
 });
 
+test("a compiled backend module migrates, authenticates routes, supplies policy, and closes", async () => {
+  let closed = false;
+  const module: BackendModule = {
+    name: "example_hosted",
+    migrations: [{
+      version: 1,
+      migrate(database) {
+        database.exec("CREATE TABLE example_hosted_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+        database.prepare("INSERT INTO example_hosted_settings VALUES (?, ?)").run("mode", "hosted");
+      },
+    }],
+    start(context) {
+      assert.equal((context.database.prepare(
+        "SELECT value FROM example_hosted_settings WHERE key = 'mode'",
+      ).get() as { value: string }).value, "hosted");
+      return {
+        commercialPolicy: {
+          lifecycleEventsEnabled: false,
+          async checkCreate() { return { allowed: false, message: "Add a payment method first." }; },
+          async emitMachineFact() {},
+          async reconcile() {},
+        },
+        registerRoutes(app, routeContext) {
+          app.get("/v1/example-hosted/session", async (request, reply) => {
+            const user = await routeContext.authenticate(request, reply);
+            if (!user) return;
+            return {
+              email: user.email,
+              team_id: user.orgID,
+              admin: routeContext.isAdministrator(user),
+            };
+          });
+        },
+        close() { closed = true; },
+      };
+    },
+  };
+  const { app, token } = await createTestBackend("module@example.com", "password123", {
+    adminEmails: ["module@example.com"],
+    modules: [module],
+  });
+  const headers = { authorization: `Bearer ${token}` };
+
+  const session = await app.inject({ method: "GET", url: "/v1/example-hosted/session", headers });
+  assert.equal(session.statusCode, 200, session.body);
+  assert.deepEqual(session.json(), {
+    email: "module@example.com",
+    team_id: session.json().team_id,
+    admin: true,
+  });
+  assert.ok(session.json().team_id);
+  const create = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "blocked" } });
+  assert.equal(create.statusCode, 403, create.body);
+  assert.equal(create.json().message, "Add a payment method first.");
+
+  await app.close();
+  assert.equal(closed, true);
+});
+
 async function createTestBackend(
   email = "user@example.com",
   password = "password123",
@@ -1262,6 +1322,7 @@ async function createTestBackend(
     commercialPolicy?: CommercialPolicy;
     policyEventRetryMs?: number;
     policyReconcileIntervalMs?: number;
+    modules?: BackendModule[];
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -1295,6 +1356,7 @@ async function createTestBackend(
     previewTargetPort: options.previewTargetPort,
     previewTLSWarmup: options.previewTLSWarmup,
     machineReadyTimeoutMs: options.machineReadyTimeoutMs ?? 0,
+    modules: options.modules,
   });
   const token = await signUp(app, email, password);
   return { app, provider, store, token };

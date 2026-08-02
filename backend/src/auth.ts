@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { betterAuth } from "better-auth";
+import { betterAuth, type Auth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { bearer, deviceAuthorization, organization } from "better-auth/plugins";
 import Database from "better-sqlite3";
@@ -20,11 +20,11 @@ export type BackendAuthOptions = {
   github?: { clientId: string; clientSecret: string };
 };
 
-export function createBackendAuth(options: BackendAuthOptions) {
-  return betterAuth(authConfig(options, openAuthDatabase(options.databasePath)));
+export function createBackendAuth(options: BackendAuthOptions): Auth {
+  return betterAuth(authConfig(options, openAuthDatabase(options.databasePath))) as Auth;
 }
 
-export type BackendAuth = ReturnType<typeof createBackendAuth>;
+export type BackendAuth = Auth;
 
 export async function migrateBackendAuth(options: BackendAuthOptions): Promise<void> {
   const database = openAuthDatabase(options.databasePath);

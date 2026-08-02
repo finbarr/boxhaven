@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
+import { applyBackendMigrations, type BackendDatabaseMigration } from "./database.js";
 import type { MachineLifecycleEvent } from "./policy.js";
 import { BackendState, RemoteMachine, TeamImageRecord, stateVersion } from "./types.js";
 
@@ -273,13 +274,15 @@ export class StateStore {
   }
 
   private migrate(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS boxhaven_migrations (
-        module TEXT NOT NULL,
-        version INTEGER NOT NULL,
-        applied_at TEXT NOT NULL,
-        PRIMARY KEY(module, version)
-      );
+    applyBackendMigrations(this.db, "core", coreMigrations);
+    this.db.prepare("INSERT OR IGNORE INTO core_metadata (key, value) VALUES ('provider', ?)").run(this.provider);
+  }
+}
+
+const coreMigrations: BackendDatabaseMigration[] = [{
+  version: 1,
+  migrate(database) {
+    database.exec(`
       CREATE TABLE IF NOT EXISTS core_metadata (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -310,13 +313,8 @@ export class StateStore {
         payload_json TEXT NOT NULL
       );
     `);
-    this.db.prepare(`
-      INSERT OR IGNORE INTO boxhaven_migrations (module, version, applied_at)
-      VALUES ('core', 1, ?)
-    `).run(new Date().toISOString());
-    this.db.prepare("INSERT OR IGNORE INTO core_metadata (key, value) VALUES ('provider', ?)").run(this.provider);
-  }
-}
+  },
+}];
 
 function parsePayload<T>(value: string, label: string): T {
   try {

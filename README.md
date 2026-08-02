@@ -21,6 +21,12 @@ site lives in [docs](docs) and can be hosted separately when teams want internal
 `BOXHAVEN_DOCS_URL` when building the console app if its footer should link to
 an internal documentation site instead of the hosted docs.
 
+The hosted distribution composes this open core at build time. It uses the
+same CLI and backend API, adds private backend modules and tables through the
+published `@boxhaven/backend` module contract, and supplies its own console UI.
+Core and hosted migrations share one SQLite database and one backend process;
+the hosted modules and UI are not present in this repository.
+
 The CLI is intentionally small, and the workflow is agent-first: copy your
 project to a box once, start Claude or Codex inside the box's tmux session —
 resuming your local conversation if you like — then disconnect and let it
