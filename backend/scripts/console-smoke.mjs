@@ -458,15 +458,15 @@ async function checkSecurityPage(page, previousToken) {
   const facts = await page.evaluate(() => ({
     title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
     activeGlobal: document.querySelector("nav[aria-label='Global'] a.active")?.textContent?.trim(),
-    storedToken: localStorage.getItem("boxhaven.backend.token"),
     bodyScrollWidth: document.documentElement.scrollWidth,
     viewport: window.innerWidth,
   }));
+  const storedToken = await page.evaluate(() => localStorage.getItem("boxhaven.backend.token"));
   assert.equal(facts.title, "Security");
   assert.equal(facts.activeGlobal, "Security");
   assert.equal(await page.locator(".security-form .error").count(), 0, await page.locator(".security-form").innerText());
   await page.getByText("Password updated.").waitFor();
-  assert.ok(facts.storedToken && facts.storedToken !== previousToken, "password change did not rotate the stored bearer token");
+  assert.ok(storedToken && storedToken !== previousToken, "password change did not rotate the stored bearer token");
   assert.ok(facts.bodyScrollWidth <= facts.viewport, `security page overflows: ${facts.bodyScrollWidth} > ${facts.viewport}`);
   const rotatedSessionStatus = await page.evaluate(async (url) => {
     const response = await fetch(`${url}/v1/auth/whoami`, {
@@ -481,7 +481,7 @@ async function checkSecurityPage(page, previousToken) {
   assert.ok(mobileDimensions.body <= mobileDimensions.viewport, `mobile security page overflows: ${mobileDimensions.body} > ${mobileDimensions.viewport}`);
 
   const rotatedContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
-  await rotatedContext.addInitScript((value) => localStorage.setItem("boxhaven.backend.token", value), facts.storedToken);
+  await rotatedContext.addInitScript((value) => localStorage.setItem("boxhaven.backend.token", value), storedToken);
   const rotatedPage = await rotatedContext.newPage();
   await rotatedPage.goto(`${appURL}/security`, { waitUntil: "domcontentloaded" });
   await waitForConsole(rotatedPage);
