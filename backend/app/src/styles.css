@@ -821,7 +821,8 @@ a.secondary-button {
   color: #244f43;
 }
 
-.side-links a.active {
+.side-links a.active,
+.side-links button.active {
   background: #fffaf0;
   color: #244f43;
   box-shadow: 0 4px 12px rgba(90, 67, 41, 0.12);
