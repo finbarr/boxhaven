@@ -16,6 +16,7 @@ import { Route as ConsoleRouteRouteImport } from './routes/_console/route'
 import { Route as ConsoleIndexRouteImport } from './routes/_console/index'
 import { Route as AuthGithubRouteImport } from './routes/auth.github'
 import { Route as ConsoleTeamsRouteImport } from './routes/_console/teams'
+import { Route as ConsoleSecurityRouteImport } from './routes/_console/security'
 import { Route as ConsoleImagesRouteImport } from './routes/_console/images'
 import { Route as ConsoleDeviceRouteImport } from './routes/_console/device'
 import { Route as ConsoleAccountRouteImport } from './routes/_console/account'
@@ -57,6 +58,11 @@ const ConsoleTeamsRoute = ConsoleTeamsRouteImport.update({
   path: '/teams',
   getParentRoute: () => ConsoleRouteRoute,
 } as any)
+const ConsoleSecurityRoute = ConsoleSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => ConsoleRouteRoute,
+} as any)
 const ConsoleImagesRoute = ConsoleImagesRouteImport.update({
   id: '/images',
   path: '/images',
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof ConsoleAccountRoute
   '/device': typeof ConsoleDeviceRoute
   '/images': typeof ConsoleImagesRoute
+  '/security': typeof ConsoleSecurityRoute
   '/teams': typeof ConsoleTeamsRoute
   '/auth/github': typeof AuthGithubRoute
   '/boxes/$name': typeof ConsoleBoxesNameRoute
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/account': typeof ConsoleAccountRoute
   '/device': typeof ConsoleDeviceRoute
   '/images': typeof ConsoleImagesRoute
+  '/security': typeof ConsoleSecurityRoute
   '/teams': typeof ConsoleTeamsRoute
   '/auth/github': typeof AuthGithubRoute
   '/': typeof ConsoleIndexRoute
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   '/_console/account': typeof ConsoleAccountRoute
   '/_console/device': typeof ConsoleDeviceRoute
   '/_console/images': typeof ConsoleImagesRoute
+  '/_console/security': typeof ConsoleSecurityRoute
   '/_console/teams': typeof ConsoleTeamsRoute
   '/auth/github': typeof AuthGithubRoute
   '/_console/': typeof ConsoleIndexRoute
@@ -142,6 +151,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/device'
     | '/images'
+    | '/security'
     | '/teams'
     | '/auth/github'
     | '/boxes/$name'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/device'
     | '/images'
+    | '/security'
     | '/teams'
     | '/auth/github'
     | '/'
@@ -170,6 +181,7 @@ export interface FileRouteTypes {
     | '/_console/account'
     | '/_console/device'
     | '/_console/images'
+    | '/_console/security'
     | '/_console/teams'
     | '/auth/github'
     | '/_console/'
@@ -237,6 +249,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleTeamsRouteImport
       parentRoute: typeof ConsoleRouteRoute
     }
+    '/_console/security': {
+      id: '/_console/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof ConsoleSecurityRouteImport
+      parentRoute: typeof ConsoleRouteRoute
+    }
     '/_console/images': {
       id: '/_console/images'
       path: '/images'
@@ -286,6 +305,7 @@ interface ConsoleRouteRouteChildren {
   ConsoleAccountRoute: typeof ConsoleAccountRoute
   ConsoleDeviceRoute: typeof ConsoleDeviceRoute
   ConsoleImagesRoute: typeof ConsoleImagesRoute
+  ConsoleSecurityRoute: typeof ConsoleSecurityRoute
   ConsoleTeamsRoute: typeof ConsoleTeamsRoute
   ConsoleIndexRoute: typeof ConsoleIndexRoute
   ConsoleBoxesNameRoute: typeof ConsoleBoxesNameRoute
@@ -297,6 +317,7 @@ const ConsoleRouteRouteChildren: ConsoleRouteRouteChildren = {
   ConsoleAccountRoute: ConsoleAccountRoute,
   ConsoleDeviceRoute: ConsoleDeviceRoute,
   ConsoleImagesRoute: ConsoleImagesRoute,
+  ConsoleSecurityRoute: ConsoleSecurityRoute,
   ConsoleTeamsRoute: ConsoleTeamsRoute,
   ConsoleIndexRoute: ConsoleIndexRoute,
   ConsoleBoxesNameRoute: ConsoleBoxesNameRoute,

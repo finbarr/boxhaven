@@ -34,7 +34,8 @@ function ConsoleLayout() {
   const onTeams = Boolean(matchRoute({ to: "/teams" }));
   const onImages = Boolean(matchRoute({ to: "/images" }));
   const onAccount = Boolean(matchRoute({ to: "/account" }));
-  const activeSection: ConsoleSection = onTeam ? "team" : onTeams ? "teams" : onImages ? "images" : onAccount ? "account" : "boxes";
+  const onSecurity = Boolean(matchRoute({ to: "/security" }));
+  const activeSection: ConsoleSection = onTeam ? "team" : onTeams ? "teams" : onImages ? "images" : onAccount ? "account" : onSecurity ? "security" : "boxes";
   // Surfaced in the sign-in hint when someone deep-links to /device.
   const deviceUserCode = typeof search.user_code === "string" ? search.user_code : "";
   const switchTeam = useMutation({
@@ -59,6 +60,7 @@ function ConsoleLayout() {
   });
   function handleToken(nextToken: string) {
     localStorage.setItem(tokenKey, nextToken);
+    if (session.data) queryClient.setQueryData(["session", nextToken], session.data);
     setToken(nextToken);
   }
 
@@ -99,6 +101,7 @@ function ConsoleLayout() {
 
   const consoleValue = {
     token,
+    replaceToken: handleToken,
     user: session.data?.user,
     teams: session.data?.teams || [],
     activeTeam: session.data?.team || undefined,

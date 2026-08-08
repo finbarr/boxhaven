@@ -941,6 +941,90 @@ a.secondary-button {
   max-width: 760px;
 }
 
+.security-workspace {
+  max-width: 640px;
+}
+
+.security-panel {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.security-intro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border-bottom: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.security-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(47, 111, 92, 0.11);
+  color: #2f6f5c;
+}
+
+.security-intro h2 {
+  margin: 0;
+  color: #24352f;
+  font-size: 20px;
+}
+
+.security-intro p,
+.security-footnote {
+  margin: 4px 0 0;
+  color: #60736a;
+  line-height: 1.45;
+}
+
+.security-form {
+  display: grid;
+  gap: 15px;
+  padding: 20px;
+}
+
+.security-session-option {
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  color: #40554c;
+}
+
+.security-session-option input {
+  width: 16px;
+  min-height: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: #2f6f5c;
+}
+
+.security-submit {
+  justify-self: start;
+}
+
+.security-success {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #2f6f5c;
+}
+
+.security-footnote {
+  margin: 0;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(96, 75, 53, 0.12);
+  background: rgba(244, 240, 229, 0.5);
+  font-size: 12px;
+}
+
 .account-panel {
   gap: 0;
   padding: 0;

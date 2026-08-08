@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Building2, CreditCard, Layers, LogOut, Server, Users } from "lucide-react";
+import { Building2, CreditCard, KeyRound, Layers, LogOut, Server, Users } from "lucide-react";
 import { ReactNode } from "react";
 import { TeamInfo } from "./api";
 import logoURL from "./assets/boxhaven-logo.png";
@@ -10,7 +10,7 @@ export const termsURL = "https://boxhaven.dev/terms/";
 export const privacyURL = "https://boxhaven.dev/privacy/";
 export const isHostedService = typeof window !== "undefined" && window.location.hostname === "app.boxhaven.dev";
 
-export type ConsoleSection = "boxes" | "team" | "teams" | "images" | "account";
+export type ConsoleSection = "boxes" | "team" | "teams" | "images" | "account" | "security";
 
 // Authed console frame: a persistent left nav sidebar plus the workspace where
 // each section renders its full-width tables. activeSection drives the
@@ -63,6 +63,10 @@ export function ConsoleShell({ activeSection, email, teams = [], activeTeam, tea
           <Link to="/teams" className={activeSection === "teams" ? "active" : undefined}>
             <Building2 size={17} />
             Teams
+          </Link>
+          <Link to="/security" className={activeSection === "security" ? "active" : undefined}>
+            <KeyRound size={17} />
+            Security
           </Link>
           {account ? (
             <Link to="/account" className={activeSection === "account" ? "active" : undefined}>

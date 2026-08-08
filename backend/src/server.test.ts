@@ -1141,6 +1141,53 @@ test("backend starts GitHub sign-in", async () => {
   assert.match(social.json().url, /client_id=test-client-id/);
 });
 
+test("authenticated users can change their password and rotate the bearer session", async () => {
+  const { app, token } = await createTestBackend("password-change@example.com", "password123");
+  const headers = { authorization: `Bearer ${token}` };
+
+  const rejected = await app.inject({
+    method: "POST",
+    url: "/v1/auth/change-password",
+    headers,
+    payload: { currentPassword: "wrong-password", newPassword: "updated-password123", revokeOtherSessions: true },
+  });
+  assert.equal(rejected.statusCode, 400, rejected.body);
+
+  const changed = await app.inject({
+    method: "POST",
+    url: "/v1/auth/change-password",
+    headers,
+    payload: { currentPassword: "password123", newPassword: "updated-password123", revokeOtherSessions: true },
+  });
+  assert.equal(changed.statusCode, 200, changed.body);
+  const replacementToken = changed.json().token;
+  assert.equal(typeof replacementToken, "string");
+  assert.notEqual(replacementToken, token);
+
+  const expiredSession = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  assert.equal(expiredSession.statusCode, 401, expiredSession.body);
+  const activeSession = await app.inject({
+    method: "GET",
+    url: "/v1/auth/whoami",
+    headers: { authorization: `Bearer ${replacementToken}` },
+  });
+  assert.equal(activeSession.statusCode, 200, activeSession.body);
+
+  const oldPassword = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-in/email",
+    payload: { email: "password-change@example.com", password: "password123" },
+  });
+  assert.notEqual(oldPassword.statusCode, 200, oldPassword.body);
+  const newPassword = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-in/email",
+    payload: { email: "password-change@example.com", password: "updated-password123" },
+  });
+  assert.equal(newPassword.statusCode, 200, newPassword.body);
+  await app.close();
+});
+
 test("hosted policy fails new creates closed while existing box access and destroy stay available", async () => {
   const facts: MachineLifecycleEvent[] = [];
   const checkedMachineIDs: string[] = [];

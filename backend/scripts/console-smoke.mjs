@@ -60,6 +60,7 @@ try {
   const disabledAccountFacts = await checkAccountCapability(page, {
     screenshotPrefix: "account-disabled",
   });
+  const securityFacts = await checkSecurityPage(page, token);
   assert.equal(disabledAccountBackend.whoami.account, undefined);
   await context.close();
 
@@ -92,6 +93,8 @@ try {
       members: join(outDir, "members.png"),
       teams: join(outDir, "teams.png"),
       teamEditor: join(outDir, "team-editor.png"),
+      security: join(outDir, "security.png"),
+      securityMobile: join(outDir, "security-mobile.png"),
       images: join(outDir, "images.png"),
       boxCreate: join(outDir, "box-create.png"),
       mobileTeams: join(outDir, "mobile-teams.png"),
@@ -105,6 +108,7 @@ try {
     gettingStartedFacts,
     membersFacts,
     teamsFacts,
+    securityFacts,
     imagesFacts,
     boxCreateFacts,
     mobileFacts,
@@ -388,7 +392,7 @@ async function checkMembersPage(page) {
   assert.deepEqual(facts.panelHeadings, []);
   assert.equal(facts.removeCellAlign, "right");
   assert.deepEqual(facts.teamNav, ["Boxes", "Members", "Images"]);
-  assert.deepEqual(facts.globalNav, ["Teams"]);
+  assert.deepEqual(facts.globalNav, ["Teams", "Security"]);
   for (const heading of ["Email", "Name", "Role"]) {
     assert.ok(facts.tableHeadings.includes(heading), `members table missing ${heading}`);
   }
@@ -438,6 +442,53 @@ async function checkTeamsPage(page) {
   return facts;
 }
 
+async function checkSecurityPage(page, previousToken) {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${appURL}/security`, { waitUntil: "domcontentloaded" });
+  await waitForConsole(page);
+  await page.getByRole("heading", { name: "Change password" }).waitFor({ timeout: 10_000 });
+  await page.getByLabel("Current password").fill("password123");
+  await page.getByLabel("New password", { exact: true }).fill("updated-password123");
+  await page.getByLabel("Confirm new password").fill("updated-password123");
+  assert.equal(await page.getByLabel("Sign out other devices and browsers").isChecked(), true);
+  await page.getByRole("button", { name: "Update password" }).click();
+  await page.locator(".security-success, .security-form .error").waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(outDir, "security.png"), fullPage: true });
+  const facts = await page.evaluate(() => ({
+    title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
+    activeGlobal: document.querySelector("nav[aria-label='Global'] a.active")?.textContent?.trim(),
+    storedToken: localStorage.getItem("boxhaven.backend.token"),
+    bodyScrollWidth: document.documentElement.scrollWidth,
+    viewport: window.innerWidth,
+  }));
+  assert.equal(facts.title, "Security");
+  assert.equal(facts.activeGlobal, "Security");
+  assert.equal(await page.locator(".security-form .error").count(), 0, await page.locator(".security-form").innerText());
+  await page.getByText("Password updated.").waitFor();
+  assert.ok(facts.storedToken && facts.storedToken !== previousToken, "password change did not rotate the stored bearer token");
+  assert.ok(facts.bodyScrollWidth <= facts.viewport, `security page overflows: ${facts.bodyScrollWidth} > ${facts.viewport}`);
+  const rotatedSessionStatus = await page.evaluate(async (url) => {
+    const response = await fetch(`${url}/v1/auth/whoami`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("boxhaven.backend.token") || ""}` },
+    });
+    return response.status;
+  }, apiURL);
+  assert.equal(rotatedSessionStatus, 200, "rotated bearer token cannot load the authenticated session");
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.screenshot({ path: join(outDir, "security-mobile.png"), fullPage: true });
+  const mobileDimensions = await page.evaluate(() => ({ viewport: window.innerWidth, body: document.documentElement.scrollWidth }));
+  assert.ok(mobileDimensions.body <= mobileDimensions.viewport, `mobile security page overflows: ${mobileDimensions.body} > ${mobileDimensions.viewport}`);
+
+  const rotatedContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+  await rotatedContext.addInitScript((value) => localStorage.setItem("boxhaven.backend.token", value), facts.storedToken);
+  const rotatedPage = await rotatedContext.newPage();
+  await rotatedPage.goto(`${appURL}/security`, { waitUntil: "domcontentloaded" });
+  await waitForConsole(rotatedPage);
+  await rotatedContext.close();
+  return facts;
+}
+
 async function checkImagesPage(page) {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${appURL}/images`, { waitUntil: "domcontentloaded" });
@@ -457,7 +508,7 @@ async function checkImagesPage(page) {
   assert.equal(facts.title, "Images");
   assert.equal(facts.eyebrow, "team / Acme Labs");
   assert.equal(facts.activeTeamNav, "Images");
-  assert.deepEqual(facts.globalNav, ["Teams"]);
+  assert.deepEqual(facts.globalNav, ["Teams", "Security"]);
   assert.equal(facts.hasActivate, false);
   assert.equal(facts.deleteCellAlign, "right");
   assert.ok(facts.rows.some(([provider, name, id]) => provider === "fake" && name === "boxhaven-remote-acme-tools" && id === "img-acme"), "missing seeded team image");
@@ -489,7 +540,7 @@ async function checkBoxCreateDrawer(page) {
 }
 
 async function checkAccountCapability(page, { label, screenshotPrefix }) {
-  const expectedNavigation = ["Boxes", "Members", "Images", "Teams", ...(label ? [label] : [])];
+  const expectedNavigation = ["Boxes", "Members", "Images", "Teams", "Security", ...(label ? [label] : [])];
   const facts = {};
   for (const [viewportName, viewport] of Object.entries({
     desktop: { width: 1440, height: 1000 },

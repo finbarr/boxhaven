@@ -6,6 +6,7 @@ import { AuthUser, TeamInfo } from "./api";
 // whoami or threading props through every component.
 export type ConsoleSession = {
   token: string;
+  replaceToken: (token: string) => void;
   user?: AuthUser;
   teams: TeamInfo[];
   activeTeam?: TeamInfo;
