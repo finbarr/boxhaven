@@ -131,6 +131,24 @@ test("backend exposes public release status without authentication", async () =>
   });
 });
 
+test("backend CORS permits authenticated PUT requests from the web console", async () => {
+  const origin = "https://app.hosted.test";
+  const { app } = await createTestBackend("cors@example.com", "password123", { corsOrigins: [origin] });
+  const response = await app.inject({
+    method: "OPTIONS",
+    url: "/v1/preferences",
+    headers: {
+      origin,
+      "access-control-request-method": "PUT",
+      "access-control-request-headers": "authorization,content-type",
+    },
+  });
+  assert.equal(response.statusCode, 204, response.body);
+  assert.equal(response.headers["access-control-allow-origin"], origin);
+  assert.match(String(response.headers["access-control-allow-methods"]), /(?:^|,\s*)PUT(?:,|$)/);
+  await app.close();
+});
+
 test("backend creates, records, lists, and releases one machine", async () => {
   const { app, provider, token } = await createTestBackend();
 
@@ -1477,6 +1495,7 @@ async function createTestBackend(
     policyReconcileIntervalMs?: number;
     modules?: BackendModule[];
     releaseChecker?: ReleaseUpdateChecker;
+    corsOrigins?: string[];
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -1512,6 +1531,7 @@ async function createTestBackend(
     machineReadyTimeoutMs: options.machineReadyTimeoutMs ?? 0,
     modules: options.modules,
     releaseChecker: options.releaseChecker,
+    corsOrigins: options.corsOrigins,
   });
   const token = await signUp(app, email, password);
   return { app, provider, store, token };

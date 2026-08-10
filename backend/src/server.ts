@@ -2384,7 +2384,7 @@ function registerCors(app: FastifyInstance, origins: string[]): void {
   void app.register(cors, {
     credentials: true,
     allowedHeaders: ["authorization", "content-type"],
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     origin(origin, callback) {
       callback(null, !origin || allowed.has(origin));
     },
