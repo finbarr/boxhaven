@@ -95,6 +95,23 @@ apt_install() {
   ln -sf /usr/bin/fdfind /usr/local/bin/fd 2>/dev/null || true
 }
 
+install_chrome() {
+  step "installing headless browser"
+  if command -v google-chrome-stable >/dev/null 2>&1; then
+    return 0
+  fi
+  if [ "$(dpkg --print-architecture)" != "amd64" ]; then
+    echo "Google Chrome is unavailable for this remote image architecture" >&2
+    return 1
+  fi
+  local package
+  package="$(mktemp --suffix=.deb)"
+  curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o "$package"
+  apt-get install -y --no-install-recommends "$package"
+  rm -f "$package"
+  command -v google-chrome-stable >/dev/null
+}
+
 install_terminal_compat() {
   step "installing terminal compatibility"
   cat > /tmp/boxhaven-extra-terminfo.src <<'EOF'
@@ -910,6 +927,7 @@ EOF
 
 disable_unattended_apt
 apt_install
+install_chrome
 install_terminal_compat
 install_node
 install_gh
