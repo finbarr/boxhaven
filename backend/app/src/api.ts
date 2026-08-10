@@ -17,6 +17,7 @@ export type {
   ProvidersResponse,
   SizesResponse,
   TeamInfo,
+  VersionResponse,
   WhoamiResponse,
 } from "../../src/client";
 

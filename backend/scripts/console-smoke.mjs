@@ -221,6 +221,17 @@ async function startSeededBackend({ accountLabel } = {}) {
     previewBaseDomain: "local.test",
     previewTargetPort: 80,
     machineReadyTimeoutMs: 0,
+    version: "v0.1.0",
+    releaseChecker: {
+      async versionStatus() {
+        return {
+          current_version: "v0.1.0",
+          latest_version: "v0.2.0",
+          update_available: true,
+          release_url: "https://github.com/finbarr/boxhaven/releases/tag/v0.2.0",
+        };
+      },
+    },
   });
   const token = await signUp(app, "admin@example.com");
   const headers = { authorization: `Bearer ${token}` };
@@ -302,6 +313,7 @@ async function startViteApp() {
 async function checkAccessPage(page) {
   await page.goto(appURL, { waitUntil: "domcontentloaded" });
   await page.getByRole("heading", { name: "Create a BoxHaven account" }).waitFor({ timeout: 10_000 });
+  await page.getByRole("status", { name: "BoxHaven update available" }).waitFor({ timeout: 10_000 });
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(outDir, "access.png"), fullPage: true });
   const facts = await page.evaluate(() => ({
@@ -313,6 +325,10 @@ async function checkAccessPage(page) {
     docsHref: [...document.querySelectorAll(".site-footer a")]
       .find((link) => link.textContent?.trim() === "Docs")
       ?.getAttribute("href"),
+    updateText: document.querySelector(".update-banner")?.textContent?.replace(/\s+/g, " ").trim(),
+    updateHref: document.querySelector(".update-banner a")?.getAttribute("href"),
+    updateTarget: document.querySelector(".update-banner a")?.getAttribute("target"),
+    updateLabel: document.querySelector(".update-banner a")?.getAttribute("aria-label"),
   }));
   assert.equal(facts.title, "Create a BoxHaven account");
   assert.equal(facts.topbarSubtitle, "console access");
@@ -320,6 +336,11 @@ async function checkAccessPage(page) {
   assert.equal(facts.marketingCopyPresent, false);
   assert.deepEqual(facts.authModes, ["Sign up", "Sign in"]);
   assert.equal(facts.docsHref, "https://docs.console-smoke.test/custom");
+  assert.ok(facts.updateText?.includes("BoxHaven v0.2.0 is available."));
+  assert.ok(facts.updateText?.includes("View release"));
+  assert.equal(facts.updateHref, "https://github.com/finbarr/boxhaven/releases/tag/v0.2.0");
+  assert.equal(facts.updateTarget, "_blank");
+  assert.equal(facts.updateLabel, "View the BoxHaven v0.2.0 release in a new tab");
   return facts;
 }
 
@@ -341,12 +362,14 @@ async function checkDevicePage(page, userCode) {
       viewportHeight: window.innerHeight,
       scrollY: window.scrollY,
       allowButtonBottom: allowRect ? Math.round(allowRect.bottom) : null,
+      updateBannerPresent: Boolean(document.querySelector(".update-banner")),
     };
   });
   assert.equal(facts.title, "Allow BoxHaven CLI?");
   assert.equal(facts.topbarPresent, false);
   assert.equal(facts.footerPresent, false);
   assert.equal(facts.welcomePanelPresent, false);
+  assert.equal(facts.updateBannerPresent, false);
   assert.equal(facts.scrollY, 0);
   assert.ok(facts.allowButtonBottom !== null && facts.allowButtonBottom <= facts.viewportHeight, `Allow button below fold: ${facts.allowButtonBottom} > ${facts.viewportHeight}`);
   return facts;
@@ -362,11 +385,17 @@ async function checkGettingStarted(page) {
     commands: [...document.querySelectorAll(".getting-started .command-block code")].map((node) => node.textContent?.trim()),
     bodyScrollWidth: document.documentElement.scrollWidth,
     viewport: window.innerWidth,
+    updateRole: document.querySelector(".update-banner")?.getAttribute("role"),
+    updateLabel: document.querySelector(".update-banner")?.getAttribute("aria-label"),
+    updateRel: document.querySelector(".update-banner a")?.getAttribute("rel"),
   }));
   for (const command of ["bh login", "bh ssh-config install", "bh create work", "bh run work claude", "bh connect work"]) {
     assert.ok(desktop.commands.includes(command), `getting started missing ${command}`);
   }
   assert.ok(desktop.bodyScrollWidth <= desktop.viewport, `desktop boxes page overflows: ${desktop.bodyScrollWidth} > ${desktop.viewport}`);
+  assert.equal(desktop.updateRole, "status");
+  assert.equal(desktop.updateLabel, "BoxHaven update available");
+  assert.equal(desktop.updateRel, "noopener noreferrer");
 
   await page.setViewportSize({ width: 390, height: 900 });
   await page.screenshot({ path: join(outDir, "mobile-boxes.png"), fullPage: true });
@@ -376,9 +405,11 @@ async function checkGettingStarted(page) {
     clippedCommands: [...document.querySelectorAll(".getting-started .command-block code")]
       .filter((node) => node.scrollWidth > node.clientWidth)
       .map((node) => node.textContent?.trim()),
+    updateWidth: document.querySelector(".update-banner")?.getBoundingClientRect().width,
   }));
   assert.ok(mobile.bodyScrollWidth <= mobile.viewport, `mobile boxes page overflows: ${mobile.bodyScrollWidth} > ${mobile.viewport}`);
   assert.deepEqual(mobile.clippedCommands, [], `mobile commands are clipped: ${mobile.clippedCommands.join(", ")}`);
+  assert.ok((mobile.updateWidth || 0) <= mobile.viewport, `mobile update banner overflows: ${mobile.updateWidth} > ${mobile.viewport}`);
   return { desktop, mobile };
 }
 

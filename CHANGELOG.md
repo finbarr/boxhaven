@@ -9,6 +9,9 @@
   hours, and stay silent when the release check is offline.
 - Added Google Chrome to the golden remote image so the seeded Playwright
   console smoke can capture screenshots in a freshly created box.
+- Added a compact accessible update banner to the open-source self-hosted
+  console, backed by a cached public GitHub release-status endpoint. The
+  hosted/private UI remains separate.
 - Split hosted commercial policy into a separate service. The public backend
   now exposes only an authenticated, versioned, vendor-neutral HTTP contract;
   self-hosting defaults to allow-all, configured create checks fail closed,

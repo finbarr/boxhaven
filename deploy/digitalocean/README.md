@@ -14,6 +14,10 @@ console. The paid-service website is maintained outside this repository and
 published to `boxhaven.dev`; documentation is a separate `docs/` artifact that
 can be hosted internally or served by this Caddy bundle.
 
+The self-hosted console also shows a compact banner when `/v1/version` reports
+a newer public BoxHaven GitHub release. Release discovery is cached by the
+backend and fails silently when GitHub is unavailable.
+
 ## Provision
 
 Create an Ubuntu 24.04 Droplet with `cloud-init.yml`. Enable DigitalOcean

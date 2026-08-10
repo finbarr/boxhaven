@@ -1,5 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { createRootRoute, HeadContent, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
-import { Compass } from "lucide-react";
+import { ArrowUpRight, Compass } from "lucide-react";
+import { apiFetch, VersionResponse } from "../api";
 import { docsURL, GitHubMark, isHostedService, privacyURL, repoURL, termsURL, TopBar } from "../shell";
 
 // App shell only: backdrop + topbar slot. Auth lives in the _console layout.
@@ -14,6 +16,20 @@ export const Route = createRootRoute({
 function RootShell() {
   const matchRoute = useMatchRoute();
   const onDevice = Boolean(matchRoute({ to: "/device" }));
+  const version = useQuery({
+    queryKey: ["boxhaven-version"],
+    enabled: !isHostedService && !onDevice,
+    retry: false,
+    staleTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    queryFn: () => apiFetch<VersionResponse>("/v1/version"),
+  });
+  const update = version.data?.update_available && version.data.latest_version
+    ? {
+        version: version.data.latest_version,
+        url: version.data.release_url || `${repoURL}/releases`,
+      }
+    : undefined;
 
   return (
     <>
@@ -21,6 +37,7 @@ function RootShell() {
       <main className="console">
         <div className="backdrop" />
         <div className="console-body">
+          {update ? <UpdateBanner version={update.version} url={update.url} /> : null}
           <Outlet />
         </div>
         {onDevice ? null : (
@@ -39,6 +56,23 @@ function RootShell() {
         )}
       </main>
     </>
+  );
+}
+
+function UpdateBanner({ version, url }: { version: string; url: string }) {
+  return (
+    <aside className="update-banner" role="status" aria-label="BoxHaven update available">
+      <span><strong>BoxHaven {version}</strong> is available.</span>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`View the BoxHaven ${version} release in a new tab`}
+      >
+        View release
+        <ArrowUpRight size={15} aria-hidden="true" />
+      </a>
+    </aside>
   );
 }
 
