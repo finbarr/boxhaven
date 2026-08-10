@@ -43,5 +43,5 @@ operators rebuild the default image with the image builder after changing
 [Self-Hosting](/self-hosting#golden-image-rotation) for the builder workflow.
 The checked-in installer pins Codex CLI `0.144.3` for deterministic
 compatibility with the configured `gpt-5.6-sol` model.
-It also installs Google Chrome and the shared libraries needed by the seeded
-Playwright console smoke.
+It also installs a pinned, checksummed Chrome for Testing headless shell and the
+shared libraries needed by the seeded Playwright console smoke.

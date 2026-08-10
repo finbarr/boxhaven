@@ -435,7 +435,7 @@ fi
 
 log "verifying remote runtime"
 ssh "${ssh_opts[@]}" "$ssh_target" \
-  "test -f /opt/boxhaven/remote/ready && command -v codex >/dev/null && command -v claude >/dev/null && command -v docker >/dev/null && command -v rsync >/dev/null && ldconfig -p | grep -Fq libatk-1.0.so.0 && ldconfig -p | grep -Fq libgbm.so.1 && test -x /usr/local/bin/boxhaven-remote-session && test -x /usr/local/lib/boxhaven/agent.mjs && test -f /home/boxhaven/.codex/skills/boxhaven-web-preview/SKILL.md && test \"\$(tmux -f /etc/tmux.conf start-server \\; show-options -gqv mouse)\" = \"on\" && git config --system --get-all safe.directory | grep -Fx /opt/boxhaven/project >/dev/null && test \"\$(stat -c %U /opt/boxhaven/project)\" = boxhaven && systemctl list-unit-files boxhaven-agent.service >/dev/null"
+  "test -f /opt/boxhaven/remote/ready && command -v codex >/dev/null && command -v claude >/dev/null && command -v docker >/dev/null && command -v rsync >/dev/null && command -v chromium >/dev/null && chromium --headless --no-sandbox --disable-gpu --dump-dom about:blank >/dev/null && ldconfig -p | grep -Fq libatk-1.0.so.0 && ldconfig -p | grep -Fq libgbm.so.1 && test -x /usr/local/bin/boxhaven-remote-session && test -x /usr/local/lib/boxhaven/agent.mjs && test -f /home/boxhaven/.codex/skills/boxhaven-web-preview/SKILL.md && test \"\$(tmux -f /etc/tmux.conf start-server \\; show-options -gqv mouse)\" = \"on\" && git config --system --get-all safe.directory | grep -Fx /opt/boxhaven/project >/dev/null && test \"\$(stat -c %U /opt/boxhaven/project)\" = boxhaven && systemctl list-unit-files boxhaven-agent.service >/dev/null"
 
 log "cleaning instance identity for reusable snapshot"
 ssh "${ssh_opts[@]}" "$ssh_target" 'bash -s' <<'REMOTE_CLEAN'

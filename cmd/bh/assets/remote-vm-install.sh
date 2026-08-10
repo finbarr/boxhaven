@@ -95,21 +95,33 @@ apt_install() {
   ln -sf /usr/bin/fdfind /usr/local/bin/fd 2>/dev/null || true
 }
 
-install_chrome() {
+install_headless_browser() {
   step "installing headless browser"
-  if command -v google-chrome-stable >/dev/null 2>&1; then
+  local version="149.0.7827.55"
+  local checksum="410c9407d5de3fea80d9398666be06f2aa09154a3fa7b327dc254e336bb4c4b7"
+  local install_dir="/opt/boxhaven/chrome-headless-shell"
+  if command -v chromium >/dev/null 2>&1 && chromium --version | grep -Fq "$version"; then
     return 0
   fi
   if [ "$(dpkg --print-architecture)" != "amd64" ]; then
-    echo "Google Chrome is unavailable for this remote image architecture" >&2
+    echo "Chrome for Testing is unavailable for this remote image architecture" >&2
     return 1
   fi
-  local package
-  package="$(mktemp --suffix=.deb)"
-  curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o "$package"
-  apt-get install -y --no-install-recommends "$package"
-  rm -f "$package"
-  command -v google-chrome-stable >/dev/null
+  local temp_dir archive
+  temp_dir="$(mktemp -d)"
+  archive="${temp_dir}/chrome-headless-shell.zip"
+  curl -fsSL \
+    "https://storage.googleapis.com/chrome-for-testing-public/${version}/linux64/chrome-headless-shell-linux64.zip" \
+    -o "$archive"
+  printf '%s  %s\n' "$checksum" "$archive" | sha256sum -c -
+  unzip -q "$archive" -d "$temp_dir"
+  rm -rf "$install_dir"
+  install -d -m 0755 "$(dirname "$install_dir")"
+  mv "${temp_dir}/chrome-headless-shell-linux64" "$install_dir"
+  chmod 0755 "${install_dir}/chrome-headless-shell"
+  ln -sfn "${install_dir}/chrome-headless-shell" /usr/bin/chromium
+  rm -rf "$temp_dir"
+  chromium --version | grep -Fq "$version"
 }
 
 install_terminal_compat() {
@@ -927,7 +939,7 @@ EOF
 
 disable_unattended_apt
 apt_install
-install_chrome
+install_headless_browser
 install_terminal_compat
 install_node
 install_gh

@@ -227,12 +227,28 @@ func TestRemoteVMInstallIncludesHeadlessBrowserExecutable(t *testing.T) {
 	}
 	script := string(data)
 	for _, want := range []string{
-		"install_chrome",
-		"google-chrome-stable_current_amd64.deb",
-		"command -v google-chrome-stable",
+		"install_headless_browser",
+		"149.0.7827.55",
+		"410c9407d5de3fea80d9398666be06f2aa09154a3fa7b327dc254e336bb4c4b7",
+		"chrome-for-testing-public/${version}/linux64/chrome-headless-shell-linux64.zip",
+		"sha256sum -c -",
+		"ln -sfn \"${install_dir}/chrome-headless-shell\" /usr/bin/chromium",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("remote-vm-install.sh is missing headless browser setup %q", want)
+		}
+	}
+
+	builder, err := os.ReadFile(filepath.Join("..", "..", "deploy", "digitalocean", "build-remote-image.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"command -v chromium",
+		"chromium --headless --no-sandbox --disable-gpu --dump-dom about:blank",
+	} {
+		if !strings.Contains(string(builder), want) {
+			t.Fatalf("build-remote-image.sh is missing headless browser verification %q", want)
 		}
 	}
 }
