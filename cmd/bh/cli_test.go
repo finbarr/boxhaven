@@ -220,6 +220,23 @@ func TestRemoteVMInstallIncludesHeadlessBrowserLibraries(t *testing.T) {
 	}
 }
 
+func TestRemoteVMInstallIncludesHeadlessBrowserExecutable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("assets", "remote-vm-install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, want := range []string{
+		"install_chrome",
+		"google-chrome-stable_current_amd64.deb",
+		"command -v google-chrome-stable",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("remote-vm-install.sh is missing headless browser setup %q", want)
+		}
+	}
+}
+
 func TestRemoteVMInstallIncludesRepositoryTestDependencies(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("assets", "remote-vm-install.sh"))
 	if err != nil {

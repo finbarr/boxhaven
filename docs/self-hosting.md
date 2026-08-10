@@ -204,7 +204,7 @@ deploy/digitalocean/build-remote-image.sh \
   --set-active
 ```
 
-The installer pins Codex CLI `0.144.1`; changing that pin has no effect on
+The installer pins Codex CLI `0.144.3`; changing that pin has no effect on
 existing boxes until this snapshot rotation is completed.
 
 Or use the checked-in npm entrypoint:
