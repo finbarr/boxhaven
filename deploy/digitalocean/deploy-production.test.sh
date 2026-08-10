@@ -24,7 +24,7 @@ curl_log="${temp_dir}/curl.log"
 
 cat > "${temp_dir}/bin/docker" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >> "${DOCKER_LOG}"
+printf '%s | %s\n' "${BOXHAVEN_VERSION:-}" "$*" >> "${DOCKER_LOG}"
 EOF
 cat > "${temp_dir}/bin/curl" <<'EOF'
 #!/usr/bin/env bash
@@ -64,6 +64,8 @@ run_deploy() {
 : > "$docker_log"
 : > "$curl_log"
 run_deploy "$public_env" --local --verify-only >/dev/null
+expected_version="$(git -C "$repo_root" describe --tags --always --dirty)"
+assert_contains "$(cat "$docker_log")" "${expected_version} | compose"
 assert_contains "$(cat "$docker_log")" "compose --env-file ${public_env} -f deploy/digitalocean/docker-compose.yml ps"
 assert_contains "$(cat "$curl_log")" "--retry 20 --retry-delay 1 --retry-all-errors --connect-timeout 5 --max-time 10 -fsS http://api.test/healthz"
 

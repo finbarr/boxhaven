@@ -81,6 +81,9 @@ fast-forward `/opt/boxhaven/app` on `master`, build the docs site, run the
 Docker Compose deploy on the Droplet, and check
 `https://api.boxhaven.dev/healthz`, `https://app.boxhaven.dev/healthz`, and
 `https://docs.boxhaven.dev/`. They do not rebuild the remote VM image.
+The deploy derives `BOXHAVEN_VERSION` from the checked-out Git ref so the
+public `/v1/version` endpoint can compare this installation with the latest
+BoxHaven GitHub release.
 
 If a distribution changes the production build or service wiring, supply its
 Compose overlay and optional overlay env file on every app or runtime deploy:

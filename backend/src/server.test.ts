@@ -11,6 +11,7 @@ import { createBackendAuth, migrateBackendAuth } from "./auth.js";
 import { ProviderRegistry } from "./providers.js";
 import { CommercialPolicy, CreatePolicyDecision, MachineLifecycleEvent } from "./policy.js";
 import { reconciliationSnapshot } from "./policy_delivery.js";
+import type { ReleaseUpdateChecker } from "./releases.js";
 import type { BackendModule } from "./module.js";
 import { StateStore } from "./state.js";
 import { createBackend } from "./server.js";
@@ -107,6 +108,28 @@ class FakeProvider implements MachineProvider {
     return this.plans.map((plan) => ({ ...plan, provider: this.name }));
   }
 }
+
+test("backend exposes public release status without authentication", async () => {
+  const releaseChecker: ReleaseUpdateChecker = {
+    async versionStatus() {
+      return {
+        current_version: "v0.1.0",
+        latest_version: "v0.2.0",
+        update_available: true,
+        release_url: "https://github.com/finbarr/boxhaven/releases/tag/v0.2.0",
+      };
+    },
+  };
+  const { app } = await createTestBackend("version@example.com", "password123", { releaseChecker });
+  const response = await app.inject({ method: "GET", url: "/v1/version" });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json(), {
+    current_version: "v0.1.0",
+    latest_version: "v0.2.0",
+    update_available: true,
+    release_url: "https://github.com/finbarr/boxhaven/releases/tag/v0.2.0",
+  });
+});
 
 test("backend creates, records, lists, and releases one machine", async () => {
   const { app, provider, token } = await createTestBackend();
@@ -1453,6 +1476,7 @@ async function createTestBackend(
     policyEventRetryMs?: number;
     policyReconcileIntervalMs?: number;
     modules?: BackendModule[];
+    releaseChecker?: ReleaseUpdateChecker;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-backend-"));
@@ -1487,6 +1511,7 @@ async function createTestBackend(
     previewTLSWarmup: options.previewTLSWarmup,
     machineReadyTimeoutMs: options.machineReadyTimeoutMs ?? 0,
     modules: options.modules,
+    releaseChecker: options.releaseChecker,
   });
   const token = await signUp(app, email, password);
   return { app, provider, store, token };
