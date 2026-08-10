@@ -197,6 +197,29 @@ func TestRemoteVMInstallPinsCompatibleCodexVersion(t *testing.T) {
 	}
 }
 
+func TestRemoteVMInstallIncludesHeadlessBrowserLibraries(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("assets", "remote-vm-install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, library := range []string{
+		"libasound2t64",
+		"libatk-bridge2.0-0t64",
+		"libatk1.0-0t64",
+		"libatspi2.0-0t64",
+		"libgbm1",
+		"libxcomposite1",
+		"libxdamage1",
+		"libxfixes3",
+		"libxrandr2",
+	} {
+		if !strings.Contains(script, library) {
+			t.Fatalf("remote-vm-install.sh is missing headless browser library %q", library)
+		}
+	}
+}
+
 func TestFormatRemoteProvisionTimings(t *testing.T) {
 	got := formatRemoteProvisionTimings(remoteBackendProvisionTimings{
 		TotalMS:            1234,

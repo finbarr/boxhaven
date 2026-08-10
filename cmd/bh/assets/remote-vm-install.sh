@@ -64,6 +64,15 @@ apt_install() {
     jq \
     rsync \
     ripgrep \
+    libasound2t64 \
+    libatk-bridge2.0-0t64 \
+    libatk1.0-0t64 \
+    libatspi2.0-0t64 \
+    libgbm1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
     fd-find \
     bat \
     eza \
