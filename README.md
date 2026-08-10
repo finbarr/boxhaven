@@ -151,6 +151,12 @@ go build -o bh ./cmd/bh
 ./bh version
 ```
 
+Normal CLI commands check the public BoxHaven GitHub releases in the
+background. Results are cached for 24 hours under the BoxHaven config
+directory, so update notices never wait on the network and offline checks stay
+silent. When a newer release is known, `bh` prints one concise link after
+reading the cached result.
+
 Then jump straight into the quickstart:
 
 ```bash
