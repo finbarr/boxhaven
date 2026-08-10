@@ -207,7 +207,7 @@ DigitalOcean:
 
 - `DIGITALOCEAN_ACCESS_TOKEN`: API token, enables the provider.
 - `DIGITALOCEAN_REGION`: default `nyc3`.
-- `DIGITALOCEAN_SIZE`: default `s-2vcpu-4gb-amd`.
+- `DIGITALOCEAN_SIZE`: default `s-2vcpu-4gb`.
 - `DIGITALOCEAN_IMAGE`: base image fallback, default `ubuntu-24-04-x64`.
 - `BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` (or legacy `BOXHAVEN_REMOTE_IMAGE`):
   golden snapshot id for new boxes.

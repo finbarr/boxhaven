@@ -170,8 +170,8 @@ Environment:
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
 - `DIGITALOCEAN_ACCESS_TOKEN`: DigitalOcean token; setting it enables the DigitalOcean provider.
 - `DIGITALOCEAN_REGION`: default `nyc3`.
-- `DIGITALOCEAN_SIZE`: provider plan behind the built-in `small` size, default `s-2vcpu-4gb-amd`.
-- Built-in sizes map to DigitalOcean AMD plans: `small` is 2 vCPU / 4 GB, `medium` is 4 vCPU / 8 GB, and `large` is 8 vCPU / 16 GB. Team owners and admins can create shortcuts for any available plan exposed by `GET /v1/sizes` or `bh size plans`.
+- `DIGITALOCEAN_SIZE`: provider plan behind the built-in `small` size, default `s-2vcpu-4gb`.
+- Built-in sizes map to DigitalOcean standard plans: `small` is 2 vCPU / 4 GB, `medium` is 4 vCPU / 8 GB, and `large` is 8 vCPU / 16 GB. Team owners and admins can create shortcuts for any available plan exposed by `GET /v1/sizes` or `bh size plans`.
 - `BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` or `BOXHAVEN_REMOTE_IMAGE`: provider image id, snapshot id, or slug for a prebuilt BoxHaven VM image. Numeric DigitalOcean snapshot ids are sent as image IDs when creating Droplets. Machines created from this image are treated as backend-bootstrapped. When unset, DigitalOcean falls back to `DIGITALOCEAN_IMAGE` and then `ubuntu-24-04-x64`; the CLI does not bootstrap plain hosts.
 - `DIGITALOCEAN_IMAGE`: DigitalOcean image fallback, default `ubuntu-24-04-x64`.
 - `DIGITALOCEAN_TAGS`: comma-separated tags, default `boxhaven`.

@@ -208,7 +208,7 @@ esac
 api_url="${BOXHAVEN_DIGITALOCEAN_API_URL:-https://api.digitalocean.com}"
 api_url="${api_url%/}"
 builder_region="${builder_region:-${DIGITALOCEAN_REGION:-nyc3}}"
-builder_size="${builder_size:-${DIGITALOCEAN_SIZE:-s-2vcpu-4gb-amd}}"
+builder_size="${builder_size:-${DIGITALOCEAN_SIZE:-s-2vcpu-4gb}}"
 active_remote_image="${BOXHAVEN_REMOTE_IMAGE:-}"
 if [ "$builder_base_image_explicit" -eq 0 ]; then
   if [ "$full_base_image" -eq 0 ] && [ -n "$active_remote_image" ]; then

@@ -36,18 +36,18 @@ test("DigitalOcean provider recognizes BoxHaven image names as bootstrapped", ()
   assert.equal(digitalOceanImageIsBoxHavenRemote(undefined), false);
 });
 
-test("DigitalOcean provider defaults to the small AMD size", () => {
+test("DigitalOcean provider defaults to the small standard size", () => {
   const provider = digitalOceanProviderFromEnv({
     DIGITALOCEAN_ACCESS_TOKEN: "dop_v1_test",
   });
 
-  assert.equal((provider as unknown as { config: { size: string } }).config.size, "s-2vcpu-4gb-amd");
+  assert.equal((provider as unknown as { config: { size: string } }).config.size, "s-2vcpu-4gb");
 });
 
 test("DigitalOcean defaults map to provider plans", () => {
-  assert.equal(digitalOceanPlanForDefaultSize("small"), "s-2vcpu-4gb-amd");
-  assert.equal(digitalOceanPlanForDefaultSize("medium"), "s-4vcpu-8gb-amd");
-  assert.equal(digitalOceanPlanForDefaultSize("large"), "s-8vcpu-16gb-amd");
+  assert.equal(digitalOceanPlanForDefaultSize("small"), "s-2vcpu-4gb");
+  assert.equal(digitalOceanPlanForDefaultSize("medium"), "s-4vcpu-8gb");
+  assert.equal(digitalOceanPlanForDefaultSize("large"), "s-8vcpu-16gb");
 });
 
 test("DigitalOcean creates machines with a throwaway no-login SSH key", async () => {

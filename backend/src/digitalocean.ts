@@ -18,11 +18,11 @@ import {
 
 const execFileAsync = promisify(execFile);
 const apiBaseURL = "https://api.digitalocean.com";
-const digitalOceanDefaultSize = "s-2vcpu-4gb-amd";
+const digitalOceanDefaultSize = "s-2vcpu-4gb";
 const digitalOceanDefaultSizes: Record<string, string> = {
-  small: "s-2vcpu-4gb-amd",
-  medium: "s-4vcpu-8gb-amd",
-  large: "s-8vcpu-16gb-amd",
+  small: "s-2vcpu-4gb",
+  medium: "s-4vcpu-8gb",
+  large: "s-8vcpu-16gb",
 };
 
 type DigitalOceanConfig = {
