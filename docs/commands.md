@@ -251,6 +251,11 @@ bh version
 
 Prints the CLI version and platform.
 
+All normal commands except help and version periodically refresh the latest
+public GitHub release in the background. The cached result is reused for 24
+hours; a newer release adds one concise notice to standard error, while an
+offline or failed check produces no warning and never delays the command.
+
 ## Configuration Files And Environment
 
 BoxHaven reads global config from `~/.config/boxhaven/config.toml` and project

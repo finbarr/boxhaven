@@ -4,6 +4,9 @@
 
 - Added the `sqlite3` CLI to the golden remote image so repository backup
   integrity tests run in a freshly created box.
+- Added non-blocking CLI update notices. Normal commands periodically refresh
+  the latest public GitHub release in the background, cache the result for 24
+  hours, and stay silent when the release check is offline.
 - Split hosted commercial policy into a separate service. The public backend
   now exposes only an authenticated, versioned, vendor-neutral HTTP contract;
   self-hosting defaults to allow-all, configured create checks fail closed,

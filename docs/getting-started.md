@@ -61,6 +61,13 @@ A plain Go build also works:
 go build -o bh ./cmd/bh
 ```
 
+Normal commands periodically check the public BoxHaven GitHub releases in a
+background process. The result is cached for 24 hours in
+`~/.config/boxhaven/version-check.json` (or the matching
+`$XDG_CONFIG_HOME` path), so an update check never delays a command and is
+silent when the network is unavailable. If a newer release is cached, `bh`
+prints a concise link to that release.
+
 ## Log In
 
 Use the hosted backend:

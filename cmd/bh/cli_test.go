@@ -370,6 +370,11 @@ func TestTopLevelHelpMentionsBHCommands(t *testing.T) {
 			t.Fatalf("help output missing sync note %q:\n%s", want, output)
 		}
 	}
+	for _, want := range []string{"GitHub Releases", "background", "24 hours", "silent offline"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("help output missing update note %q:\n%s", want, output)
+		}
+	}
 }
 
 func TestTeamUsageMentionsSwitchAndStatus(t *testing.T) {

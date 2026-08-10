@@ -41,6 +41,14 @@ func run() int {
 }
 
 func runCmd(args []string) error {
+	if len(args) > 0 && args[0] == backgroundVersionCheckCommand {
+		runBackgroundVersionCheck()
+		return nil
+	}
+	if shouldCheckForUpdates(args) {
+		checkForUpdates()
+	}
+
 	projectDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("get working directory: %w", err)
@@ -83,6 +91,18 @@ func runCmd(args []string) error {
 	}
 }
 
+func shouldCheckForUpdates(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "version", "help", "-h", "--help":
+		return false
+	default:
+		return true
+	}
+}
+
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "%sBoxHaven%s %s\n\n", colorBold, colorReset, Version)
 	fmt.Fprintf(os.Stderr, "%sUSAGE:%s\n", colorBold, colorReset)
@@ -113,6 +133,9 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintf(os.Stderr, "%sSYNC:%s\n", colorBold, colorReset)
 	fmt.Fprintln(os.Stderr, "  Excludes dependency/cache directories by default, reads .boxhavenignore, and reports elapsed transfer stats")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintf(os.Stderr, "%sUPDATES:%s\n", colorBold, colorReset)
+	fmt.Fprintln(os.Stderr, "  Checks GitHub Releases in the background, caches results for 24 hours, and stays silent offline")
 }
 
 func printVersion() {
