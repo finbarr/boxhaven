@@ -490,7 +490,7 @@ test("team owners create, use, and delete provider size shortcuts", async () => 
   assert.equal(missing.statusCode, 400, missing.body);
 });
 
-test("size discovery quotes every available provider plan for shortcut creation", async () => {
+test("size discovery quotes every provider plan available in the selected region", async () => {
   const commercialPolicy: CommercialPolicy = {
     lifecycleEventsEnabled: true,
     async checkCreate() { return { allowed: true }; },
@@ -500,8 +500,10 @@ test("size discovery quotes every available provider plan for shortcut creation"
     async emitMachineFact() {},
     async reconcile() {},
   };
-  const { app, token } = await createTestBackend("quoted-sizes@example.com", "password123", { commercialPolicy });
-  const response = await app.inject({ method: "GET", url: "/v1/sizes", headers: { authorization: `Bearer ${token}` } });
+  const { app, provider, token } = await createTestBackend("quoted-sizes@example.com", "password123", { commercialPolicy });
+  provider.plans[1].regions = ["nyc3"];
+  provider.plans[2].regions = ["sfo3"];
+  const response = await app.inject({ method: "GET", url: "/v1/sizes?region=nyc3", headers: { authorization: `Bearer ${token}` } });
 
   assert.equal(response.statusCode, 200, response.body);
   assert.deepEqual(response.json().plans.map((plan: { slug: string; hourly_price_cents: number }) => ({
@@ -510,7 +512,6 @@ test("size discovery quotes every available provider plan for shortcut creation"
   })), [
     { slug: "small", hourly_price_cents: 12 },
     { slug: "medium", hourly_price_cents: 24 },
-    { slug: "large", hourly_price_cents: 48 },
   ]);
 });
 

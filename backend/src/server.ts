@@ -1495,10 +1495,13 @@ async function quotePlansForProvider(
   policy: CommercialPolicy,
   region: string,
 ): Promise<Array<MachinePlan & { hourly_price_cents?: number }>> {
-  if (!policy.quoteMachine) return plans;
   const effectiveRegion = region || provider.info?.default_region || "";
-  return Promise.all(plans.map(async (plan) => {
-    if (!plan.available || (effectiveRegion && plan.regions.length > 0 && !plan.regions.includes(effectiveRegion))) return plan;
+  const eligiblePlans = plans.filter((plan) => (
+    plan.available
+    && (!effectiveRegion || plan.regions.length === 0 || plan.regions.includes(effectiveRegion))
+  ));
+  if (!policy.quoteMachine) return eligiblePlans;
+  return Promise.all(eligiblePlans.map(async (plan) => {
     const quote = await policy.quoteMachine!({
       team,
       actor,
