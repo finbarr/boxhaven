@@ -27,8 +27,7 @@ type TeamRowInfo = {
 };
 
 export function TeamsView() {
-  const { token, user } = useConsole();
-  const [newTeamOpen, setNewTeamOpen] = useState(false);
+  const { token, user, newTeamOpen, openNewTeam, closeNewTeam } = useConsole();
   const [selectedTeamID, setSelectedTeamID] = useState("");
   const orgs = useQuery({
     queryKey: ["orgs", token],
@@ -47,7 +46,7 @@ export function TeamsView() {
         eyebrow="global"
         title="Teams"
         actions={(
-          <button className="primary-button" type="button" onClick={() => setNewTeamOpen(true)}>
+          <button className="primary-button" type="button" onClick={openNewTeam}>
             <Plus size={16} />
             New team
           </button>
@@ -98,8 +97,8 @@ export function TeamsView() {
         onClose={() => setSelectedTeamID("")}
       />
 
-      <Drawer open={newTeamOpen} onClose={() => setNewTeamOpen(false)} eyebrow="teams" title="New team">
-        <NewTeamForm token={token} onCreated={() => setNewTeamOpen(false)} />
+      <Drawer open={newTeamOpen} onClose={closeNewTeam} eyebrow="teams" title="New team">
+        <NewTeamForm token={token} onCreated={closeNewTeam} />
       </Drawer>
     </>
   );
@@ -274,6 +273,7 @@ function NewTeamForm({ token, onCreated }: { token: string; onCreated?: (organiz
       <label>
         Team name
         <input
+          autoFocus
           value={name}
           onChange={(event) => {
             setName(event.target.value);

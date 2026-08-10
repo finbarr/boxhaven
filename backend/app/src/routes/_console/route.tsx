@@ -15,6 +15,7 @@ export const Route = createFileRoute("/_console")({
 
 function ConsoleLayout() {
   const [token, setToken] = useState(() => localStorage.getItem(tokenKey) || "");
+  const [newTeamOpen, setNewTeamOpen] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const matchRoute = useMatchRoute();
@@ -79,6 +80,11 @@ function ConsoleLayout() {
     switchTeam.mutate(organizationId);
   }
 
+  function handleNewTeam() {
+    setNewTeamOpen(true);
+    if (!onTeams) void navigate({ to: "/teams" });
+  }
+
   if (token && session.isPending) {
     return (
       <>
@@ -106,6 +112,9 @@ function ConsoleLayout() {
     teams: session.data?.teams || [],
     activeTeam: session.data?.team || undefined,
     isAdmin,
+    newTeamOpen,
+    openNewTeam: handleNewTeam,
+    closeNewTeam: () => setNewTeamOpen(false),
   };
 
   // The CLI device-approval page is a focused confirmation; render it without
@@ -129,6 +138,7 @@ function ConsoleLayout() {
         teamSwitchError={switchTeam.error ? (switchTeam.error as Error).message : ""}
         account={session.data?.account}
         onTeamSwitch={handleTeamSwitch}
+        onNewTeam={handleNewTeam}
         onLogout={handleLogout}
       >
         <Outlet />

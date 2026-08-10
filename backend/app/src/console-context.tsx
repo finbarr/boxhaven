@@ -11,6 +11,9 @@ export type ConsoleSession = {
   teams: TeamInfo[];
   activeTeam?: TeamInfo;
   isAdmin: boolean;
+  newTeamOpen: boolean;
+  openNewTeam: () => void;
+  closeNewTeam: () => void;
 };
 
 const ConsoleContext = createContext<ConsoleSession | null>(null);
