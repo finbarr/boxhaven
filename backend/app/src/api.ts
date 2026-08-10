@@ -12,6 +12,7 @@ export type {
   MachineSizeOption,
   MachineSizeShortcut,
   MachinesResponse,
+  OrgMachinesResponse,
   ProviderInfo,
   ProvidersResponse,
   SizesResponse,

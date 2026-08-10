@@ -41,6 +41,8 @@ export type ProviderInfo = {
 export type Machine = {
   name: string;
   user_id?: string;
+  owner_name?: string;
+  owner_email?: string;
   org_id?: string;
   team_id?: string;
   team_slug?: string;
@@ -85,6 +87,7 @@ export type ImagesResponse = { images: MachineImage[] };
 export type LoginResponse = { token: string; user?: AuthUser };
 export type MachineResponse = { machine: Machine; status?: string };
 export type MachinesResponse = { machines: Machine[] };
+export type OrgMachinesResponse = { machines: Machine[]; role: string };
 export type ProvidersResponse = { providers: ProviderInfo[] };
 
 export type MachinePlanPrice = { region?: string; hourly: number; monthly: number; currency: string };

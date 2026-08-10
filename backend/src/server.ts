@@ -6,6 +6,7 @@ import websocket from "@fastify/websocket";
 import Fastify, { FastifyInstance } from "fastify";
 import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
+import type { OrgMachinesResponse } from "./client.js";
 import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
 import { applyBackendMigrations } from "./database.js";
 import { BackendModule, BackendModuleContext, BackendModuleRuntime, BackendTeam, BackendUserContext } from "./module.js";
@@ -125,11 +126,6 @@ type SizeShortcutRequest = {
   name?: string;
   provider?: string;
   plan?: string;
-};
-
-type OrgMachine = RemoteMachine & {
-  owner_email?: string;
-  owner_name?: string;
 };
 
 type OrgMember = {
@@ -786,9 +782,8 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const context = await requireOrgMembership(options, request, reply, request.params.orgID);
     if (!context) return;
     const ownerByID = new Map(context.members.map((member) => [member.userId, member.user]));
-    const machines: OrgMachine[] = [];
-    for (const machine of await options.store.listMachines()) {
-      if (machine.org_id !== request.params.orgID) continue;
+    const machines: OrgMachinesResponse["machines"] = [];
+    for (const machine of await options.store.listMachinesForOrg(request.params.orgID)) {
       const owner = machine.user_id ? ownerByID.get(machine.user_id) : undefined;
       machines.push({
         ...publicMachine(normalizeMachine(options, machine)),
@@ -796,7 +791,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
         owner_name: owner?.name,
       });
     }
-    return { machines, role: context.role };
+    return { machines, role: context.role } satisfies OrgMachinesResponse;
   });
 
   app.delete<{ Params: { orgID: string; userID: string; name: string } }>("/v1/orgs/:orgID/machines/:userID/:name", async (request, reply) => {

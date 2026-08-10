@@ -1054,12 +1054,19 @@ test("backend scopes team machine listing and destroy to the box's team", async 
   assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "owner-box", team: "acme" } })).statusCode, 201);
   assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: memberHeaders, payload: { name: "team-box" } })).statusCode, 201);
 
+  const memberOwnedView = await app.inject({ method: "GET", url: "/v1/machines", headers: memberHeaders });
+  assert.equal(memberOwnedView.statusCode, 200, memberOwnedView.body);
+  assert.deepEqual(memberOwnedView.json().machines.map((machine: { name: string }) => machine.name).sort(), ["private-box", "team-box"]);
+
   const memberView = await app.inject({ method: "GET", url: `/v1/orgs/${orgID}/machines`, headers: memberHeaders });
   assert.equal(memberView.statusCode, 200, memberView.body);
   assert.equal(memberView.json().role, "member");
   const names = memberView.json().machines.map((machine: { name: string }) => machine.name).sort();
   assert.deepEqual(names, ["owner-box", "team-box"]);
   const ownerBox = memberView.json().machines.find((machine: { name: string }) => machine.name === "owner-box");
+  assert.equal(ownerBox.provider, "fake");
+  assert.equal(ownerBox.provider_label, "Fake Cloud");
+  assert.equal(ownerBox.owner_name, "owner");
   assert.equal(ownerBox.owner_email, "owner@example.com");
   assert.equal(ownerBox.agent_token_hash, undefined);
 
@@ -1071,6 +1078,10 @@ test("backend scopes team machine listing and destroy to the box's team", async 
   assert.equal(memberDestroy.statusCode, 403, memberDestroy.body);
 
   const teamBox = memberView.json().machines.find((machine: { name: string }) => machine.name === "team-box");
+  assert.equal(teamBox.provider, "fake");
+  assert.equal(teamBox.provider_label, "Fake Cloud");
+  assert.equal(teamBox.owner_name, "member");
+  assert.equal(teamBox.owner_email, "member@example.com");
   const privateDestroy = await app.inject({
     method: "DELETE",
     url: `/v1/orgs/${orgID}/machines/${teamBox.user_id}/private-box`,
