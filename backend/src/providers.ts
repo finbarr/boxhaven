@@ -52,6 +52,7 @@ export function providerInfo(provider: MachineProvider, defaultName?: string): M
   return {
     ...base,
     capabilities: [...capabilities],
+    default_sizes: base.default_sizes || { small: "small", medium: "medium", large: "large" },
     default: provider.name === defaultName,
   };
 }

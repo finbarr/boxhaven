@@ -14,7 +14,14 @@ const event: MachineLifecycleEvent = {
   type: "machine.created",
   team: { id: "team-1", name: "Team One", slug: "team-one" },
   actor: { id: "user-1", email: "user@example.com" },
-  machine: { id: "provider:machine-1", name: "box", tier: "medium" },
+  machine: {
+    id: "provider:machine-1",
+    name: "box",
+    size: "medium",
+    provider: "fake",
+    provider_plan: "medium",
+    provider_hourly_price: 0.1,
+  },
 };
 
 test("machine state and its policy event survive restart in one state commit", async () => {
@@ -163,7 +170,9 @@ test("reconciliation uses lifecycle team and stable provider machine identity se
     user_id: "user-1",
     provider: "fake",
     provider_name: "stable-provider-name",
-    tier: "large",
+    size: "large",
+    size_shortcut: "large",
+    provider_hourly_price: 0.2,
     org_id: "team-1",
     org_name: "Team One",
     org_slug: "team-one",
@@ -172,7 +181,14 @@ test("reconciliation uses lifecycle team and stable provider machine identity se
     generated_at: "2026-07-11T00:05:00.000Z",
     machines: [{
       team: { id: "team-1", name: "Team One", slug: "team-one" },
-      machine: { id: "fake:stable-provider-name", name: "renamed-box", tier: "large" },
+      machine: {
+        id: "fake:stable-provider-name",
+        name: "renamed-box",
+        size: "large",
+        provider: "fake",
+        provider_plan: "large",
+        provider_hourly_price: 0.2,
+      },
     }],
   });
 });
@@ -232,7 +248,9 @@ test("hosted reconciliation runs at startup, retries failures, and remains perio
     user_id: "user-1",
     provider: "fake",
     provider_name: "stable-box",
-    tier: "medium",
+    size: "medium",
+    size_shortcut: "medium",
+    provider_hourly_price: 0.1,
     org_id: "team-1",
     org_name: "Team One",
   });

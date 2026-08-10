@@ -9,12 +9,12 @@ import { BackendAuth } from "./auth.js";
 import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
 import { applyBackendMigrations } from "./database.js";
 import { BackendModule, BackendModuleContext, BackendModuleRuntime, BackendTeam, BackendUserContext } from "./module.js";
-import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyTeam, PolicyTier, policyMachineIdentity } from "./policy.js";
+import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyActor, PolicyTeam, policyMachineIdentity } from "./policy.js";
 import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { StateStore } from "./state.js";
-import { CreateMachineRequest, MachineImage, MachineProvider, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
+import { CreateMachineRequest, MachineImage, MachinePlan, MachineProvider, MachineSizeOption, MachineSizeShortcut, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
 
 export type BackendOptions = {
   auth: BackendAuth;
@@ -120,6 +120,13 @@ type CreateImageRequest = {
   name?: string;
 };
 
+type SizeShortcutRequest = {
+  team?: string;
+  name?: string;
+  provider?: string;
+  plan?: string;
+};
+
 type OrgMachine = RemoteMachine & {
   owner_email?: string;
   owner_name?: string;
@@ -168,6 +175,98 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   app.get("/v1/providers", async () => ({
     providers: options.providers.list().map((provider) => providerInfo(provider, options.providers.defaultName)),
   }));
+
+  app.get<{ Querystring: { team?: string; provider?: string; region?: string } }>("/v1/sizes", async (request, reply) => {
+    const auth = await requireAuth(options, request, reply);
+    if (!auth) return;
+    const team = resolveTeamReference(auth, bodyString(request.query?.team), reply);
+    if (!team) return;
+    const providerName = bodyString(request.query?.provider).trim().toLowerCase() || options.providers.defaultName;
+    const provider = options.providers.get(providerName);
+    if (!provider) {
+      return reply.code(400).send({ id: "bad_request", message: `provider ${providerName} is not configured` });
+    }
+    try {
+      const actor = policyActor(auth, false);
+      const plans = await listProviderPlans(provider);
+      const shortcuts = await options.store.listSizeShortcutsForOrg(team.id);
+      const sizes = await sizeOptionsForProvider(
+        provider,
+        plans,
+        shortcuts,
+        policyTeam(team),
+        actor,
+        commercialPolicy,
+        bodyString(request.query?.region).trim().toLowerCase(),
+      );
+      return {
+        provider: providerInfo(provider, options.providers.defaultName),
+        plans,
+        sizes,
+        shortcuts,
+        can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
+      };
+    } catch (error) {
+      console.error(`machine size discovery failed: ${(error as Error).message}`);
+      return reply.code(503).send({ id: "sizes_unavailable", message: "Machine sizes are temporarily unavailable." });
+    }
+  });
+
+  app.post<{ Body: SizeShortcutRequest }>("/v1/sizes/shortcuts", async (request, reply) => {
+    const auth = await requireAuth(options, request, reply);
+    if (!auth) return;
+    const team = resolveTeamReference(auth, bodyString(request.body?.team), reply);
+    if (!team) return;
+    if (!orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID))) {
+      return reply.code(403).send({ id: "forbidden", message: "Only team owners and admins can manage size shortcuts." });
+    }
+    const name = bodyString(request.body?.name).trim().toLowerCase();
+    const providerName = bodyString(request.body?.provider).trim().toLowerCase();
+    const planSlug = bodyString(request.body?.plan).trim();
+    const nameError = validateName(name);
+    if (nameError) return reply.code(400).send({ id: "bad_request", message: nameError.replace("machine", "shortcut") });
+    if (isDefaultSize(name)) {
+      return reply.code(400).send({ id: "bad_request", message: `${name} is a built-in size and cannot be replaced` });
+    }
+    const provider = options.providers.get(providerName);
+    if (!provider) return reply.code(400).send({ id: "bad_request", message: `provider ${providerName || "(empty)"} is not configured` });
+    let plan: MachinePlan | undefined;
+    try {
+      plan = (await listProviderPlans(provider)).find((candidate) => candidate.slug === planSlug);
+    } catch (error) {
+      console.error(`machine plan validation failed: ${(error as Error).message}`);
+      return reply.code(503).send({ id: "sizes_unavailable", message: "Machine sizes are temporarily unavailable." });
+    }
+    if (!plan || !plan.available) {
+      return reply.code(400).send({ id: "bad_request", message: `plan ${planSlug || "(empty)"} is not available from ${provider.label || provider.name}` });
+    }
+    const existing = await options.store.getSizeShortcutForOrg(team.id, name);
+    const now = new Date().toISOString();
+    const shortcut: MachineSizeShortcut = {
+      name,
+      org_id: team.id,
+      provider: provider.name,
+      plan: plan.slug,
+      created_at: existing?.created_at || now,
+      updated_at: now,
+    };
+    await options.store.putSizeShortcut(shortcut);
+    return reply.code(existing ? 200 : 201).send({ shortcut });
+  });
+
+  app.delete<{ Params: { name: string }; Querystring: { team?: string } }>("/v1/sizes/shortcuts/:name", async (request, reply) => {
+    const auth = await requireAuth(options, request, reply);
+    if (!auth) return;
+    const team = resolveTeamReference(auth, bodyString(request.query?.team), reply);
+    if (!team) return;
+    if (!orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID))) {
+      return reply.code(403).send({ id: "forbidden", message: "Only team owners and admins can manage size shortcuts." });
+    }
+    const name = bodyString(request.params.name).trim().toLowerCase();
+    if (isDefaultSize(name)) return reply.code(400).send({ id: "bad_request", message: "Built-in sizes cannot be deleted." });
+    await options.store.deleteSizeShortcutForOrg(team.id, name);
+    return reply.code(204).send();
+  });
 
   app.get<{ Querystring: { domain?: string } }>("/v1/preview/tls-check", async (request, reply) => {
     const hostname = normalizeHostname(request.query.domain || "");
@@ -262,18 +361,11 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   app.post<{ Body: CreateMachineRequest }>("/v1/machines", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
-    const body = normalizeCreateRequest(request.body, options.providers.defaultName);
-    const provider = options.providers.get(body.provider);
-    if (!provider) {
-      return reply.code(400).send({
-        id: "bad_request",
-        message: `provider ${body.provider} is not configured (configured: ${options.providers.names().join(", ")})`,
-      });
-    }
+    const body = normalizeCreateRequest(request.body);
     const error = validateName(body.name);
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
-    const tierError = validateMachineTier(body.tier);
-    if (tierError) return reply.code(400).send({ id: "bad_request", message: tierError });
+    const sizeError = validateName(body.size || "small");
+    if (sizeError) return reply.code(400).send({ id: "bad_request", message: sizeError.replace("machine", "size") });
     const imageError = validateCreateOverride("image", body.image);
     if (imageError) return reply.code(400).send({ id: "bad_request", message: imageError });
     const regionError = validateCreateOverride("region", body.region);
@@ -297,6 +389,23 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       team = found.team;
     }
     const orgID = team?.id || auth.orgID;
+    let selected: MachineSizeOption;
+    try {
+      selected = await resolveMachineSize(options, orgID, body.size || "small", body.provider, body.region);
+    } catch (sizeError) {
+      return reply.code(400).send({ id: "bad_request", message: (sizeError as Error).message });
+    }
+    const provider = options.providers.get(selected.provider);
+    if (!provider) {
+      return reply.code(400).send({
+        id: "bad_request",
+        message: `provider ${selected.provider} is not configured (configured: ${options.providers.names().join(", ")})`,
+      });
+    }
+    body.provider = provider.name;
+    body.provider_size = selected.plan.slug;
+    body.provider_hourly_price = providerPlanHourlyPrice(selected.plan, body.region || provider.info?.default_region);
+    body.size = selected.name;
     if (body.image) {
       const teamImage = await resolveTeamImageForCreate(options, provider, orgID, body.image, reply);
       if (!teamImage) return;
@@ -318,7 +427,9 @@ export function createBackend(options: BackendOptions): FastifyInstance {
             user_id: auth.userID,
             provider: body.provider,
             provider_name: providerMachineName(auth.userID, body.name),
-            tier: body.tier,
+            size: selected.plan.slug,
+            size_shortcut: selected.name,
+            provider_hourly_price: body.provider_hourly_price,
           }),
         });
       } catch (policyError) {
@@ -334,6 +445,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
           message: decision.message || "This team is not currently allowed to create another box.",
         });
       }
+      body.hourly_price_cents = decision.hourly_price_cents;
     }
     return createMachine(options, agents, auth, provider, body, orgID, auth.teams, commercialPolicy, policyDelivery, reply);
   });
@@ -843,7 +955,10 @@ async function createMachine(
     org_id: orgID || undefined,
     org_name: teams.find((team) => team.id === orgID)?.name,
     org_slug: teams.find((team) => team.id === orgID)?.slug,
-    tier: policyTier(body.tier),
+    size: body.provider_size,
+    size_shortcut: body.size || "small",
+    provider_hourly_price: body.provider_hourly_price,
+    ...(body.hourly_price_cents !== undefined ? { hourly_price_cents: body.hourly_price_cents } : {}),
     provider_name: body.provider_name,
     source_path: body.source_path,
     repo_url: body.repo_url,
@@ -955,15 +1070,18 @@ function providerMachineMatches(left: RemoteMachine, right: RemoteMachine): bool
   );
 }
 
-function normalizeCreateRequest(body: CreateMachineRequest | undefined, providerName: string): CreateMachineRequest {
+function normalizeCreateRequest(body: CreateMachineRequest | undefined): CreateMachineRequest {
   const input = body || { name: "" };
   return {
     ...input,
     name: normalizeMachineName(bodyString(input.name)),
-    provider: bodyString(input.provider).trim().toLowerCase() || providerName,
+    provider: bodyString(input.provider).trim().toLowerCase() || undefined,
     provider_name: bodyString(input.provider_name).trim() || undefined,
     team: bodyString(input.team).trim() || undefined,
-    tier: bodyString(input.tier).trim().toLowerCase() || undefined,
+    size: bodyString(input.size).trim().toLowerCase() || "small",
+    provider_size: undefined,
+    provider_hourly_price: undefined,
+    hourly_price_cents: undefined,
     region: bodyString(input.region).trim().toLowerCase() || undefined,
     image: bodyString(input.image).trim() || undefined,
     image_bootstrapped: undefined,
@@ -1267,14 +1385,109 @@ function validateName(name: string): string | undefined {
   return undefined;
 }
 
-function validateMachineTier(tier: string | undefined): string | undefined {
-  if (!tier) return undefined;
-  if (tier === "small" || tier === "medium" || tier === "large") return undefined;
-  return "invalid machine tier; expected small, medium, or large";
+function isDefaultSize(name: string): name is "small" | "medium" | "large" {
+  return name === "small" || name === "medium" || name === "large";
 }
 
-function policyTier(tier: string | undefined): PolicyTier {
-  return tier === "medium" || tier === "large" ? tier : "small";
+async function listProviderPlans(provider: MachineProvider): Promise<MachinePlan[]> {
+  if (provider.listPlans) return provider.listPlans();
+  const defaults = providerInfo(provider).default_sizes || { small: "small", medium: "medium", large: "large" };
+  return Object.entries(defaults).map(([name, slug]) => ({
+    provider: provider.name,
+    slug,
+    label: name[0].toUpperCase() + name.slice(1),
+    vcpus: 0,
+    memory_mb: 0,
+    disk_gb: 0,
+    available: true,
+    regions: [],
+    prices: [],
+  }));
+}
+
+async function resolveMachineSize(
+  options: BackendOptions,
+  orgID: string,
+  name: string,
+  requestedProvider: string | undefined,
+  region: string | undefined,
+): Promise<MachineSizeOption> {
+  const shortcut = isDefaultSize(name) ? undefined : await options.store.getSizeShortcutForOrg(orgID, name);
+  if (!shortcut && !isDefaultSize(name)) {
+    throw new Error(`size ${name} does not exist; use bh size list or create it with bh size create`);
+  }
+  if (shortcut && requestedProvider && shortcut.provider !== requestedProvider) {
+    throw new Error(`size ${name} uses ${shortcut.provider}, not ${requestedProvider}`);
+  }
+  const providerName = shortcut?.provider || requestedProvider || options.providers.defaultName;
+  const provider = options.providers.get(providerName);
+  if (!provider) throw new Error(`provider ${providerName} is not configured`);
+  const defaults = providerInfo(provider).default_sizes || { small: "small", medium: "medium", large: "large" };
+  const planSlug = shortcut?.plan || defaults[name as keyof typeof defaults];
+  if (!planSlug) throw new Error(`provider ${providerName} does not define the ${name} size`);
+  const plan = (await listProviderPlans(provider)).find((candidate) => candidate.slug === planSlug);
+  if (!plan || !plan.available) throw new Error(`plan ${planSlug} is no longer available from ${provider.label || provider.name}`);
+  const effectiveRegion = region || provider.info?.default_region;
+  if (effectiveRegion && plan.regions.length > 0 && !plan.regions.includes(effectiveRegion)) {
+    throw new Error(`plan ${planSlug} is not available in ${effectiveRegion}`);
+  }
+  return { name, kind: shortcut ? "shortcut" : "default", provider: provider.name, plan };
+}
+
+async function sizeOptionsForProvider(
+  provider: MachineProvider,
+  plans: MachinePlan[],
+  shortcuts: MachineSizeShortcut[],
+  team: PolicyTeam,
+  actor: PolicyActor,
+  policy: CommercialPolicy,
+  region: string,
+): Promise<MachineSizeOption[]> {
+  const bySlug = new Map(plans.map((plan) => [plan.slug, plan]));
+  const defaults = providerInfo(provider).default_sizes || { small: "small", medium: "medium", large: "large" };
+  const definitions = [
+    ...Object.entries(defaults).map(([name, plan]) => ({ name, plan, kind: "default" as const })),
+    ...shortcuts.filter((shortcut) => shortcut.provider === provider.name).map((shortcut) => ({
+      name: shortcut.name,
+      plan: shortcut.plan,
+      kind: "shortcut" as const,
+    })),
+  ];
+  const effectiveRegion = region || provider.info?.default_region || "";
+  const options: MachineSizeOption[] = [];
+  for (const definition of definitions) {
+    const plan = bySlug.get(definition.plan);
+    if (!plan || !plan.available) continue;
+    if (effectiveRegion && plan.regions.length > 0 && !plan.regions.includes(effectiveRegion)) continue;
+    const option: MachineSizeOption = { ...definition, provider: provider.name, plan };
+    if (policy.quoteMachine) {
+      const quote = await policy.quoteMachine({
+        team,
+        actor,
+        machine: policyMachineIdentity({
+          name: definition.name,
+          provider: provider.name,
+          size: plan.slug,
+          size_shortcut: definition.name,
+          provider_hourly_price: providerPlanHourlyPrice(plan, effectiveRegion),
+        }),
+      });
+      if (quote.hourly_price_cents !== undefined) option.hourly_price_cents = quote.hourly_price_cents;
+    }
+    options.push(option);
+  }
+  return options;
+}
+
+function providerPlanHourlyPrice(plan: MachinePlan, region = ""): number {
+  const price = (region ? plan.prices.find((candidate) => candidate.region === region) : undefined)
+    || plan.prices.find((candidate) => !candidate.region)
+    || plan.prices[0];
+  return price?.hourly || 0;
+}
+
+function policyActor(auth: AuthContext, canManage: boolean): PolicyActor {
+  return { id: auth.userID, email: auth.email, can_manage: canManage };
 }
 
 function policyTeam(team: TeamInfo): PolicyTeam {

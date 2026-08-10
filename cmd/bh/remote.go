@@ -81,7 +81,7 @@ type remoteProvisionOptions struct {
 	Name       string
 	SSHUser    string
 	BackendURL string
-	Tier       string
+	Size       string
 	Provider   string
 	Region     string
 	Image      string
@@ -120,7 +120,7 @@ func runRemote(args []string, projectDir string) error {
 
 func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "USAGE:")
-	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--tier <tier>] [--region <region>] [--image <image>] [--team <team>] [--no-sync]")
+	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--size <name>] [--region <region>] [--image <image>] [--team <team>] [--no-sync]")
 	fmt.Fprintln(os.Stderr, "  bh run <name> [--sync] <cmd...>")
 	fmt.Fprintln(os.Stderr, "  bh connect <name>")
 	fmt.Fprintln(os.Stderr, "  bh sync up <name>")
@@ -135,7 +135,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  --no-sync            Skip the create command's initial project sync")
 	fmt.Fprintln(os.Stderr, "  --sync               Mirror the local project before bh run (off by default; overwrites box-side edits)")
 	fmt.Fprintln(os.Stderr, "  --provider <name>    Cloud provider for create (defaults to config or backend default)")
-	fmt.Fprintln(os.Stderr, "  --tier <tier>        Machine size tier for create: small, medium, or large")
+	fmt.Fprintln(os.Stderr, "  --size <name>        Built-in or team-defined size shortcut (default: small)")
 	fmt.Fprintln(os.Stderr, "  --region <region>    Provider region for create")
 	fmt.Fprintln(os.Stderr, "  --image <image>      Provider image ID or slug for create")
 	fmt.Fprintln(os.Stderr, "  --team <team>        Team that owns the new box (defaults to your active team)")
@@ -224,14 +224,14 @@ func parseRemoteCreateArgs(args []string, cfg Config) (remoteProvisionOptions, b
 			opts.SSHUser = args[i]
 		case strings.HasPrefix(arg, "--ssh-user="):
 			opts.SSHUser = strings.TrimPrefix(arg, "--ssh-user=")
-		case arg == "--tier":
+		case arg == "--size":
 			i++
 			if i >= len(args) {
-				return opts, noSync, fmt.Errorf("bh create --tier requires a value")
+				return opts, noSync, fmt.Errorf("bh create --size requires a value")
 			}
-			opts.Tier = args[i]
-		case strings.HasPrefix(arg, "--tier="):
-			opts.Tier = strings.TrimPrefix(arg, "--tier=")
+			opts.Size = args[i]
+		case strings.HasPrefix(arg, "--size="):
+			opts.Size = strings.TrimPrefix(arg, "--size=")
 		case arg == "--provider":
 			i++
 			if i >= len(args) {
@@ -283,11 +283,11 @@ func parseRemoteCreateArgs(args []string, cfg Config) (remoteProvisionOptions, b
 	}
 	opts.Name = strings.ToLower(strings.TrimSpace(opts.Name))
 	opts.SSHUser = strings.TrimSpace(opts.SSHUser)
-	tier, err := normalizeRemoteMachineTier(opts.Tier)
+	size, err := normalizeRemoteMachineSize(opts.Size)
 	if err != nil {
 		return opts, noSync, err
 	}
-	opts.Tier = tier
+	opts.Size = size
 	opts.Provider = strings.ToLower(strings.TrimSpace(opts.Provider))
 	opts.Region = strings.TrimSpace(opts.Region)
 	opts.Image = strings.TrimSpace(opts.Image)
@@ -302,17 +302,15 @@ func parseRemoteCreateArgs(args []string, cfg Config) (remoteProvisionOptions, b
 	return opts, noSync, nil
 }
 
-func normalizeRemoteMachineTier(tier string) (string, error) {
-	tier = strings.ToLower(strings.TrimSpace(tier))
-	if tier == "" {
+func normalizeRemoteMachineSize(size string) (string, error) {
+	size = strings.ToLower(strings.TrimSpace(size))
+	if size == "" {
 		return "", nil
 	}
-	switch tier {
-	case "small", "medium", "large":
-		return tier, nil
-	default:
-		return "", fmt.Errorf("invalid remote machine tier %q; expected small, medium, or large", tier)
+	if err := validateRemoteName(size); err != nil {
+		return "", fmt.Errorf("invalid remote machine size %q; expected lowercase letters, numbers, and hyphens", size)
 	}
+	return size, nil
 }
 
 func remoteConfigForProvision(cfg Config, opts remoteProvisionOptions) (Config, error) {

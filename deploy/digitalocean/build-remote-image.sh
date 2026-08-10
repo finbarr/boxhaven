@@ -18,7 +18,7 @@ Options:
   --ref <git-ref>         Build from a GitHub ref instead of this checkout
   --source-dir <path>     Build from a local Git checkout (default: repo root)
   --name <snapshot-name>  Snapshot name (default includes commit/ref + timestamp)
-  --size <slug>           Builder Droplet size (default: DIGITALOCEAN_SIZE or small tier)
+  --size <slug>           Builder Droplet size (default: DIGITALOCEAN_SIZE or the small plan)
   --region <slug>         Builder Droplet region (default: DIGITALOCEAN_REGION or nyc3)
   --base-image <slug|id>  Builder base image override
   --full-base-image       Build from DIGITALOCEAN_IMAGE or Ubuntu 24.04 instead

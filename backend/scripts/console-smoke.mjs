@@ -163,6 +163,13 @@ async function startSeededBackend({ accountLabel } = {}) {
     async listImages() {
       return fakeImages;
     },
+    async listPlans() {
+      return [
+        { provider: "fake", slug: "small", label: "Small", vcpus: 2, memory_mb: 4096, disk_gb: 80, available: true, regions: [], prices: [{ hourly: 0.1, monthly: 73, currency: "USD" }] },
+        { provider: "fake", slug: "medium", label: "Medium", vcpus: 4, memory_mb: 8192, disk_gb: 160, available: true, regions: [], prices: [{ hourly: 0.2, monthly: 146, currency: "USD" }] },
+        { provider: "fake", slug: "large", label: "Large", vcpus: 8, memory_mb: 16384, disk_gb: 320, available: true, regions: [], prices: [{ hourly: 0.4, monthly: 292, currency: "USD" }] },
+      ];
+    },
   };
   const providers = new ProviderRegistry([fakeProvider], fakeProvider.name);
   const databasePath = join(dir, "boxhaven.sqlite");
@@ -177,8 +184,8 @@ async function startSeededBackend({ accountLabel } = {}) {
     async getAccountSummary() {
       return {
         state: "trial",
-        included_units_remaining: 37,
-        active_units: 3,
+        included_credit_cents: 3700,
+        active_hourly_cents: 30,
         can_manage: true,
         primary_action: "subscribe",
       };
@@ -521,6 +528,8 @@ async function checkBoxCreateDrawer(page) {
   await waitForConsole(page);
   await page.getByRole("button", { name: "New box" }).click();
   await page.waitForSelector(".drawer-panel select", { timeout: 10_000 });
+  await page.getByRole("button", { name: "Size shortcuts" }).click();
+  await page.waitForSelector(".size-manager-body", { timeout: 10_000 });
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(outDir, "box-create.png"), fullPage: true });
   const facts = await page.evaluate(() => {
@@ -531,11 +540,16 @@ async function checkBoxCreateDrawer(page) {
       imageOptions: imageLabel
         ? [...imageLabel.querySelectorAll("option")].map((option) => option.textContent?.trim())
         : [],
+      shortcutPlanOptions: [...document.querySelectorAll(".size-manager-body select option")].map((option) => option.textContent?.trim()),
+      bodyScrollWidth: document.documentElement.scrollWidth,
+      viewport: window.innerWidth,
     };
   });
   assert.equal(facts.drawerTitle, "Create a box");
   assert.ok(facts.imageOptions.includes("BoxHaven default"), "missing default image option");
   assert.ok(facts.imageOptions.some((option) => option?.includes("boxhaven-remote-acme-tools")), "missing team image option");
+  assert.ok(facts.shortcutPlanOptions.some((option) => option?.includes("large - 8 vCPU / 16 GB / 320 GB")), "missing provider plan option");
+  assert.ok(facts.bodyScrollWidth <= facts.viewport, `create drawer overflows: ${facts.bodyScrollWidth} > ${facts.viewport}`);
   return facts;
 }
 
@@ -557,8 +571,8 @@ async function checkAccountCapability(page, { label, screenshotPrefix }) {
       allNavigation: [...document.querySelectorAll(".side-links a")].map((item) => item.textContent?.trim()),
       title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
       planStatus: document.querySelector(".account-state")?.textContent?.trim() || null,
-      includedUnits: document.querySelector(".account-metrics div:first-child strong")?.textContent?.trim() || null,
-      activeUnits: document.querySelector(".account-metrics div:last-child strong")?.textContent?.trim() || null,
+      includedCredit: document.querySelector(".account-metrics div:first-child strong")?.textContent?.trim() || null,
+      activeRate: document.querySelector(".account-metrics div:last-child strong")?.textContent?.trim() || null,
       primaryAction: document.querySelector(".account-actions .primary-button")?.textContent?.trim() || null,
       bodyScrollWidth: document.documentElement.scrollWidth,
       viewport: window.innerWidth,
@@ -568,8 +582,8 @@ async function checkAccountCapability(page, { label, screenshotPrefix }) {
     if (label) {
       assert.equal(facts[viewportName].title, "Account");
       assert.equal(facts[viewportName].planStatus, "Included usage");
-      assert.equal(facts[viewportName].includedUnits, "37");
-      assert.equal(facts[viewportName].activeUnits, "3");
+      assert.equal(facts[viewportName].includedCredit, "$37.00");
+      assert.equal(facts[viewportName].activeRate, "$0.30/hr");
       assert.equal(facts[viewportName].primaryAction, "Choose a plan");
     }
     assert.ok(

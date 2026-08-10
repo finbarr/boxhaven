@@ -60,6 +60,8 @@ func runCmd(args []string) error {
 		return runImage(args[1:], projectDir)
 	case "team":
 		return runTeam(args[1:], projectDir)
+	case "size":
+		return runSize(args[1:], projectDir)
 	case "login":
 		return runLogin(args[1:])
 	case "logout":
@@ -84,7 +86,7 @@ func runCmd(args []string) error {
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "%sBoxHaven%s %s\n\n", colorBold, colorReset, Version)
 	fmt.Fprintf(os.Stderr, "%sUSAGE:%s\n", colorBold, colorReset)
-	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--tier small|medium|large] [--region <region>] [--image <image>] [--team <team>] [--no-sync]")
+	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--size <name>] [--region <region>] [--image <image>] [--team <team>] [--no-sync]")
 	fmt.Fprintln(os.Stderr, "  bh list")
 	fmt.Fprintln(os.Stderr, "  bh destroy <name> [--force]")
 	fmt.Fprintln(os.Stderr, "  bh rename <old-name> <new-name>")
@@ -97,6 +99,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  bh ssh-config install|refresh|uninstall")
 	fmt.Fprintln(os.Stderr, "  bh image ls|create|rm [...]")
 	fmt.Fprintln(os.Stderr, "  bh team list|create|switch|status|members|invite|boxes [...]")
+	fmt.Fprintln(os.Stderr, "  bh size list|plans|create|rm [...]")
 	fmt.Fprintln(os.Stderr, "  bh login [--backend-url <url>] [--no-open]")
 	fmt.Fprintln(os.Stderr, "  bh logout")
 	fmt.Fprintln(os.Stderr, "  bh config")

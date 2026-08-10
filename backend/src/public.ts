@@ -16,11 +16,12 @@ export type {
   CreatePolicyDecision,
   CreatePolicyInput,
   MachineLifecycleEvent,
+  MachinePriceQuote,
   PolicyActor,
   PolicyMachine,
   PolicyReconciliation,
   PolicyTeam,
-  PolicyTier,
 } from "./policy.js";
+export type { MachinePlan, MachinePlanGPU, MachinePlanPrice, MachineSizeOption, MachineSizeShortcut } from "./types.js";
 export { startBackendFromEnv } from "./runtime.js";
 export type { BackendRuntimeOptions } from "./runtime.js";

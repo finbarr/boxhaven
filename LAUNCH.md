@@ -32,15 +32,15 @@ Last audited: 2026-07-31.
 
 ## 1. Control trial and infrastructure abuse
 
-This is the first launch gate. The hosted policy currently grants 50 included
-units to every new team. A user can create additional teams to obtain additional
-credits. Email verification is disabled, and the production value of
+This is the first launch gate. The hosted policy currently grants a $5 included
+credit to every new team. A user can create additional teams to obtain additional
+credit. Email verification is disabled, and the production value of
 `BOXHAVEN_MAX_MACHINES_PER_USER` is unset.
 
 - [ ] Grant included usage once per verified user or other durable billing
   identity, not once per newly created team.
 - [ ] Require a payment method before the first hosted machine is provisioned.
-  Included units should still be consumed before metered charges begin.
+  Included credit should still be consumed before metered charges begin.
 - [ ] Require email verification for password signups. GitHub sign-in may rely
   on GitHub's verified email assertion.
 - [ ] Set `BOXHAVEN_MAX_MACHINES_PER_USER=5` in production for the initial
@@ -66,15 +66,14 @@ Deleting such a team can orphan provider resources or recurring billing.
 
 ## 3. Publish pricing and payment policy
 
-The live marketing site has no pricing page. The account page shows units but
-does not define their price, tier weights, rounding, trial expiry, or card
-requirements.
+The live marketing site has no pricing page. The account page shows prices but
+does not yet publish the markup formula, trial expiry, or card requirements.
 
-- [ ] Publish the launch price before signup and beside the account action:
-  `$0.10` per unit, with small at 1 unit/hour, medium at 2 units/hour, and large
-  at 4 units/hour.
-- [ ] State that usage is measured in started machine-hours and that 50
-  included units expire after 14 days.
+- [ ] Publish the launch price before signup and beside the account action.
+  The built-in DigitalOcean sizes start at `$0.10`, `$0.20`, and `$0.40` per
+  hour; custom plans use the same hosted pricing formula.
+- [ ] State that usage is measured in started machine-minutes and that the $5
+  included credit expires after 14 days.
 - [ ] State when a card is required, when metered charges begin, how to cancel,
   and what happens to machines after cancellation.
 - [ ] Change the `past_due` policy to block new machine creation immediately.

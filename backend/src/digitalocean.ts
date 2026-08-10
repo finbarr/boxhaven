@@ -9,6 +9,7 @@ import {
   CreateMachineRequest,
   ListProviderMachinesRequest,
   MachineImage,
+  MachinePlan,
   MachineProvider,
   MachineProviderInfo,
   RemoteMachine,
@@ -18,7 +19,7 @@ import {
 const execFileAsync = promisify(execFile);
 const apiBaseURL = "https://api.digitalocean.com";
 const digitalOceanDefaultSize = "s-2vcpu-4gb-amd";
-const digitalOceanTierSizes: Record<string, string> = {
+const digitalOceanDefaultSizes: Record<string, string> = {
   small: "s-2vcpu-4gb-amd",
   medium: "s-4vcpu-8gb-amd",
   large: "s-8vcpu-16gb-amd",
@@ -79,15 +80,18 @@ type SSHKey = {
 export class DigitalOceanProvider implements MachineProvider {
   readonly name = "digitalocean";
   readonly label = "DigitalOcean";
-  readonly info: MachineProviderInfo = {
-    name: this.name,
-    label: this.label,
-    capabilities: ["create", "destroy", "list", "connect", "images", "snapshot"],
-  };
+  readonly info: MachineProviderInfo;
   private readonly apiURL: string;
 
   constructor(private readonly config: DigitalOceanConfig) {
     this.apiURL = (config.apiURL || apiBaseURL).replace(/\/+$/, "");
+    this.info = {
+      name: this.name,
+      label: this.label,
+      capabilities: ["create", "destroy", "list", "connect", "images", "snapshot"],
+      default_sizes: { ...digitalOceanDefaultSizes, small: config.size } as MachineProviderInfo["default_sizes"],
+      default_region: config.region,
+    };
   }
 
   async createMachine(request: CreateMachineRequest): Promise<{ machine: RemoteMachine; status?: string }> {
@@ -107,7 +111,7 @@ export class DigitalOceanProvider implements MachineProvider {
         body: {
           name: machineResourceName(providerName),
           region: request.region?.trim() || this.config.region,
-          size: digitalOceanSizeForRequest(request, this.config),
+          size: request.provider_size || this.config.size || digitalOceanDefaultSize,
           image: digitalOceanImageForCreate(image),
           ssh_keys: [throwawaySSHKeyID],
           tags: this.machineTags(providerName),
@@ -198,6 +202,17 @@ export class DigitalOceanProvider implements MachineProvider {
 
   async deleteImage(imageID: string): Promise<void> {
     await this.request(`/v2/images/${encodeURIComponent(imageID)}`, { method: "DELETE" });
+  }
+
+  async listPlans(): Promise<MachinePlan[]> {
+    const plans: MachinePlan[] = [];
+    let path = "/v2/sizes?per_page=200";
+    while (path) {
+      const response = await this.request<{ sizes: DigitalOceanSize[]; links?: { pages?: { next?: string } } }>(path);
+      plans.push(...response.sizes.map((size) => machinePlanFromDigitalOcean(this.name, size)));
+      path = nextPath(response.links?.pages?.next);
+    }
+    return plans;
   }
 
   private async findDroplet(machineName: string): Promise<Droplet | undefined> {
@@ -329,13 +344,55 @@ export function digitalOceanProviderFromEnv(env = process.env): DigitalOceanProv
   });
 }
 
-function digitalOceanSizeForRequest(request: CreateMachineRequest, config: DigitalOceanConfig): string {
-  const tierSize = request.tier ? digitalOceanSizeForTier(request.tier) : "";
-  return tierSize || config.size || digitalOceanDefaultSize;
+export function digitalOceanPlanForDefaultSize(size: string): string | undefined {
+  return digitalOceanDefaultSizes[size];
 }
 
-export function digitalOceanSizeForTier(tier: string): string | undefined {
-  return digitalOceanTierSizes[tier];
+type DigitalOceanSize = {
+  slug: string;
+  memory?: number;
+  vcpus?: number;
+  disk?: number;
+  price_monthly?: number;
+  price_hourly?: number;
+  regions?: string[];
+  available?: boolean;
+  description?: string;
+  gpu_info?: {
+    count?: number;
+    model?: string;
+    vram?: number | { amount?: number; unit?: string };
+  } | null;
+};
+
+function machinePlanFromDigitalOcean(provider: string, size: DigitalOceanSize): MachinePlan {
+  const vram = typeof size.gpu_info?.vram === "number"
+    ? size.gpu_info.vram
+    : size.gpu_info?.vram?.amount;
+  const vramUnit = typeof size.gpu_info?.vram === "object" ? size.gpu_info.vram.unit : "MiB";
+  return {
+    provider,
+    slug: size.slug,
+    label: size.description?.trim() || size.slug,
+    ...(size.description ? { description: size.description } : {}),
+    vcpus: size.vcpus || 0,
+    memory_mb: size.memory || 0,
+    disk_gb: size.disk || 0,
+    available: size.available !== false,
+    regions: size.regions || [],
+    prices: [{
+      hourly: size.price_hourly || 0,
+      monthly: size.price_monthly || 0,
+      currency: "USD",
+    }],
+    ...(size.gpu_info?.count ? {
+      gpu: {
+        count: size.gpu_info.count,
+        model: size.gpu_info.model || "GPU",
+        ...(vram ? { memory_mb: vramUnit?.toLowerCase() === "gib" ? vram * 1024 : vram } : {}),
+      },
+    } : {}),
+  };
 }
 
 export function digitalOceanImageForCreate(image: string): string | number {

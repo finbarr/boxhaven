@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { applyBackendMigrations, type BackendDatabaseMigration } from "./database.js";
 import type { MachineLifecycleEvent } from "./policy.js";
-import { BackendState, RemoteMachine, TeamImageRecord, stateVersion } from "./types.js";
+import { BackendState, MachineSizeShortcut, RemoteMachine, TeamImageRecord, stateVersion } from "./types.js";
 
 type PayloadRow = { payload_json: string };
 type MetadataRow = { value: string };
@@ -138,6 +138,39 @@ export class StateStore {
         DELETE FROM core_images
         WHERE org_id = ? AND provider = ? AND (image_id = ? OR name = ?)
       `).run(orgID, provider, want, want);
+    });
+  }
+
+  async listSizeShortcutsForOrg(orgID: string): Promise<MachineSizeShortcut[]> {
+    return this.payloads<MachineSizeShortcut>(
+      "SELECT payload_json FROM core_size_shortcuts WHERE org_id = ? ORDER BY name",
+      orgID,
+    );
+  }
+
+  async getSizeShortcutForOrg(orgID: string, name: string): Promise<MachineSizeShortcut | undefined> {
+    const row = this.db.prepare(
+      "SELECT payload_json FROM core_size_shortcuts WHERE org_id = ? AND name = ?",
+    ).get(orgID, name) as PayloadRow | undefined;
+    return row ? parsePayload<MachineSizeShortcut>(row.payload_json, "size shortcut") : undefined;
+  }
+
+  async putSizeShortcut(shortcut: MachineSizeShortcut): Promise<void> {
+    await this.mutate(() => {
+      this.db.prepare(`
+        INSERT INTO core_size_shortcuts (org_id, name, provider, plan, payload_json)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(org_id, name) DO UPDATE SET
+          provider = excluded.provider,
+          plan = excluded.plan,
+          payload_json = excluded.payload_json
+      `).run(shortcut.org_id, shortcut.name, shortcut.provider, shortcut.plan, JSON.stringify(shortcut));
+    });
+  }
+
+  async deleteSizeShortcutForOrg(orgID: string, name: string): Promise<void> {
+    await this.mutate(() => {
+      this.db.prepare("DELETE FROM core_size_shortcuts WHERE org_id = ? AND name = ?").run(orgID, name);
     });
   }
 
@@ -293,6 +326,21 @@ const coreMigrations: BackendDatabaseMigration[] = [{
         occurred_at TEXT NOT NULL,
         payload_json TEXT NOT NULL
       );
+    `);
+  },
+}, {
+  version: 2,
+  migrate(database) {
+    database.exec(`
+      CREATE TABLE core_size_shortcuts (
+        org_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        plan TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY(org_id, name)
+      );
+      CREATE INDEX core_size_shortcuts_provider ON core_size_shortcuts(provider, plan);
     `);
   },
 }];

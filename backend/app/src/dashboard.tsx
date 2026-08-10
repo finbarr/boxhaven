@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRightLeft, ChevronRight, MonitorDot, Plus, Server, Trash2 } from "lucide-react";
+import { ArrowRightLeft, ChevronRight, Info, MonitorDot, Plus, Settings2, Server, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CommandBlock, installCommand } from "./access";
 import {
@@ -9,9 +9,12 @@ import {
   ImagesResponse,
   Machine,
   MachineImage,
+  MachinePlan,
+  MachinePlanPrice,
   MachineResponse,
   MachinesResponse,
   ProvidersResponse,
+  SizesResponse,
   slugName,
   TeamInfo,
 } from "./api";
@@ -27,14 +30,6 @@ type ConnectResponse = MachineResponse & {
   };
 };
 
-type MachineTier = "small" | "medium" | "large";
-
-const machineTiers: Array<{ value: MachineTier; label: string; detail: string }> = [
-  { value: "small", label: "Small", detail: "2 vCPU / 4 GB" },
-  { value: "medium", label: "Medium", detail: "4 vCPU / 8 GB" },
-  { value: "large", label: "Large", detail: "8 vCPU / 16 GB" },
-];
-
 function imageValue(image: MachineImage): string {
   return image.id || image.name;
 }
@@ -47,9 +42,12 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   const navigate = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
-  const [tier, setTier] = useState<MachineTier>("small");
+  const [size, setSize] = useState("small");
   const [provider, setProvider] = useState("");
   const [image, setImage] = useState("");
+  const [manageSizes, setManageSizes] = useState(false);
+  const [shortcutName, setShortcutName] = useState("");
+  const [shortcutPlan, setShortcutPlan] = useState("");
   const queryClient = useQueryClient();
   const providers = useQuery({
     queryKey: ["providers"],
@@ -65,6 +63,11 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   const selectedProvider = provider || defaultProvider;
   const defaultTeam = activeTeam ? activeTeam.slug || activeTeam.id : teams[0]?.slug || teams[0]?.id || "";
   const activeTeamID = activeTeam?.id || "";
+  const sizes = useQuery({
+    queryKey: ["sizes", token, activeTeamID, selectedProvider],
+    enabled: Boolean(activeTeamID && selectedProvider),
+    queryFn: () => apiFetch<SizesResponse>(`/v1/sizes?team=${encodeURIComponent(defaultTeam)}&provider=${encodeURIComponent(selectedProvider)}`, token),
+  });
   const images = useQuery({
     queryKey: ["images", token, activeTeamID],
     queryFn: () => apiFetch<ImagesResponse>("/v1/images", token),
@@ -80,7 +83,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   const createMachine = useMutation({
     mutationFn: () => apiFetch<MachineResponse>("/v1/machines", token, {
       method: "POST",
-      body: { name, tier, ...(provider ? { provider } : {}), ...(image ? { image } : {}), ...(defaultTeam ? { team: defaultTeam } : {}) },
+      body: { name, size, provider: selectedProvider, ...(image ? { image } : {}), ...(defaultTeam ? { team: defaultTeam } : {}) },
     }),
     onSuccess: (data) => {
       setName("");
@@ -88,6 +91,26 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
       setAddOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["machines", token] });
       void navigate({ to: "/boxes/$name", params: { name: data.machine.name } });
+    },
+  });
+  const saveShortcut = useMutation({
+    mutationFn: () => apiFetch("/v1/sizes/shortcuts", token, {
+      method: "POST",
+      body: { name: shortcutName, provider: selectedProvider, plan: shortcutPlan, team: defaultTeam },
+    }),
+    onSuccess: () => {
+      const next = shortcutName;
+      setShortcutName("");
+      setShortcutPlan("");
+      setSize(next);
+      void queryClient.invalidateQueries({ queryKey: ["sizes", token, activeTeamID] });
+    },
+  });
+  const deleteShortcut = useMutation({
+    mutationFn: (shortcut: string) => apiFetch(`/v1/sizes/shortcuts/${encodeURIComponent(shortcut)}?team=${encodeURIComponent(defaultTeam)}`, token, { method: "DELETE" }),
+    onSuccess: (_, shortcut) => {
+      if (size === shortcut) setSize("small");
+      void queryClient.invalidateQueries({ queryKey: ["sizes", token, activeTeamID] });
     },
   });
   const destroyMachine = useMutation({
@@ -124,6 +147,17 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   useEffect(() => {
     if (image && !imageOptions.some((option) => imageValue(option) === image)) setImage("");
   }, [image, imageOptions]);
+  useEffect(() => {
+    if (sizes.data && !sizes.data.sizes.some((option) => option.name === size)) setSize("small");
+  }, [size, sizes.data]);
+
+  const selectedSize = sizes.data?.sizes.find((option) => option.name === size);
+  const availablePlans = useMemo(() => (
+    [...(sizes.data?.plans || [])]
+      .filter((plan) => plan.available)
+      .sort((left, right) => left.vcpus - right.vcpus || left.memory_mb - right.memory_mb || left.slug.localeCompare(right.slug))
+  ), [sizes.data?.plans]);
+  const selectedShortcutPlan = availablePlans.find((plan) => plan.slug === shortcutPlan);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -195,7 +229,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
           {providerList.length > 1 ? (
             <label>
               Provider
-              <select value={provider || defaultProvider} onChange={(event) => setProvider(event.target.value)}>
+              <select value={selectedProvider} onChange={(event) => { setProvider(event.target.value); setSize("small"); setShortcutPlan(""); }}>
                 {providerList.map((option) => (
                   <option value={option.name} key={option.name}>{option.label}{option.default ? " (default)" : ""}</option>
                 ))}
@@ -204,12 +238,52 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
           ) : null}
           <label>
             Size
-            <select value={tier} onChange={(event) => setTier(event.target.value as MachineTier)}>
-              {machineTiers.map((option) => (
-                <option value={option.value} key={option.value}>{option.label} - {option.detail}</option>
+            <select value={size} onChange={(event) => setSize(event.target.value)} disabled={sizes.isLoading}>
+              {(sizes.data?.sizes || []).map((option) => (
+                <option value={option.name} key={option.name}>{option.name} - {planHardware(option.plan)}</option>
               ))}
             </select>
           </label>
+          {selectedSize ? <PlanSummary plan={selectedSize.plan} hourlyPriceCents={selectedSize.hourly_price_cents} /> : null}
+          {sizes.data?.can_manage ? (
+            <div className="size-manager">
+              <button className="secondary-button size-manager-toggle" type="button" onClick={() => setManageSizes((open) => !open)}>
+                <Settings2 size={16} />
+                Size shortcuts
+              </button>
+              {manageSizes ? (
+                <div className="size-manager-body">
+                  <div className="shortcut-list">
+                    {(sizes.data.shortcuts || []).filter((shortcut) => shortcut.provider === selectedProvider).map((shortcut) => (
+                      <div key={shortcut.name}>
+                        <span><strong>{shortcut.name}</strong><small>{shortcut.plan}</small></span>
+                        <button className="icon-button" type="button" title={`Delete ${shortcut.name}`} aria-label={`Delete ${shortcut.name}`} onClick={() => deleteShortcut.mutate(shortcut.name)} disabled={deleteShortcut.isPending}>
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <label>
+                    Shortcut name
+                    <input value={shortcutName} onChange={(event) => setShortcutName(slugName(event.target.value))} placeholder="gpu" />
+                  </label>
+                  <label>
+                    Provider plan
+                    <select value={shortcutPlan} onChange={(event) => setShortcutPlan(event.target.value)}>
+                      <option value="">Choose a plan</option>
+                      {availablePlans.map((plan) => <option value={plan.slug} key={plan.slug}>{plan.slug} - {planHardware(plan)}</option>)}
+                    </select>
+                  </label>
+                  {selectedShortcutPlan ? <PlanSummary plan={selectedShortcutPlan} /> : null}
+                  <button className="secondary-button" type="button" disabled={!shortcutName || !shortcutPlan || saveShortcut.isPending} onClick={() => saveShortcut.mutate()}>
+                    <Plus size={16} />
+                    {saveShortcut.isPending ? "Saving" : "Save shortcut"}
+                  </button>
+                  {saveShortcut.error ? <p className="error">{(saveShortcut.error as Error).message}</p> : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {imageOptions.length ? (
             <label>
               Image
@@ -347,7 +421,7 @@ function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClos
         <div className="metrics">
           <Metric label="Provider" value={machine.provider_label || machine.provider || "-"} />
           <Metric label="Region" value={machine.region || "-"} />
-          <Metric label="Size" value={machine.size || "-"} />
+          <Metric label="Size" value={machine.size_shortcut ? `${machine.size_shortcut} (${machine.size || "-"})` : machine.size || "-"} />
           <Metric label="Image" value={machine.image || "-"} />
         </div>
         <CommandBlock label="Preview" value={machine.preview_url || ""} />
@@ -420,4 +494,32 @@ function Metric({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function PlanSummary({ plan, hourlyPriceCents }: { plan: MachinePlan; hourlyPriceCents?: number }) {
+  const providerPrice = planPrice(plan);
+  const hourly = hourlyPriceCents !== undefined ? hourlyPriceCents / 100 : providerPrice?.hourly;
+  const currency = hourlyPriceCents !== undefined ? "USD" : providerPrice?.currency || "USD";
+  return (
+    <div className="plan-summary">
+      <span>{planHardware(plan)}</span>
+      {hourly !== undefined ? <PriceEstimate hourly={hourly} currency={currency} /> : null}
+    </div>
+  );
+}
+
+function PriceEstimate({ hourly, currency }: { hourly: number; currency: string }) {
+  const format = (value: number) => new Intl.NumberFormat(undefined, { style: "currency", currency, minimumFractionDigits: value < 1 ? 2 : 0, maximumFractionDigits: value < 1 ? 4 : 2 }).format(value);
+  const detail = `${format(hourly)} per hour · ${format(hourly * 24)} per day · ${format(hourly * 730)} per month`;
+  return <span className="price-estimate" title={detail}>{format(hourly)}/hr <Info size={14} aria-label={detail} /></span>;
+}
+
+function planPrice(plan: MachinePlan): MachinePlanPrice | undefined {
+  return plan.prices[0];
+}
+
+function planHardware(plan: MachinePlan): string {
+  const memory = plan.memory_mb >= 1024 ? `${plan.memory_mb / 1024} GB` : `${plan.memory_mb} MB`;
+  const gpu = plan.gpu ? ` / ${plan.gpu.count}x ${plan.gpu.model}` : "";
+  return `${plan.vcpus} vCPU / ${memory} / ${plan.disk_gb} GB${gpu}`;
 }

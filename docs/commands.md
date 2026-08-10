@@ -3,7 +3,7 @@
 The `bh` CLI is intentionally small. This page covers every command and flag.
 
 ```text
-bh create <name> [--provider <name>] [--tier small|medium|large] [--region <region>] [--image <image>] [--team <team>] [--no-sync]
+bh create <name> [--provider <name>] [--size <name>] [--region <region>] [--image <image>] [--team <team>] [--no-sync]
 bh list
 bh destroy <name> [--force]
 bh rename <old-name> <new-name>
@@ -16,6 +16,7 @@ bh status <name>
 bh ssh-config install|refresh|uninstall
 bh image ls|create|rm [...]
 bh team list|create|switch|status|members|invite|boxes [...]
+bh size list|plans|create|rm [...]
 bh login [--backend-url <url>] [--no-open]
 bh logout
 bh config
@@ -39,12 +40,25 @@ certificate trust are ready, then syncs the current directory to
 | --- | --- |
 | `--no-sync` | Skip the create command's initial project sync |
 | `--provider <name>` | Cloud provider for create (defaults to config or backend default) |
-| `--tier <tier>` | Machine size tier for create: `small`, `medium`, or `large` |
+| `--size <name>` | Built-in or team-owned size shortcut; defaults to `small` |
 | `--region <region>` | Provider region for create, passed through to the provider verbatim |
 | `--image <image>` | Provider image ID or slug for create, passed through verbatim |
 | `--team <team>` | Team that owns the new box (defaults to your active team) |
 | `--ssh-user <user>` | SSH user for create |
 | `--backend-url <url>` | Remote backend API URL for create |
+
+## bh size
+
+```bash
+bh size list [--provider <name>] [--region <region>] [--team <team>]
+bh size plans [--provider <name>] [--region <region>] [--team <team>]
+bh size create <name> --provider <name> --plan <slug> [--team <team>]
+bh size rm <name> [--team <team>]
+```
+
+`list` shows the three built-in sizes plus the selected team's shortcuts.
+`plans` shows available provider plans, including hardware, GPUs, and the
+provider's price. Team owners and admins can create or remove shortcuts.
 
 ## bh run
 

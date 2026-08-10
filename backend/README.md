@@ -170,15 +170,15 @@ Environment:
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
 - `DIGITALOCEAN_ACCESS_TOKEN`: DigitalOcean token; setting it enables the DigitalOcean provider.
 - `DIGITALOCEAN_REGION`: default `nyc3`.
-- `DIGITALOCEAN_SIZE`: default provider size for creates without an explicit tier, default `s-2vcpu-4gb-amd`.
-- Create-time tiers map to DigitalOcean AMD sizes: `small` is 2 vCPU / 4 GB, `medium` is 4 vCPU / 8 GB, and `large` is 8 vCPU / 16 GB.
+- `DIGITALOCEAN_SIZE`: provider plan behind the built-in `small` size, default `s-2vcpu-4gb-amd`.
+- Built-in sizes map to DigitalOcean AMD plans: `small` is 2 vCPU / 4 GB, `medium` is 4 vCPU / 8 GB, and `large` is 8 vCPU / 16 GB. Team owners and admins can create shortcuts for any available plan exposed by `GET /v1/sizes` or `bh size plans`.
 - `BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` or `BOXHAVEN_REMOTE_IMAGE`: provider image id, snapshot id, or slug for a prebuilt BoxHaven VM image. Numeric DigitalOcean snapshot ids are sent as image IDs when creating Droplets. Machines created from this image are treated as backend-bootstrapped. When unset, DigitalOcean falls back to `DIGITALOCEAN_IMAGE` and then `ubuntu-24-04-x64`; the CLI does not bootstrap plain hosts.
 - `DIGITALOCEAN_IMAGE`: DigitalOcean image fallback, default `ubuntu-24-04-x64`.
 - `DIGITALOCEAN_TAGS`: comma-separated tags, default `boxhaven`.
 - `DIGITALOCEAN_VPC_UUID`: optional VPC UUID.
 - `HCLOUD_TOKEN`: Hetzner Cloud token; setting it enables the Hetzner provider.
-- `HETZNER_LOCATION`: default `nbg1`. The tier server types (`cpx22`/`cpx32`/`cpx42`) are also orderable in `fsn1`, `hel1`, and `sin`; the US locations `ash` and `hil` only offer other plans, so they need `HETZNER_SERVER_TYPE` set accordingly and creates without a tier.
-- `HETZNER_SERVER_TYPE`: default server type for creates without an explicit tier, default `cpx22`. Tiers map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large).
+- `HETZNER_LOCATION`: default `nbg1`.
+- `HETZNER_SERVER_TYPE`: provider plan behind the built-in `small` size, default `cpx22`. Built-in sizes map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large); use a team size shortcut for other plans.
 - `HETZNER_IMAGE`: Hetzner image fallback, default `ubuntu-24.04`.
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event and reconciliation retry delay, default `30000`.

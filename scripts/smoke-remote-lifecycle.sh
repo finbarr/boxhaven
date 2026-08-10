@@ -6,7 +6,7 @@ repo_root="$(cd "${script_dir}/.." && pwd)"
 
 bh_bin="${BOXHAVEN_SMOKE_BH:-${repo_root}/bh}"
 backend_url="${BOXHAVEN_SMOKE_BACKEND_URL:-${BOXHAVEN_BACKEND_URL:-https://api.boxhaven.dev}}"
-tier="${BOXHAVEN_SMOKE_TIER:-small}"
+size="${BOXHAVEN_SMOKE_SIZE:-small}"
 keep="${BOXHAVEN_SMOKE_KEEP:-0}"
 require_preview="${BOXHAVEN_SMOKE_REQUIRE_PREVIEW:-1}"
 mode="${BOXHAVEN_SMOKE_MODE:-fast}"
@@ -119,7 +119,7 @@ preview_url_for() {
 create_boxes() {
   for name in "${boxes[@]}"; do
     log "creating ${name}"
-    bh create "$name" --tier "$tier"
+    bh create "$name" --size "$size"
     created+=("$name")
   done
   for name in "${boxes[@]}"; do

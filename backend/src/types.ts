@@ -13,7 +13,9 @@ export type RemoteMachine = {
   public_ipv4?: string;
   region?: string;
   size?: string;
-  tier?: "small" | "medium" | "large";
+  size_shortcut?: string;
+  provider_hourly_price?: number;
+  hourly_price_cents?: number;
   image?: string;
   ssh_user?: string;
   preview_hostname?: string;
@@ -37,7 +39,10 @@ export type CreateMachineRequest = {
   provider?: string;
   provider_name?: string;
   team?: string;
-  tier?: string;
+  size?: string;
+  provider_size?: string;
+  provider_hourly_price?: number;
+  hourly_price_cents?: number;
   region?: string;
   image?: string;
   image_bootstrapped?: boolean;
@@ -75,7 +80,55 @@ export type MachineProviderInfo = {
   name: string;
   label: string;
   capabilities: MachineProviderCapability[];
+  default_sizes?: Record<DefaultMachineSize, string>;
+  default_region?: string;
   default?: boolean;
+};
+
+export type DefaultMachineSize = "small" | "medium" | "large";
+
+export type MachinePlanPrice = {
+  region?: string;
+  hourly: number;
+  monthly: number;
+  currency: string;
+};
+
+export type MachinePlanGPU = {
+  count: number;
+  model: string;
+  memory_mb?: number;
+};
+
+export type MachinePlan = {
+  provider: string;
+  slug: string;
+  label: string;
+  description?: string;
+  vcpus: number;
+  memory_mb: number;
+  disk_gb: number;
+  available: boolean;
+  regions: string[];
+  prices: MachinePlanPrice[];
+  gpu?: MachinePlanGPU;
+};
+
+export type MachineSizeShortcut = {
+  name: string;
+  org_id: string;
+  provider: string;
+  plan: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MachineSizeOption = {
+  name: string;
+  kind: "default" | "shortcut";
+  provider: string;
+  plan: MachinePlan;
+  hourly_price_cents?: number;
 };
 
 export type MachineProvider = {
@@ -89,6 +142,7 @@ export type MachineProvider = {
   listImages?(): Promise<MachineImage[]>;
   createImage?(machine: RemoteMachine, name: string): Promise<MachineImage>;
   deleteImage?(imageID: string): Promise<void>;
+  listPlans?(): Promise<MachinePlan[]>;
 };
 
 export type TeamImageRecord = {

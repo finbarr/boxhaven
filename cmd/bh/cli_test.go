@@ -65,7 +65,7 @@ func TestSaveAndLoadGlobalConfig(t *testing.T) {
 func TestParseRemoteCreateArgsProviderRegionImage(t *testing.T) {
 	cfg := defaultConfig()
 
-	opts, noSync, err := parseRemoteCreateArgs([]string{"dev", "--provider", "Hetzner", "--region", "nbg1", "--image", "12345"}, cfg)
+	opts, noSync, err := parseRemoteCreateArgs([]string{"dev", "--provider", "Hetzner", "--size", "Memory-XL", "--region", "nbg1", "--image", "12345"}, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +81,9 @@ func TestParseRemoteCreateArgsProviderRegionImage(t *testing.T) {
 	if opts.Image != "12345" {
 		t.Fatalf("image = %q, want %q", opts.Image, "12345")
 	}
+	if opts.Size != "memory-xl" {
+		t.Fatalf("size = %q, want %q", opts.Size, "memory-xl")
+	}
 
 	opts, _, err = parseRemoteCreateArgs([]string{"dev", "--provider=digitalocean", "--region=nyc3", "--image=ubuntu-24-04-x64"}, cfg)
 	if err != nil {
@@ -90,7 +93,7 @@ func TestParseRemoteCreateArgsProviderRegionImage(t *testing.T) {
 		t.Fatalf("flag=value form parsed %q/%q/%q", opts.Provider, opts.Region, opts.Image)
 	}
 
-	for _, flag := range []string{"--provider", "--region", "--image"} {
+	for _, flag := range []string{"--provider", "--size", "--region", "--image"} {
 		if _, _, err := parseRemoteCreateArgs([]string{"dev", flag}, cfg); err == nil {
 			t.Fatalf("parseRemoteCreateArgs accepted %s without a value", flag)
 		}

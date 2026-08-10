@@ -9,6 +9,7 @@ import {
   CreateMachineRequest,
   ListProviderMachinesRequest,
   MachineImage,
+  MachinePlan,
   MachineProvider,
   MachineProviderInfo,
   RemoteMachine,
@@ -19,9 +20,8 @@ const execFileAsync = promisify(execFile);
 const apiBaseURL = "https://api.hetzner.cloud/v1";
 const hetznerDefaultServerType = "cpx22";
 // CPX Gen2 shared plans are orderable in fsn1/nbg1/hel1/sin; the US locations
-// (ash/hil) only offer legacy plans, so they need HETZNER_SERVER_TYPE instead
-// of a tier.
-const hetznerTierServerTypes: Record<string, string> = {
+// (ash/hil) only offer legacy plans, so they need HETZNER_SERVER_TYPE instead.
+const hetznerDefaultServerTypes: Record<string, string> = {
   small: "cpx22",
   medium: "cpx32",
   large: "cpx42",
@@ -76,15 +76,18 @@ type HetznerImageList = {
 export class HetznerProvider implements MachineProvider {
   readonly name = "hetzner";
   readonly label = "Hetzner Cloud";
-  readonly info: MachineProviderInfo = {
-    name: this.name,
-    label: this.label,
-    capabilities: ["create", "destroy", "list", "connect", "images", "snapshot"],
-  };
+  readonly info: MachineProviderInfo;
   private readonly apiURL: string;
 
   constructor(private readonly config: HetznerConfig) {
     this.apiURL = (config.apiURL || apiBaseURL).replace(/\/+$/, "");
+    this.info = {
+      name: this.name,
+      label: this.label,
+      capabilities: ["create", "destroy", "list", "connect", "images", "snapshot"],
+      default_sizes: { ...hetznerDefaultServerTypes, small: config.serverType } as MachineProviderInfo["default_sizes"],
+      default_region: config.location,
+    };
   }
 
   async createMachine(request: CreateMachineRequest): Promise<{ machine: RemoteMachine; status?: string }> {
@@ -103,7 +106,7 @@ export class HetznerProvider implements MachineProvider {
         method: "POST",
         body: {
           name: hetznerResourceName(providerName),
-          server_type: hetznerServerTypeForRequest(request, this.config),
+          server_type: request.provider_size || this.config.serverType || hetznerDefaultServerType,
           image: hetznerImageForCreate(image),
           location: request.region?.trim() || this.config.location,
           ssh_keys: [throwawaySSHKeyID],
@@ -184,6 +187,17 @@ export class HetznerProvider implements MachineProvider {
 
   async deleteImage(imageID: string): Promise<void> {
     await this.request(`/images/${encodeURIComponent(imageID)}`, { method: "DELETE" });
+  }
+
+  async listPlans(): Promise<MachinePlan[]> {
+    const plans: MachinePlan[] = [];
+    let page: number | null = 1;
+    while (page) {
+      const response: HetznerServerTypeList = await this.request<HetznerServerTypeList>(`/server_types?per_page=50&page=${page}`);
+      plans.push(...response.server_types.map((serverType) => machinePlanFromHetzner(this.name, serverType)));
+      page = response.meta?.pagination?.next_page ?? null;
+    }
+    return plans;
   }
 
   private async findServer(machineName: string): Promise<HetznerServer | undefined> {
@@ -311,13 +325,48 @@ export function hetznerProviderFromEnv(env = process.env): HetznerProvider {
   });
 }
 
-function hetznerServerTypeForRequest(request: CreateMachineRequest, config: HetznerConfig): string {
-  const tierType = request.tier ? hetznerServerTypeForTier(request.tier) : "";
-  return tierType || config.serverType || hetznerDefaultServerType;
+export function hetznerPlanForDefaultSize(size: string): string | undefined {
+  return hetznerDefaultServerTypes[size];
 }
 
-export function hetznerServerTypeForTier(tier: string): string | undefined {
-  return hetznerTierServerTypes[tier];
+type HetznerServerType = {
+  name: string;
+  description?: string;
+  cores?: number;
+  memory?: number;
+  disk?: number;
+  deprecated?: boolean;
+  prices?: Array<{
+    location?: string;
+    price_hourly?: { net?: string };
+    price_monthly?: { net?: string };
+  }>;
+};
+
+type HetznerServerTypeList = {
+  server_types: HetznerServerType[];
+  meta?: { pagination?: { next_page?: number | null } };
+};
+
+function machinePlanFromHetzner(provider: string, serverType: HetznerServerType): MachinePlan {
+  const prices = (serverType.prices || []).map((price) => ({
+    ...(price.location ? { region: price.location } : {}),
+    hourly: Number(price.price_hourly?.net || 0),
+    monthly: Number(price.price_monthly?.net || 0),
+    currency: "EUR",
+  }));
+  return {
+    provider,
+    slug: serverType.name,
+    label: serverType.description?.trim() || serverType.name,
+    ...(serverType.description ? { description: serverType.description } : {}),
+    vcpus: serverType.cores || 0,
+    memory_mb: Math.round((serverType.memory || 0) * 1024),
+    disk_gb: serverType.disk || 0,
+    available: !serverType.deprecated,
+    regions: prices.flatMap((price) => price.region ? [price.region] : []),
+    prices,
+  };
 }
 
 export function hetznerImageForCreate(image: string): string | number {

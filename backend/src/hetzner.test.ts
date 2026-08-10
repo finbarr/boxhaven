@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { hetznerImageForCreate, hetznerProviderFromEnv, hetznerResourceName, hetznerServerTypeForTier } from "./hetzner.js";
+import { hetznerImageForCreate, hetznerPlanForDefaultSize, hetznerProviderFromEnv, hetznerResourceName } from "./hetzner.js";
 
 test("Hetzner provider prefers the BoxHaven snapshot override", () => {
   const provider = hetznerProviderFromEnv({
@@ -39,10 +39,10 @@ test("Hetzner server names stay within the 63-character hostname limit", () => {
   assert.ok(truncated.startsWith("boxhaven-aaaa"));
 });
 
-test("Hetzner size tiers map to orderable CPX server types", () => {
-  assert.equal(hetznerServerTypeForTier("small"), "cpx22");
-  assert.equal(hetznerServerTypeForTier("medium"), "cpx32");
-  assert.equal(hetznerServerTypeForTier("large"), "cpx42");
+test("Hetzner defaults map to orderable CPX server types", () => {
+  assert.equal(hetznerPlanForDefaultSize("small"), "cpx22");
+  assert.equal(hetznerPlanForDefaultSize("medium"), "cpx32");
+  assert.equal(hetznerPlanForDefaultSize("large"), "cpx42");
 });
 
 test("Hetzner creates servers with labels, cloud-init, and a throwaway SSH key", async () => {
@@ -88,6 +88,7 @@ test("Hetzner creates servers with labels, cloud-init, and a throwaway SSH key",
 
     const created = await provider.createMachine({
       name: "foo",
+      provider_size: "cpx32",
       agent_token: "agent-token",
       agent_backend_url: "https://api.example.com",
       ssh_user_ca_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest boxhaven-ca",
@@ -97,7 +98,7 @@ test("Hetzner creates servers with labels, cloud-init, and a throwaway SSH key",
     const createRequest = requests.find((request) => request.method === "POST" && request.url.endsWith("/servers"));
     assert.ok(createRequest?.body);
     assert.equal(createRequest.body.name, "boxhaven-foo");
-    assert.equal(createRequest.body.server_type, "cpx22");
+    assert.equal(createRequest.body.server_type, "cpx32");
     assert.equal(createRequest.body.location, "nbg1");
     assert.deepEqual(createRequest.body.ssh_keys, [654]);
     assert.deepEqual(createRequest.body.labels, { boxhaven: "", "boxhaven-machine": "foo" });
@@ -110,6 +111,36 @@ test("Hetzner creates servers with labels, cloud-init, and a throwaway SSH key",
     assert.equal(created.machine.region, "nbg1");
     assert.equal(created.machine.image, "boxhaven-remote-test");
     assert.equal(created.machine.bootstrap_complete, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Hetzner exposes server types with regional prices", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    assert.match(String(input), /\/server_types\?per_page=50&page=1$/);
+    return jsonResponse({
+      server_types: [{
+        name: "cpx32",
+        description: "CPX 32",
+        cores: 4,
+        memory: 8,
+        disk: 160,
+        prices: [{ location: "nbg1", price_hourly: { net: "0.0123" }, price_monthly: { net: "8.50" } }],
+      }],
+      meta: { pagination: { next_page: null } },
+    });
+  }) as typeof fetch;
+  try {
+    const provider = hetznerProviderFromEnv({
+      HCLOUD_TOKEN: "hcloud-test",
+      BOXHAVEN_HETZNER_API_URL: "https://hetzner.example.test",
+    });
+    const [plan] = await provider.listPlans();
+    assert.equal(plan.memory_mb, 8192);
+    assert.deepEqual(plan.regions, ["nbg1"]);
+    assert.deepEqual(plan.prices, [{ region: "nbg1", hourly: 0.0123, monthly: 8.5, currency: "EUR" }]);
   } finally {
     globalThis.fetch = originalFetch;
   }

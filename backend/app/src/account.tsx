@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CreditCard, ExternalLink } from "lucide-react";
+import { CreditCard, ExternalLink, Info } from "lucide-react";
 import { AccountSummary, apiFetch, TeamInfo } from "./api";
 import { WorkspaceHead } from "./shell";
 
@@ -43,12 +43,14 @@ export function AccountView({ token, team }: { token: string; team?: TeamInfo })
               </div>
               <div className="account-metrics">
                 <div>
-                  <span>Included units remaining</span>
-                  <strong>{account.included_units_remaining}</strong>
+                  <span>Included credit remaining</span>
+                  <strong title="Included credit balance">{formatUSD(account.included_credit_cents)}</strong>
                 </div>
                 <div>
-                  <span>Current units per hour</span>
-                  <strong>{account.active_units}</strong>
+                  <span>Current box rate</span>
+                  <strong className="price-estimate" title={priceDetail(account.active_hourly_cents)}>
+                    {formatUSD(account.active_hourly_cents)}/hr <Info size={14} aria-label={priceDetail(account.active_hourly_cents)} />
+                  </strong>
                 </div>
               </div>
               <div className="account-actions">
@@ -73,4 +75,12 @@ export function AccountView({ token, team }: { token: string; team?: TeamInfo })
       </section>
     </>
   );
+}
+
+function formatUSD(cents: number): string {
+  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function priceDetail(hourlyCents: number): string {
+  return `${formatUSD(hourlyCents)} per hour · ${formatUSD(hourlyCents * 24)} per day · ${formatUSD(hourlyCents * 730)} per month`;
 }

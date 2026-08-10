@@ -101,6 +101,7 @@ device key stored under `~/.boxhaven/ssh`. Remove the managed include with
 - Git safe-directory configuration for the synced project path.
 - Optional preview hostnames for HTTP services running on the box.
 - Multiple cloud providers per backend: DigitalOcean and Hetzner Cloud.
+- Provider plan discovery with team-owned size shortcuts.
 - Team-owned boxes with roles, shareable invite links, and per-team visibility.
 - Admin-managed golden images that become the default for new boxes.
 - An open-source Fastify/Better Auth backend.
@@ -214,13 +215,28 @@ DigitalOcean:
 Hetzner Cloud:
 
 - `HCLOUD_TOKEN`: API token, enables the provider.
-- `HETZNER_LOCATION`: default `nbg1` (also `fsn1`, `hel1`, `sin`). The tier
-  server types are not orderable in the US locations `ash` and `hil`; to use
-  those, set `HETZNER_SERVER_TYPE` to a plan Hetzner offers there and create
-  boxes without `--tier`.
-- `HETZNER_SERVER_TYPE`: default `cpx22`; tiers map to `cpx22`/`cpx32`/`cpx42`.
+- `HETZNER_LOCATION`: default `nbg1` (also `fsn1`, `hel1`, `sin`).
+- `HETZNER_SERVER_TYPE`: provider plan behind the built-in `small` size, default `cpx22`.
 - `HETZNER_IMAGE`: base image fallback, default `ubuntu-24.04`.
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: golden snapshot id for new boxes.
+
+## Sizes
+
+Every provider supplies the built-in `small`, `medium`, and `large` sizes.
+Use `bh size list` to see their exact CPU, memory, disk, provider plan, and
+price. Owners and admins can give any available provider plan a team-owned
+shortcut:
+
+```bash
+bh size plans --provider digitalocean
+bh size create gpu --provider digitalocean --plan gpu-4000adax1-20gb
+bh create model-work --size gpu
+bh size rm gpu
+```
+
+Shortcuts store a provider and provider-plan slug. Creating a box resolves the
+shortcut once and records the resolved plan on the box; changing or deleting a
+shortcut never changes an existing machine.
 
 ## Teams
 

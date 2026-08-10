@@ -616,6 +616,76 @@ a.secondary-button {
   text-overflow: ellipsis;
 }
 
+.plan-summary,
+.price-estimate,
+.size-manager-toggle,
+.shortcut-list > div,
+.shortcut-list span {
+  display: flex;
+  align-items: center;
+}
+
+.plan-summary {
+  min-height: 38px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-left: 3px solid #2a6470;
+  background: rgba(42, 100, 112, 0.07);
+  color: #3f5750;
+  font-size: 13px;
+}
+
+.price-estimate {
+  flex: 0 0 auto;
+  gap: 5px;
+  color: #244f43;
+  font-weight: 700;
+  cursor: help;
+}
+
+.size-manager {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+  border-top: 1px solid rgba(96, 75, 53, 0.12);
+}
+
+.size-manager-toggle {
+  width: max-content;
+}
+
+.size-manager-body {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0 2px;
+}
+
+.shortcut-list {
+  display: grid;
+  gap: 6px;
+}
+
+.shortcut-list > div {
+  min-width: 0;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0 6px 10px;
+  border-left: 2px solid rgba(47, 111, 92, 0.35);
+}
+
+.shortcut-list span {
+  min-width: 0;
+  gap: 8px;
+}
+
+.shortcut-list small {
+  overflow: hidden;
+  color: #6a776f;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .panel {
   display: grid;
   gap: 14px;

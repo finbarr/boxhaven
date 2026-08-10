@@ -29,7 +29,7 @@ var remoteBackendHTTPClient = &http.Client{
 type remoteBackendCreateRequest struct {
 	Name       string `json:"name"`
 	SSHUser    string `json:"ssh_user,omitempty"`
-	Tier       string `json:"tier,omitempty"`
+	Size       string `json:"size,omitempty"`
 	Provider   string `json:"provider,omitempty"`
 	Region     string `json:"region,omitempty"`
 	Image      string `json:"image,omitempty"`
@@ -125,7 +125,7 @@ func createRemoteBackendMachine(cfg Config, projectDir string, opts remoteProvis
 	req := remoteBackendCreateRequest{
 		Name:       opts.Name,
 		SSHUser:    firstNonEmpty(opts.SSHUser, cfg.Remote.SSHUser, remoteDefaultSSHUser),
-		Tier:       opts.Tier,
+		Size:       opts.Size,
 		Provider:   opts.Provider,
 		Region:     opts.Region,
 		Image:      opts.Image,

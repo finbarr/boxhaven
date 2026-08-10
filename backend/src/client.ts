@@ -23,8 +23,8 @@ export type WhoamiResponse = {
 
 export type AccountSummary = {
   state: "trial" | "active" | "past_due" | "inactive";
-  included_units_remaining: number;
-  active_units: number;
+  included_credit_cents: number;
+  active_hourly_cents: number;
   can_manage: boolean;
   primary_action?: "subscribe" | "manage";
 };
@@ -33,6 +33,8 @@ export type ProviderInfo = {
   name: string;
   label: string;
   capabilities: string[];
+  default_sizes?: Record<"small" | "medium" | "large", string>;
+  default_region?: string;
   default?: boolean;
 };
 
@@ -49,6 +51,9 @@ export type Machine = {
   public_ipv4?: string;
   region?: string;
   size?: string;
+  size_shortcut?: string;
+  provider_hourly_price?: number;
+  hourly_price_cents?: number;
   image?: string;
   ssh_user?: string;
   preview_hostname?: string;
@@ -81,6 +86,43 @@ export type LoginResponse = { token: string; user?: AuthUser };
 export type MachineResponse = { machine: Machine; status?: string };
 export type MachinesResponse = { machines: Machine[] };
 export type ProvidersResponse = { providers: ProviderInfo[] };
+
+export type MachinePlanPrice = { region?: string; hourly: number; monthly: number; currency: string };
+export type MachinePlan = {
+  provider: string;
+  slug: string;
+  label: string;
+  description?: string;
+  vcpus: number;
+  memory_mb: number;
+  disk_gb: number;
+  available: boolean;
+  regions: string[];
+  prices: MachinePlanPrice[];
+  gpu?: { count: number; model: string; memory_mb?: number };
+};
+export type MachineSizeShortcut = {
+  name: string;
+  org_id: string;
+  provider: string;
+  plan: string;
+  created_at: string;
+  updated_at: string;
+};
+export type MachineSizeOption = {
+  name: string;
+  kind: "default" | "shortcut";
+  provider: string;
+  plan: MachinePlan;
+  hourly_price_cents?: number;
+};
+export type SizesResponse = {
+  provider: ProviderInfo;
+  plans: MachinePlan[];
+  sizes: MachineSizeOption[];
+  shortcuts: MachineSizeShortcut[];
+  can_manage: boolean;
+};
 
 export type APIRequestInit = {
   method?: string;

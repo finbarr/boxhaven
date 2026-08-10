@@ -15,7 +15,7 @@ import type { BackendModule } from "./module.js";
 import { StateStore } from "./state.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
-import { CreateMachineRequest, MachineImage, MachineProvider, RemoteMachine, defaultSSHUser } from "./types.js";
+import { CreateMachineRequest, MachineImage, MachinePlan, MachineProvider, RemoteMachine, defaultSSHUser } from "./types.js";
 
 const testSSHUserPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBxsqJzPGdcbwFthXVe2lyIImV6BwTw4Ee5WcoeczwJf test";
 
@@ -26,6 +26,17 @@ class FakeProvider implements MachineProvider {
   released: string[] = [];
   discovered: RemoteMachine[] = [];
   images: MachineImage[] = [];
+  plans: MachinePlan[] = ["small", "medium", "large"].map((slug, index) => ({
+    provider: "fake",
+    slug,
+    label: slug,
+    vcpus: 2 ** (index + 1),
+    memory_mb: 4096 * (2 ** index),
+    disk_gb: 80 * (2 ** index),
+    available: true,
+    regions: [],
+    prices: [{ hourly: 0.05 * (2 ** index), monthly: 36 * (2 ** index), currency: "USD" }],
+  }));
   snapshotted: Array<{ machine: string; name: string }> = [];
   deletedImages: string[] = [];
   publicIPv4 = "203.0.113.10";
@@ -91,6 +102,10 @@ class FakeProvider implements MachineProvider {
   async deleteImage(imageID: string) {
     this.deletedImages.push(imageID);
   }
+
+  async listPlans() {
+    return this.plans.map((plan) => ({ ...plan, provider: this.name }));
+  }
 }
 
 test("backend creates, records, lists, and releases one machine", async () => {
@@ -107,7 +122,7 @@ test("backend creates, records, lists, and releases one machine", async () => {
     payload: {
       name: "Foo",
       ssh_user: "ubuntu",
-      tier: "Medium",
+      size: "Medium",
       source_path: "/Users/example/project",
       repo_url: "git@example.com:repo.git",
       branch: "main",
@@ -129,7 +144,8 @@ test("backend creates, records, lists, and releases one machine", async () => {
   assert.equal(createBody.timings.agent_wait_ms, 0);
   assert.equal(createBody.timings.ssh_trust_ms, 0);
   assert.equal(provider.created.length, 1);
-  assert.equal(provider.created[0].tier, "medium");
+  assert.equal(provider.created[0].size, "medium");
+  assert.equal(provider.created[0].provider_size, "medium");
   assert.match(provider.created[0].agent_token || "", /^[A-Za-z0-9_-]{64}$/);
   assert.equal(provider.created[0].agent_backend_url, "https://api.hosted.test");
   assert.match(provider.created[0].ssh_user_ca_public_key || "", /^ssh-ed25519 /);
@@ -429,7 +445,7 @@ test("backend rejects rename collisions", async () => {
   assert.match(renamed.body, /remote machine bar already exists/);
 });
 
-test("backend rejects unknown machine tiers", async () => {
+test("backend rejects unknown machine sizes", async () => {
   const { app, token } = await createTestBackend();
   const response = await app.inject({
     method: "POST",
@@ -437,11 +453,41 @@ test("backend rejects unknown machine tiers", async () => {
     headers: { authorization: `Bearer ${token}` },
     payload: {
       name: "foo",
-      tier: "enormous",
+      size: "enormous",
     },
   });
   assert.equal(response.statusCode, 400, response.body);
-  assert.match(response.body, /invalid machine tier/);
+  assert.match(response.body, /size enormous does not exist/);
+});
+
+test("team owners create, use, and delete provider size shortcuts", async () => {
+  const { app, provider, token } = await createTestBackend("sizes@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+
+  const defaults = await app.inject({ method: "GET", url: "/v1/sizes", headers });
+  assert.equal(defaults.statusCode, 200, defaults.body);
+  assert.deepEqual(defaults.json().sizes.map((size: { name: string }) => size.name), ["small", "medium", "large"]);
+  assert.equal(defaults.json().plans[2].memory_mb, 16384);
+
+  const saved = await app.inject({
+    method: "POST",
+    url: "/v1/sizes/shortcuts",
+    headers,
+    payload: { name: "beefy", provider: "fake", plan: "large" },
+  });
+  assert.equal(saved.statusCode, 201, saved.body);
+  assert.equal(saved.json().shortcut.name, "beefy");
+
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "work", size: "beefy" } });
+  assert.equal(created.statusCode, 201, created.body);
+  assert.equal(provider.created.at(-1)?.provider_size, "large");
+  assert.equal(created.json().machine.size, "large");
+  assert.equal(created.json().machine.size_shortcut, "beefy");
+
+  const deleted = await app.inject({ method: "DELETE", url: "/v1/sizes/shortcuts/beefy", headers });
+  assert.equal(deleted.statusCode, 204, deleted.body);
+  const missing = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "other", size: "beefy" } });
+  assert.equal(missing.statusCode, 400, missing.body);
 });
 
 test("backend imports provider machines for the authenticated user", async () => {
@@ -1219,13 +1265,14 @@ test("hosted policy fails new creates closed while existing box access and destr
   });
   const headers = { authorization: `Bearer ${token}` };
 
-  const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "existing", tier: "large" } });
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "existing", size: "large" } });
   assert.equal(created.statusCode, 201, created.body);
   await waitFor(() => facts.length === 1);
   assert.equal(facts[0].type, "machine.created");
   assert.equal(facts[0].version, 1);
   assert.equal(typeof facts[0].id, "string");
-  assert.equal(facts[0].machine.tier, "large");
+  assert.equal(facts[0].machine.size, "large");
+  assert.equal(facts[0].machine.provider_plan, "large");
   assert.equal(facts[0].machine.id, checkedMachineIDs[0]);
   const activeSnapshot = reconciliationSnapshot(await store.listMachines(), "2026-07-11T00:00:00.000Z");
   assert.deepEqual(activeSnapshot.machines[0], { team: facts[0].team, machine: facts[0].machine });
@@ -1268,8 +1315,8 @@ test("generic account capability returns a summary and action without exposing p
     async getAccountSummary(input) {
       return {
         state: "trial",
-        included_units_remaining: input.team.name.length,
-        active_units: 2,
+        included_credit_cents: input.team.name.length,
+        active_hourly_cents: 2,
         can_manage: input.actor.can_manage,
         primary_action: "subscribe",
       };
@@ -1285,8 +1332,8 @@ test("generic account capability returns a summary and action without exposing p
   assert.equal(summary.statusCode, 200, summary.body);
   assert.deepEqual(summary.json(), {
     state: "trial",
-    included_units_remaining: "account's Team".length,
-    active_units: 2,
+    included_credit_cents: "account's Team".length,
+    active_hourly_cents: 2,
     can_manage: true,
     primary_action: "subscribe",
   });

@@ -114,10 +114,18 @@ and SSH certificate trust are ready, then syncs the current directory to:
 /opt/boxhaven/project
 ```
 
-Use a larger tier when needed:
+Use one of the larger built-in sizes when needed:
 
 ```bash
-bh create work --tier medium
+bh create work --size medium
+```
+
+Team owners and admins can also name any plan exposed by a configured provider:
+
+```bash
+bh size plans --provider digitalocean
+bh size create gpu --provider digitalocean --plan gpu-4000adax1-20gb
+bh create work --size gpu
 ```
 
 Pick a specific provider, region, or image when the backend has more than one

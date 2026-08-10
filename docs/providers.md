@@ -26,14 +26,15 @@ project-wide default with the `provider` key under `[remote]` in
 | --- | --- |
 | `DIGITALOCEAN_ACCESS_TOKEN` | API token, enables the provider |
 | `DIGITALOCEAN_REGION` | Default `nyc3` |
-| `DIGITALOCEAN_SIZE` | Default provider size for creates without an explicit tier, default `s-2vcpu-4gb-amd` |
+| `DIGITALOCEAN_SIZE` | Provider plan behind the built-in `small` size, default `s-2vcpu-4gb-amd` |
 | `DIGITALOCEAN_IMAGE` | Base image fallback, default `ubuntu-24-04-x64` |
 | `DIGITALOCEAN_TAGS` | Comma-separated tags, default `boxhaven` |
 | `DIGITALOCEAN_VPC_UUID` | Optional VPC UUID |
 | `BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` (or legacy `BOXHAVEN_REMOTE_IMAGE`) | Golden snapshot id for new boxes |
 
-Create-time tiers map to DigitalOcean AMD sizes: `small` is 2 vCPU / 4 GB,
-`medium` is 4 vCPU / 8 GB, and `large` is 8 vCPU / 16 GB. Numeric
+Built-in sizes map to DigitalOcean AMD plans: `small` is 2 vCPU / 4 GB,
+`medium` is 4 vCPU / 8 GB, and `large` is 8 vCPU / 16 GB. `bh size plans`
+lists every currently available Droplet plan, including GPU plans. Numeric
 DigitalOcean snapshot ids are sent as image IDs when creating Droplets.
 
 ## Hetzner Cloud
@@ -42,14 +43,13 @@ DigitalOcean snapshot ids are sent as image IDs when creating Droplets.
 | --- | --- |
 | `HCLOUD_TOKEN` | API token, enables the provider |
 | `HETZNER_LOCATION` | Default `nbg1` (also `fsn1`, `hel1`, `sin`) |
-| `HETZNER_SERVER_TYPE` | Default server type for creates without an explicit tier, default `cpx22` |
+| `HETZNER_SERVER_TYPE` | Provider plan behind the built-in `small` size, default `cpx22` |
 | `HETZNER_IMAGE` | Base image fallback, default `ubuntu-24.04` |
 | `BOXHAVEN_REMOTE_IMAGE_HETZNER` | Golden snapshot id for new boxes |
 
-Tiers map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large). The tier
-server types are not orderable in the US locations `ash` and `hil`; to use
-those, set `HETZNER_SERVER_TYPE` to a plan Hetzner offers there and create
-boxes without `--tier`.
+Built-in sizes map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large).
+Availability is validated against the selected location. Use `bh size plans`
+and a team shortcut for any other server type.
 
 ## Golden Snapshots
 
