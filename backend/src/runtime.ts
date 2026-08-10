@@ -63,6 +63,7 @@ export async function startBackendFromEnv(runtime: BackendRuntimeOptions = {}) {
     previewTargetPort: Number(process.env.BOXHAVEN_PREVIEW_TARGET_PORT || 80),
     previewTLSWarmup: warmPreviewTLS,
     modules: runtime.modules,
+    version: process.env.BOXHAVEN_VERSION || "dev",
   });
 
   await app.listen({ host, port });

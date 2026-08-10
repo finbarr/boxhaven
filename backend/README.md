@@ -53,6 +53,7 @@ From the repository root:
 ```bash
 export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
 export DIGITALOCEAN_ACCESS_TOKEN=dop_v1_example
+export BOXHAVEN_VERSION="$(git describe --tags --always)"
 docker compose -f docker-compose.backend.yml up --build
 ```
 
@@ -158,6 +159,7 @@ Environment:
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated trusted browser origins.
 - `BOXHAVEN_APP_URL`: public console/auth app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_API_URL`: public API URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
+- `BOXHAVEN_VERSION`: current backend version returned by `/v1/version` and compared with the latest public GitHub release. The production deploy script supplies `git describe` automatically; set it explicitly for direct or Compose runs.
 - `BOXHAVEN_DOCS_URL`: public documentation URL used by console footer links in Docker builds. Set this when self-hosting internal docs; otherwise the app links to `https://docs.boxhaven.dev`.
 - `BOXHAVEN_BACKEND_CORS_ORIGINS`: comma-separated browser origins allowed to call the API.
 - `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.boxhaven.dev`.

@@ -89,6 +89,12 @@ export type MachineResponse = { machine: Machine; status?: string };
 export type MachinesResponse = { machines: Machine[] };
 export type OrgMachinesResponse = { machines: Machine[]; role: string };
 export type ProvidersResponse = { providers: ProviderInfo[] };
+export type VersionResponse = {
+  current_version: string;
+  update_available: boolean;
+  latest_version?: string;
+  release_url?: string;
+};
 
 export type MachinePlanPrice = { region?: string; hourly: number; monthly: number; currency: string };
 export type MachinePlan = {

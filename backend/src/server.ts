@@ -13,6 +13,7 @@ import { BackendModule, BackendModuleContext, BackendModuleRuntime, BackendTeam,
 import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyActor, PolicyTeam, policyMachineIdentity } from "./policy.js";
 import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
+import { GitHubReleaseChecker, ReleaseUpdateChecker } from "./releases.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { StateStore } from "./state.js";
 import { CreateMachineRequest, MachineImage, MachinePlan, MachineProvider, MachineSizeOption, MachineSizeShortcut, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
@@ -36,6 +37,8 @@ export type BackendOptions = {
   previewTLSWarmup?: (previewURL: string) => Promise<void>;
   machineReadyTimeoutMs?: number;
   modules?: BackendModule[];
+  version?: string;
+  releaseChecker?: ReleaseUpdateChecker;
 };
 
 type AuthContext = BackendUserContext;
@@ -144,6 +147,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   const moduleContext = createModuleContext(options);
   const moduleRuntimes = startModules(options.modules || [], moduleContext);
   const app = Fastify({ logger: false });
+  const releaseChecker = options.releaseChecker || new GitHubReleaseChecker(options.version || "dev");
   const commercialPolicy = resolveCommercialPolicy(options.commercialPolicy, moduleRuntimes);
   const policyDelivery = new PolicyEventDelivery(
     options.store,
@@ -167,6 +171,8 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   });
 
   app.get("/healthz", async () => "ok\n");
+
+  app.get("/v1/version", async () => releaseChecker.versionStatus());
 
   app.get("/v1/providers", async () => ({
     providers: options.providers.list().map((provider) => providerInfo(provider, options.providers.defaultName)),
