@@ -30,7 +30,7 @@ ENV NODE_ENV=production \
 
 RUN mkdir -p /data \
   && apt-get update \
-  && apt-get install -y --no-install-recommends openssh-client \
+  && apt-get install -y --no-install-recommends openssh-client sqlite3 \
   && rm -rf /var/lib/apt/lists/* \
   && chown node:node /data
 
