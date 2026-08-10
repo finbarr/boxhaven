@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRightLeft, ChevronRight, Info, MonitorDot, Plus, Settings2, Server, Trash2 } from "lucide-react";
+import { ArrowRightLeft, ChevronRight, MonitorDot, Plus, Settings2, Server, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CommandBlock, installCommand } from "./access";
 import {
@@ -19,6 +19,7 @@ import {
   TeamInfo,
 } from "./api";
 import { useConsole } from "./console-context";
+import { CostEstimate } from "./cost-estimate";
 import { Drawer } from "./drawer";
 import { WorkspaceHead } from "./shell";
 
@@ -271,10 +272,10 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
                     Provider plan
                     <select value={shortcutPlan} onChange={(event) => setShortcutPlan(event.target.value)}>
                       <option value="">Choose a plan</option>
-                      {availablePlans.map((plan) => <option value={plan.slug} key={plan.slug}>{plan.slug} - {planHardware(plan)}</option>)}
+                      {availablePlans.map((plan) => <option value={plan.slug} key={plan.slug}>{plan.slug} - {planHardware(plan)} - {planPriceLabel(plan)}</option>)}
                     </select>
                   </label>
-                  {selectedShortcutPlan ? <PlanSummary plan={selectedShortcutPlan} /> : null}
+                  {selectedShortcutPlan ? <PlanSummary plan={selectedShortcutPlan} hourlyPriceCents={selectedShortcutPlan.hourly_price_cents} /> : null}
                   <button className="secondary-button" type="button" disabled={!shortcutName || !shortcutPlan || saveShortcut.isPending} onClick={() => saveShortcut.mutate()}>
                     <Plus size={16} />
                     {saveShortcut.isPending ? "Saving" : "Save shortcut"}
@@ -509,9 +510,14 @@ function PlanSummary({ plan, hourlyPriceCents }: { plan: MachinePlan; hourlyPric
 }
 
 function PriceEstimate({ hourly, currency }: { hourly: number; currency: string }) {
-  const format = (value: number) => new Intl.NumberFormat(undefined, { style: "currency", currency, minimumFractionDigits: value < 1 ? 2 : 0, maximumFractionDigits: value < 1 ? 4 : 2 }).format(value);
-  const detail = `${format(hourly)} per hour · ${format(hourly * 24)} per day · ${format(hourly * 730)} per month`;
-  return <span className="price-estimate" title={detail}>{format(hourly)}/hr <Info size={14} aria-label={detail} /></span>;
+  return <CostEstimate hourly={hourly} currency={currency} />;
+}
+
+function planPriceLabel(plan: MachinePlan): string {
+  if (plan.hourly_price_cents !== undefined) return `${new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(plan.hourly_price_cents / 100)}/hr`;
+  const price = planPrice(plan);
+  if (!price) return "price unavailable";
+  return `${new Intl.NumberFormat(undefined, { style: "currency", currency: price.currency, maximumFractionDigits: 4 }).format(price.hourly)}/hr`;
 }
 
 function planPrice(plan: MachinePlan): MachinePlanPrice | undefined {

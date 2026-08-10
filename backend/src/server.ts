@@ -189,6 +189,14 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     try {
       const actor = policyActor(auth, false);
       const plans = await listProviderPlans(provider);
+      const quotedPlans = await quotePlansForProvider(
+        provider,
+        plans,
+        policyTeam(team),
+        actor,
+        commercialPolicy,
+        bodyString(request.query?.region).trim().toLowerCase(),
+      );
       const shortcuts = await options.store.listSizeShortcutsForOrg(team.id);
       const sizes = await sizeOptionsForProvider(
         provider,
@@ -201,7 +209,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       );
       return {
         provider: providerInfo(provider, options.providers.defaultName),
-        plans,
+        plans: quotedPlans,
         sizes,
         shortcuts,
         can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
@@ -1477,6 +1485,33 @@ async function sizeOptionsForProvider(
     options.push(option);
   }
   return options;
+}
+
+async function quotePlansForProvider(
+  provider: MachineProvider,
+  plans: MachinePlan[],
+  team: PolicyTeam,
+  actor: PolicyActor,
+  policy: CommercialPolicy,
+  region: string,
+): Promise<Array<MachinePlan & { hourly_price_cents?: number }>> {
+  if (!policy.quoteMachine) return plans;
+  const effectiveRegion = region || provider.info?.default_region || "";
+  return Promise.all(plans.map(async (plan) => {
+    if (!plan.available || (effectiveRegion && plan.regions.length > 0 && !plan.regions.includes(effectiveRegion))) return plan;
+    const quote = await policy.quoteMachine!({
+      team,
+      actor,
+      machine: policyMachineIdentity({
+        name: plan.slug,
+        provider: provider.name,
+        size: plan.slug,
+        size_shortcut: plan.slug,
+        provider_hourly_price: providerPlanHourlyPrice(plan, effectiveRegion),
+      }),
+    });
+    return quote.hourly_price_cents === undefined ? plan : { ...plan, hourly_price_cents: quote.hourly_price_cents };
+  }));
 }
 
 function providerPlanHourlyPrice(plan: MachinePlan, region = ""): number {

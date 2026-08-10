@@ -490,6 +490,30 @@ test("team owners create, use, and delete provider size shortcuts", async () => 
   assert.equal(missing.statusCode, 400, missing.body);
 });
 
+test("size discovery quotes every available provider plan for shortcut creation", async () => {
+  const commercialPolicy: CommercialPolicy = {
+    lifecycleEventsEnabled: true,
+    async checkCreate() { return { allowed: true }; },
+    async quoteMachine(input) {
+      return { hourly_price_cents: Math.round(input.machine.provider_hourly_price * 100 * 2.4) };
+    },
+    async emitMachineFact() {},
+    async reconcile() {},
+  };
+  const { app, token } = await createTestBackend("quoted-sizes@example.com", "password123", { commercialPolicy });
+  const response = await app.inject({ method: "GET", url: "/v1/sizes", headers: { authorization: `Bearer ${token}` } });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json().plans.map((plan: { slug: string; hourly_price_cents: number }) => ({
+    slug: plan.slug,
+    hourly_price_cents: plan.hourly_price_cents,
+  })), [
+    { slug: "small", hourly_price_cents: 12 },
+    { slug: "medium", hourly_price_cents: 24 },
+    { slug: "large", hourly_price_cents: 48 },
+  ]);
+});
+
 test("backend imports provider machines for the authenticated user", async () => {
   const { app, provider, token } = await createTestBackend();
   const headers = { authorization: `Bearer ${token}` };

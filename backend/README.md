@@ -230,6 +230,9 @@ Routes:
 - `GET /v1/account`
 - `POST /v1/account/action`
 - `GET /v1/providers`
+- `GET /v1/sizes` (available plans include an effective `hourly_price_cents` quote when commercial policy supplies one)
+- `POST /v1/sizes/shortcuts`
+- `DELETE /v1/sizes/shortcuts/:name`
 - `GET /v1/preview/tls-check`
 - `GET /v1/preview/proxy/:hostname/*` for HTTP and WebSocket preview traffic
 - `POST|PUT|PATCH|DELETE|OPTIONS /v1/preview/proxy/:hostname/*`

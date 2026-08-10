@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CreditCard, ExternalLink, Info } from "lucide-react";
+import { CreditCard, ExternalLink } from "lucide-react";
 import { AccountSummary, apiFetch, TeamInfo } from "./api";
+import { CentsCostEstimate } from "./cost-estimate";
 import { WorkspaceHead } from "./shell";
 
 const stateLabels: Record<AccountSummary["state"], string> = {
@@ -48,9 +49,7 @@ export function AccountView({ token, team }: { token: string; team?: TeamInfo })
                 </div>
                 <div>
                   <span>Current box rate</span>
-                  <strong className="price-estimate" title={priceDetail(account.active_hourly_cents)}>
-                    {formatUSD(account.active_hourly_cents)}/hr <Info size={14} aria-label={priceDetail(account.active_hourly_cents)} />
-                  </strong>
+                  <strong><CentsCostEstimate hourlyCents={account.active_hourly_cents} /></strong>
                 </div>
               </div>
               <div className="account-actions">
@@ -79,8 +78,4 @@ export function AccountView({ token, team }: { token: string; team?: TeamInfo })
 
 function formatUSD(cents: number): string {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
-}
-
-function priceDetail(hourlyCents: number): string {
-  return `${formatUSD(hourlyCents)} per hour · ${formatUSD(hourlyCents * 24)} per day · ${formatUSD(hourlyCents * 730)} per month`;
 }

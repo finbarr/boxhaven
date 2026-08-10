@@ -179,6 +179,7 @@ async function startSeededBackend({ accountLabel } = {}) {
     lifecycleEventsEnabled: false,
     accountCapability: { label: accountLabel },
     async checkCreate() { return { allowed: true }; },
+    async quoteMachine(input) { return { hourly_price_cents: Math.round(input.machine.provider_hourly_price * 100 * 2.4) }; },
     async emitMachineFact() {},
     async reconcile() {},
     async getAccountSummary() {
@@ -530,6 +531,7 @@ async function checkBoxCreateDrawer(page) {
   await page.waitForSelector(".drawer-panel select", { timeout: 10_000 });
   await page.getByRole("button", { name: "Size shortcuts" }).click();
   await page.waitForSelector(".size-manager-body", { timeout: 10_000 });
+  await page.locator(".plan-summary .cost-tooltip").first().hover();
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(outDir, "box-create.png"), fullPage: true });
   const facts = await page.evaluate(() => {
@@ -541,6 +543,8 @@ async function checkBoxCreateDrawer(page) {
         ? [...imageLabel.querySelectorAll("option")].map((option) => option.textContent?.trim())
         : [],
       shortcutPlanOptions: [...document.querySelectorAll(".size-manager-body select option")].map((option) => option.textContent?.trim()),
+      costTooltip: document.querySelector(".plan-summary .cost-tooltip-panel")?.textContent?.replace(/\s+/g, " ").trim(),
+      costTooltipVisible: getComputedStyle(document.querySelector(".plan-summary .cost-tooltip-panel")).visibility,
       bodyScrollWidth: document.documentElement.scrollWidth,
       viewport: window.innerWidth,
     };
@@ -548,7 +552,9 @@ async function checkBoxCreateDrawer(page) {
   assert.equal(facts.drawerTitle, "Create a box");
   assert.ok(facts.imageOptions.includes("BoxHaven default"), "missing default image option");
   assert.ok(facts.imageOptions.some((option) => option?.includes("boxhaven-remote-acme-tools")), "missing team image option");
-  assert.ok(facts.shortcutPlanOptions.some((option) => option?.includes("large - 8 vCPU / 16 GB / 320 GB")), "missing provider plan option");
+  assert.ok(facts.shortcutPlanOptions.some((option) => option?.includes("large - 8 vCPU / 16 GB / 320 GB - $0.40/hr")), "missing provider plan price");
+  assert.equal(facts.costTooltipVisible, "visible");
+  assert.equal(facts.costTooltip, "Hour$0.10Day$2.40Month$73.00");
   assert.ok(facts.bodyScrollWidth <= facts.viewport, `create drawer overflows: ${facts.bodyScrollWidth} > ${facts.viewport}`);
   return facts;
 }
@@ -564,6 +570,11 @@ async function checkAccountCapability(page, { label, screenshotPrefix }) {
     await page.goto(label ? `${appURL}/account` : appURL, { waitUntil: "domcontentloaded" });
     await waitForConsole(page);
     if (label) await page.waitForSelector(".account-status", { timeout: 10_000 });
+    if (label) {
+      const trigger = page.locator(".account-metrics .cost-tooltip");
+      if (viewportName === "desktop") await trigger.hover();
+      else await trigger.focus();
+    }
     await page.waitForTimeout(300);
     await page.screenshot({ path: join(outDir, `${screenshotPrefix}-${viewportName}.png`), fullPage: true });
     facts[viewportName] = await page.evaluate(() => ({
@@ -572,7 +583,10 @@ async function checkAccountCapability(page, { label, screenshotPrefix }) {
       title: document.querySelector(".workspace-title h1")?.textContent?.trim(),
       planStatus: document.querySelector(".account-state")?.textContent?.trim() || null,
       includedCredit: document.querySelector(".account-metrics div:first-child strong")?.textContent?.trim() || null,
-      activeRate: document.querySelector(".account-metrics div:last-child strong")?.textContent?.trim() || null,
+      activeRate: document.querySelector(".account-metrics div:last-child .cost-estimate > span:first-child")?.textContent?.trim() || null,
+      costTooltipVisible: document.querySelector(".account-metrics .cost-tooltip-panel")
+        ? getComputedStyle(document.querySelector(".account-metrics .cost-tooltip-panel")).visibility
+        : null,
       primaryAction: document.querySelector(".account-actions .primary-button")?.textContent?.trim() || null,
       bodyScrollWidth: document.documentElement.scrollWidth,
       viewport: window.innerWidth,
@@ -584,6 +598,7 @@ async function checkAccountCapability(page, { label, screenshotPrefix }) {
       assert.equal(facts[viewportName].planStatus, "Included usage");
       assert.equal(facts[viewportName].includedCredit, "$37.00");
       assert.equal(facts[viewportName].activeRate, "$0.30/hr");
+      assert.equal(facts[viewportName].costTooltipVisible, "visible");
       assert.equal(facts[viewportName].primaryAction, "Choose a plan");
     }
     assert.ok(

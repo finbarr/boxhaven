@@ -49,7 +49,8 @@ DigitalOcean snapshot ids are sent as image IDs when creating Droplets.
 
 Built-in sizes map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large).
 Availability is validated against the selected location. Use `bh size plans`
-and a team shortcut for any other server type.
+to compare hardware and effective prices before creating a team shortcut for
+any other server type.
 
 ## Golden Snapshots
 

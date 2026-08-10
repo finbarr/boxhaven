@@ -25,16 +25,17 @@ type remoteMachinePlanGPU struct {
 }
 
 type remoteMachinePlan struct {
-	Provider  string                   `json:"provider"`
-	Slug      string                   `json:"slug"`
-	Label     string                   `json:"label"`
-	VCPUs     int                      `json:"vcpus"`
-	MemoryMB  int                      `json:"memory_mb"`
-	DiskGB    int                      `json:"disk_gb"`
-	Available bool                     `json:"available"`
-	Regions   []string                 `json:"regions"`
-	Prices    []remoteMachinePlanPrice `json:"prices"`
-	GPU       *remoteMachinePlanGPU    `json:"gpu,omitempty"`
+	Provider         string                   `json:"provider"`
+	Slug             string                   `json:"slug"`
+	Label            string                   `json:"label"`
+	VCPUs            int                      `json:"vcpus"`
+	MemoryMB         int                      `json:"memory_mb"`
+	DiskGB           int                      `json:"disk_gb"`
+	Available        bool                     `json:"available"`
+	Regions          []string                 `json:"regions"`
+	Prices           []remoteMachinePlanPrice `json:"prices"`
+	HourlyPriceCents *int                     `json:"hourly_price_cents,omitempty"`
+	GPU              *remoteMachinePlanGPU    `json:"gpu,omitempty"`
 }
 
 type remoteMachineSizeOption struct {
@@ -109,7 +110,7 @@ func runSizeList(args []string, projectDir string, plans bool) error {
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	if plans {
-		fmt.Fprintln(w, "PLAN\tCPU\tMEMORY\tDISK\tGPU\tPROVIDER COST")
+		fmt.Fprintln(w, "PLAN\tCPU\tMEMORY\tDISK\tGPU\tPRICE")
 		sort.Slice(response.Plans, func(i, j int) bool { return response.Plans[i].Slug < response.Plans[j].Slug })
 		for _, plan := range response.Plans {
 			if !plan.Available {
@@ -119,14 +120,18 @@ func runSizeList(args []string, projectDir string, plans bool) error {
 			if plan.GPU != nil {
 				gpu = fmt.Sprintf("%dx %s", plan.GPU.Count, plan.GPU.Model)
 			}
-			fmt.Fprintf(w, "%s\t%d\t%s\t%d GB\t%s\t%s\n", plan.Slug, plan.VCPUs, formatMemory(plan.MemoryMB), plan.DiskGB, gpu, formatProviderPrice(plan.Prices))
+			price := formatProviderPrice(plan.Prices)
+			if plan.HourlyPriceCents != nil {
+				price = formatDollarPrice(*plan.HourlyPriceCents)
+			}
+			fmt.Fprintf(w, "%s\t%d\t%s\t%d GB\t%s\t%s\n", plan.Slug, plan.VCPUs, formatMemory(plan.MemoryMB), plan.DiskGB, gpu, price)
 		}
 	} else {
 		fmt.Fprintln(w, "NAME\tKIND\tPROVIDER PLAN\tCPU\tMEMORY\tPRICE")
 		for _, size := range response.Sizes {
 			price := formatProviderPrice(size.Plan.Prices)
 			if size.HourlyPriceCents != nil {
-				price = fmt.Sprintf("$%.2f/hr", float64(*size.HourlyPriceCents)/100)
+				price = formatDollarPrice(*size.HourlyPriceCents)
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s/%s\t%d\t%s\t%s\n", size.Name, size.Kind, size.Provider, size.Plan.Slug, size.Plan.VCPUs, formatMemory(size.Plan.MemoryMB), price)
 		}
@@ -225,6 +230,11 @@ func formatMemory(memoryMB int) string {
 		return strconv.Itoa(memoryMB/1024) + " GB"
 	}
 	return strconv.Itoa(memoryMB) + " MB"
+}
+
+func formatDollarPrice(hourlyCents int) string {
+	hourly := float64(hourlyCents) / 100
+	return fmt.Sprintf("$%.2f/hr ($%.2f/day, $%.2f/mo)", hourly, hourly*24, hourly*730)
 }
 
 func formatProviderPrice(prices []remoteMachinePlanPrice) string {

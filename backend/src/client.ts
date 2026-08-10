@@ -99,6 +99,7 @@ export type MachinePlan = {
   available: boolean;
   regions: string[];
   prices: MachinePlanPrice[];
+  hourly_price_cents?: number;
   gpu?: { count: number; model: string; memory_mb?: number };
 };
 export type MachineSizeShortcut = {

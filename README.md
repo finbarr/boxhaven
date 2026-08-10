@@ -224,7 +224,8 @@ Hetzner Cloud:
 
 Every provider supplies the built-in `small`, `medium`, and `large` sizes.
 Use `bh size list` to see their exact CPU, memory, disk, provider plan, and
-price. Owners and admins can give any available provider plan a team-owned
+effective hourly price with day and month estimates. `bh size plans` shows the
+same price context before an owner or admin gives a provider plan a team-owned
 shortcut:
 
 ```bash

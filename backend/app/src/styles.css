@@ -617,7 +617,7 @@ a.secondary-button {
 }
 
 .plan-summary,
-.price-estimate,
+.cost-estimate,
 .size-manager-toggle,
 .shortcut-list > div,
 .shortcut-list span {
@@ -636,12 +636,86 @@ a.secondary-button {
   font-size: 13px;
 }
 
-.price-estimate {
+.cost-estimate {
+  position: relative;
   flex: 0 0 auto;
   gap: 5px;
   color: #244f43;
   font-weight: 700;
+}
+
+.cost-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  outline: none;
   cursor: help;
+}
+
+.cost-tooltip:focus-visible {
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px rgba(42, 100, 112, 0.28);
+}
+
+.cost-tooltip-panel {
+  position: absolute;
+  z-index: 40;
+  right: -8px;
+  bottom: calc(100% + 9px);
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  gap: 12px;
+  visibility: hidden;
+  padding: 9px 11px;
+  border: 1px solid rgba(44, 65, 58, 0.18);
+  border-radius: 6px;
+  background: #fffdf7;
+  box-shadow: 0 10px 26px rgba(37, 54, 47, 0.16);
+  color: #24352f;
+  font-weight: 400;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(3px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+
+.cost-tooltip-panel > span {
+  display: grid;
+  gap: 2px;
+}
+
+.cost-tooltip-panel small {
+  color: #6a776f;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.cost-tooltip-panel strong {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cost-tooltip:hover .cost-tooltip-panel,
+.cost-tooltip:focus .cost-tooltip-panel,
+.cost-tooltip:focus-within .cost-tooltip-panel {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+  .cost-tooltip-panel {
+    right: auto;
+    left: 50%;
+    grid-template-columns: max-content;
+    transform: translate(-50%, 3px);
+  }
+
+  .cost-tooltip:hover .cost-tooltip-panel,
+  .cost-tooltip:focus .cost-tooltip-panel,
+  .cost-tooltip:focus-within .cost-tooltip-panel {
+    transform: translate(-50%, 0);
+  }
 }
 
 .size-manager {
