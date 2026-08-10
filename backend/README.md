@@ -15,6 +15,11 @@ website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for the
 console/auth app, and `api.boxhaven.dev` for this API. The API also serves the
 built console app from `dist-app` for simple self-hosted deployments.
 
+The open-source app reads the public `/v1/version` endpoint and shows an
+accessible GitHub release banner when this self-hosted backend is behind. The
+endpoint caches GitHub release results for 24 hours, backs off failed checks
+for an hour, and returns quietly without an update when offline.
+
 ## Run Locally
 
 ```bash

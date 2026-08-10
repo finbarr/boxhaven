@@ -18,6 +18,12 @@ website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for the
 console/auth app, and `api.boxhaven.dev` for the API. The API also serves the
 built console app from `dist-app` for simple self-hosted deployments.
 
+The open-source console shows a compact update banner when the backend reports
+a newer public BoxHaven GitHub release. The backend caches successful checks
+for 24 hours, retries failed checks after an hour, and returns no update when
+offline, so release discovery never prevents the console from loading. Banner
+links open the exact GitHub release in a new tab.
+
 ## Run Locally
 
 ```bash

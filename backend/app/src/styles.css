@@ -65,6 +65,55 @@ select {
   flex: 1;
 }
 
+.update-banner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 1280px;
+  min-width: 0;
+  margin: 0 auto 14px;
+  padding: 9px 13px;
+  border: 1px solid rgba(47, 111, 92, 0.28);
+  border-radius: 9px;
+  background: rgba(238, 248, 240, 0.94);
+  color: #345047;
+  box-shadow: 0 8px 20px rgba(67, 94, 78, 0.08);
+  font-size: 13px;
+}
+
+.update-banner > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.update-banner strong {
+  color: #244f43;
+}
+
+.update-banner a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  color: #2f6f5c;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.update-banner a:hover {
+  text-decoration: underline;
+}
+
+.update-banner a:focus-visible {
+  outline: 3px solid rgba(47, 111, 92, 0.24);
+  outline-offset: 3px;
+}
+
 .site-footer {
   position: relative;
   z-index: 1;
@@ -1674,6 +1723,12 @@ a.secondary-button {
 @media (max-width: 640px) {
   .console {
     padding: 14px;
+  }
+
+  .update-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
   }
 
   .topbar,
