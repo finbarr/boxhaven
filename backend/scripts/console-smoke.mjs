@@ -52,6 +52,7 @@ try {
 
   const deviceFacts = await checkDevicePage(page, deviceUserCode);
   const gettingStartedFacts = await checkGettingStarted(page);
+  const teamMenuFacts = await checkTeamMenu(page);
   const membersFacts = await checkMembersPage(page);
   const teamsFacts = await checkTeamsPage(page);
   const imagesFacts = await checkImagesPage(page);
@@ -90,6 +91,9 @@ try {
       device: join(outDir, "device.png"),
       boxes: join(outDir, "boxes.png"),
       mobileBoxes: join(outDir, "mobile-boxes.png"),
+      teamMenuDesktop: join(outDir, "team-menu-desktop.png"),
+      teamMenuMobile: join(outDir, "team-menu-mobile.png"),
+      teamCreateFromMenu: join(outDir, "team-create-from-menu.png"),
       members: join(outDir, "members.png"),
       teams: join(outDir, "teams.png"),
       teamEditor: join(outDir, "team-editor.png"),
@@ -106,6 +110,7 @@ try {
     accessFacts,
     deviceFacts,
     gettingStartedFacts,
+    teamMenuFacts,
     membersFacts,
     teamsFacts,
     securityFacts,
@@ -375,6 +380,123 @@ async function checkGettingStarted(page) {
   assert.ok(mobile.bodyScrollWidth <= mobile.viewport, `mobile boxes page overflows: ${mobile.bodyScrollWidth} > ${mobile.viewport}`);
   assert.deepEqual(mobile.clippedCommands, [], `mobile commands are clipped: ${mobile.clippedCommands.join(", ")}`);
   return { desktop, mobile };
+}
+
+async function checkTeamMenu(page) {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(appURL, { waitUntil: "domcontentloaded" });
+  await waitForConsole(page);
+
+  let trigger = page.getByRole("button", { name: "Active team Acme Labs" });
+  assert.equal(await trigger.count(), 1, "missing active-team menu trigger");
+  assert.equal(await page.locator(".side-team select").count(), 0, "team switcher should not use a native select");
+
+  await trigger.click();
+  let menu = page.getByRole("menu", { name: "Teams" });
+  await menu.waitFor({ state: "visible", timeout: 10_000 });
+  await page.waitForFunction(() => document.activeElement?.getAttribute("role") === "menuitemradio");
+  await page.screenshot({ path: join(outDir, "team-menu-desktop.png"), fullPage: true });
+
+  const desktop = await page.evaluate(() => {
+    const triggerElement = document.querySelector(".side-team-trigger");
+    const menuElement = document.querySelector(".side-team-menu");
+    const separator = document.querySelector(".side-team-menu-separator");
+    const menuRect = menuElement?.getBoundingClientRect();
+    return {
+      triggerText: triggerElement?.textContent?.trim(),
+      expanded: triggerElement?.getAttribute("aria-expanded"),
+      focusedItem: document.activeElement?.textContent?.trim(),
+      teamItems: [...document.querySelectorAll("[role='menuitemradio']")].map((item) => ({
+        name: item.textContent?.trim(),
+        checked: item.getAttribute("aria-checked"),
+      })),
+      newTeamAction: document.querySelector("[role='menuitem']")?.textContent?.trim(),
+      separatorBorder: separator ? getComputedStyle(separator).borderTopWidth : "0px",
+      menuLeft: menuRect?.left,
+      menuRight: menuRect?.right,
+      viewport: window.innerWidth,
+    };
+  });
+  assert.equal(desktop.triggerText, "Acme Labs");
+  assert.equal(desktop.expanded, "true");
+  assert.equal(desktop.focusedItem, "Acme Labs");
+  assert.deepEqual(desktop.teamItems, [
+    { name: "admin's team", checked: "false" },
+    { name: "Acme Labs", checked: "true" },
+    { name: "Design Systems", checked: "false" },
+  ]);
+  assert.equal(desktop.newTeamAction, "New team");
+  assert.notEqual(desktop.separatorBorder, "0px", "New team action should be visually separated");
+  assert.ok((desktop.menuLeft || 0) >= 0 && (desktop.menuRight || 0) <= desktop.viewport, "desktop team menu overflows viewport");
+
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), "Design Systems");
+  await page.keyboard.press("Escape");
+  await menu.waitFor({ state: "detached" });
+  await page.waitForFunction(() => document.activeElement?.classList.contains("side-team-trigger"));
+
+  await trigger.click();
+  menu = page.getByRole("menu", { name: "Teams" });
+  await menu.waitFor({ state: "visible" });
+  await page.locator(".workspace-title").click();
+  await menu.waitFor({ state: "detached" });
+
+  await trigger.click();
+  await page.getByRole("menuitemradio", { name: "Design Systems" }).click();
+  await page.waitForFunction(() => document.querySelector(".side-team-trigger-name")?.textContent?.trim() === "Design Systems");
+  trigger = page.getByRole("button", { name: "Active team Design Systems" });
+  await trigger.click();
+  assert.equal(await page.getByRole("menuitemradio", { name: "Design Systems" }).getAttribute("aria-checked"), "true");
+  await page.getByRole("menuitemradio", { name: "Acme Labs" }).click();
+  await page.waitForFunction(() => document.querySelector(".side-team-trigger-name")?.textContent?.trim() === "Acme Labs");
+
+  trigger = page.getByRole("button", { name: "Active team Acme Labs" });
+  await trigger.click();
+  await page.waitForFunction(() => document.activeElement?.getAttribute("role") === "menuitemradio");
+  await page.keyboard.press("End");
+  assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), "New team");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => window.location.pathname === "/teams");
+  await page.getByRole("heading", { name: "New team" }).waitFor({ timeout: 10_000 });
+  await page.waitForFunction(() => document.activeElement?.getAttribute("placeholder") === "The Treehouse");
+  await page.screenshot({ path: join(outDir, "team-create-from-menu.png"), fullPage: true });
+  const creation = await page.evaluate(() => ({
+    pathname: window.location.pathname,
+    drawerTitle: document.querySelector(".drawer-panel h2")?.textContent?.trim(),
+    focusedPlaceholder: document.activeElement?.getAttribute("placeholder"),
+  }));
+  assert.deepEqual(creation, {
+    pathname: "/teams",
+    drawerTitle: "New team",
+    focusedPlaceholder: "The Treehouse",
+  });
+  await page.locator(".drawer-panel").getByRole("button", { name: "Close" }).click();
+  await page.locator(".drawer-panel").waitFor({ state: "detached" });
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  trigger = page.getByRole("button", { name: "Active team Acme Labs" });
+  await trigger.click();
+  menu = page.getByRole("menu", { name: "Teams" });
+  await menu.waitFor({ state: "visible" });
+  await page.screenshot({ path: join(outDir, "team-menu-mobile.png"), fullPage: true });
+  const mobile = await page.evaluate(() => {
+    const rect = document.querySelector(".side-team-menu")?.getBoundingClientRect();
+    return {
+      viewport: window.innerWidth,
+      bodyScrollWidth: document.documentElement.scrollWidth,
+      menuLeft: rect?.left,
+      menuRight: rect?.right,
+      menuWidth: rect?.width,
+    };
+  });
+  assert.ok(mobile.bodyScrollWidth <= mobile.viewport, `mobile team menu causes overflow: ${mobile.bodyScrollWidth} > ${mobile.viewport}`);
+  assert.ok((mobile.menuLeft || 0) >= 0, `mobile team menu starts outside viewport: ${mobile.menuLeft}`);
+  assert.ok((mobile.menuRight || 0) <= mobile.viewport, `mobile team menu ends outside viewport: ${mobile.menuRight} > ${mobile.viewport}`);
+  assert.ok((mobile.menuWidth || 0) > 0, "mobile team menu has no width");
+  await page.keyboard.press("Escape");
+  await menu.waitFor({ state: "detached" });
+
+  return { desktop, creation, mobile };
 }
 
 async function checkMembersPage(page) {
