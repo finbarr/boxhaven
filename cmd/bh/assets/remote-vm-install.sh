@@ -62,6 +62,7 @@ apt_install() {
     python3-pip \
     python3-venv \
     jq \
+    sqlite3 \
     rsync \
     ripgrep \
     libasound2t64 \

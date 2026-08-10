@@ -220,6 +220,16 @@ func TestRemoteVMInstallIncludesHeadlessBrowserLibraries(t *testing.T) {
 	}
 }
 
+func TestRemoteVMInstallIncludesRepositoryTestDependencies(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("assets", "remote-vm-install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "    sqlite3 \\\n") {
+		t.Fatal("remote-vm-install.sh does not install sqlite3 for backup integrity tests")
+	}
+}
+
 func TestFormatRemoteProvisionTimings(t *testing.T) {
 	got := formatRemoteProvisionTimings(remoteBackendProvisionTimings{
 		TotalMS:            1234,

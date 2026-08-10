@@ -157,7 +157,9 @@ The installer pins Codex CLI `0.144.3` so the golden image supports the
 configured `gpt-5.6-sol` model deterministically.
 It also installs the shared libraries required by Playwright's headless
 Chromium so browser-based agents and reusable console smoke tests run on a
-fresh box without a separate privileged dependency-install step.
+fresh box without a separate privileged dependency-install step. The image
+also includes the `sqlite3` CLI required by the repository's backend backup
+integrity tests.
 
 When `BOXHAVEN_REMOTE_IMAGE` is already set in the env file, the builder starts
 from that active snapshot by default. This keeps dependency-heavy image builds

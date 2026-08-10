@@ -187,7 +187,8 @@ Backups are installed through `deploy/digitalocean/install-backups.sh` and
 write archives under `/opt/boxhaven/backups`. The backend data backup uses
 SQLite's online backup command and requires `boxhaven.sqlite` and the SSH CA
 keypair. It validates the copied database before atomically publishing the
-archive and includes Caddy data when present.
+archive and includes Caddy data when present. The golden remote image includes
+the `sqlite3` CLI so the checked-in backup integrity test can run from a box.
 
 ## Golden Image Rotation
 
