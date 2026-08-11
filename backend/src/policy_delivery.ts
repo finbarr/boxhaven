@@ -168,7 +168,9 @@ export function reconciliationSnapshot(
   return {
     version: 1,
     generated_at: generatedAt,
-    machines: machines.map((machine) => {
+    // Provisioning recovery records block destructive operations but are not
+    // provider-confirmed lifecycle facts and must never activate billing.
+    machines: machines.filter((machine) => !machine.create_state).map((machine) => {
       const teamID = machine.org_id || machine.user_id || "unknown";
       return {
         team: {

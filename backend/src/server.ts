@@ -9,14 +9,14 @@ import { BackendAuth } from "./auth.js";
 import type { OrgMachinesResponse } from "./client.js";
 import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
 import { applyBackendMigrations } from "./database.js";
-import { BackendModule, BackendModuleContext, BackendModuleRuntime, BackendTeam, BackendUserContext } from "./module.js";
+import { BackendModule, BackendModuleContext, BackendModuleRuntime, BackendTeam, BackendUserContext, TeamDeletionPolicy } from "./module.js";
 import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyActor, PolicyTeam, policyMachineIdentity } from "./policy.js";
 import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { GitHubReleaseChecker, ReleaseUpdateChecker } from "./releases.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
-import { MachineCleanupPendingError, StateStore } from "./state.js";
-import { CreateMachineRequest, MachineImage, MachinePlan, MachineProvider, MachineSizeOption, MachineSizeShortcut, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
+import { DeletionGuardError, MachineCleanupPendingError, StateStore, TeamDeletionBlockers } from "./state.js";
+import { CreateMachineRequest, MachineCreateError, MachineImage, MachinePlan, MachineProvider, MachineSizeOption, MachineSizeShortcut, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
 
 export type BackendOptions = {
   auth: BackendAuth;
@@ -144,12 +144,14 @@ const agentRPCDefaultTimeout = 60_000;
 const agentRPCSetupTimeout = 30 * 60_000;
 
 export function createBackend(options: BackendOptions): FastifyInstance {
+  options.store.ensureOrganizationDeletionSafety();
   let policyDelivery: PolicyEventDelivery | undefined;
   const moduleContext = createModuleContext(options, () => policyDelivery?.notifyReconcile());
   const moduleRuntimes = startModules(options.modules || [], moduleContext);
   const app = Fastify({ logger: false });
   const releaseChecker = options.releaseChecker || new GitHubReleaseChecker(options.version || "dev");
   const commercialPolicy = resolveCommercialPolicy(options.commercialPolicy, moduleRuntimes);
+  const teamDeletionPolicies = moduleRuntimes.flatMap((runtime) => runtime.teamDeletionPolicy ? [runtime.teamDeletionPolicy] : []);
   policyDelivery = new PolicyEventDelivery(
     options.store,
     commercialPolicy,
@@ -307,6 +309,16 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     };
   });
 
+  app.delete<{ Params: { orgID: string } }>("/v1/teams/:orgID", async (request, reply) => {
+    return deleteTeam(options, teamDeletionPolicies, request, reply, request.params.orgID);
+  });
+
+  // Shadow Better Auth's direct organization deletion endpoint so older
+  // clients cannot bypass BoxHaven's machine and module safety checks.
+  app.post<{ Body: { organizationId?: string } }>("/v1/auth/organization/delete", async (request, reply) => {
+    return deleteTeam(options, teamDeletionPolicies, request, reply, bodyString(request.body?.organizationId));
+  });
+
   app.all("/v1/auth/*", async (request, reply) => {
     await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
   });
@@ -459,7 +471,54 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       }
       body.hourly_price_cents = decision.hourly_price_cents;
     }
-    return createMachine(options, agents, auth, provider, body, orgID, auth.teams, commercialPolicy, policyDelivery, reply);
+    const createOperationID = randomUUID();
+    body.provider_name = providerMachineName(auth.userID, body.name);
+    const provisioningMachine = normalizeMachine(options, {
+      name: body.name,
+      user_id: auth.userID,
+      org_id: orgID,
+      org_name: team?.name,
+      org_slug: team?.slug,
+      provider: provider.name,
+      provider_name: body.provider_name,
+      size: body.provider_size,
+      size_shortcut: body.size || "small",
+      provider_hourly_price: body.provider_hourly_price,
+      ...(body.hourly_price_cents !== undefined ? { hourly_price_cents: body.hourly_price_cents } : {}),
+      source_path: body.source_path,
+      repo_url: body.repo_url,
+      branch: body.branch,
+      ssh_user: body.ssh_user || defaultSSHUser,
+      create_state: "provisioning",
+      create_operation_id: createOperationID,
+    });
+    try {
+      await options.store.reserveMachineCreate({
+        operationID: createOperationID,
+        orgID,
+        userID: auth.userID,
+        name: body.name,
+        provider: provider.name,
+        providerName: body.provider_name,
+        machine: provisioningMachine,
+      });
+    } catch (reservationError) {
+      if (reservationError instanceof DeletionGuardError) {
+        return reply.code(409).send({ id: reservationError.code, message: reservationError.message });
+      }
+      if (sqliteConstraint(reservationError)) return reply.code(409).send(machineNameConflict(body.name));
+      throw reservationError;
+    }
+    try {
+      return await createMachine(options, agents, auth, provider, body, createOperationID, orgID, auth.teams, commercialPolicy, policyDelivery, reply);
+    } catch (error) {
+      if (error instanceof MachineCreateError && error.outcome === "not_created") {
+        await options.store.cancelMachineCreate(createOperationID);
+      }
+      throw error;
+    } finally {
+      await options.store.releaseMachineCreate(createOperationID);
+    }
   });
 
   app.get("/v1/machines", async (request, reply) => {
@@ -486,6 +545,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       existing = await options.store.getMachine(auth.userID, name);
     }
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+    if (existing.create_state) return machineCreateRecoveryReply(existing, reply);
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
     const refreshed = await provider.getMachine(existing);
@@ -507,6 +567,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       existing = await options.store.getMachine(auth.userID, name);
     }
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+    if (existing.create_state) return machineCreateRecoveryReply(existing, reply);
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
     const refreshed = await provider.getMachine(existing);
@@ -579,6 +640,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
     const machine = await options.store.getMachine(auth.userID, name);
     if (!machine) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+    if (machine.create_state) return machineCreateRecoveryReply(machine, reply);
     if (!machine.bootstrap_complete) {
       return reply.code(409).send({ id: "not_bootstrapped", message: "remote machine is not bootstrapped" });
     }
@@ -886,6 +948,159 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   return app;
 }
 
+async function deleteTeam(
+  options: BackendOptions,
+  policies: TeamDeletionPolicy[],
+  request: { headers: Record<string, string | string[] | undefined> },
+  reply: { code: (statusCode: number) => { send: (payload?: unknown) => unknown } },
+  orgID: string,
+): Promise<unknown> {
+  if (!orgID) return reply.code(400).send({ id: "bad_request", message: "team id is required" });
+  const context = await requireOrgMembership(options, request, reply, orgID);
+  if (!context) return;
+  const team = context.auth.teams.find((candidate) => candidate.id === orgID) || { id: orgID, name: orgID };
+  const audit = (outcome: "succeeded" | "denied" | "failed", detail: string) => options.store.recordDeletionAudit({
+    action: "team.delete",
+    actor_user_id: context.auth.userID,
+    actor_email: context.auth.email,
+    target_id: orgID,
+    target_name: team.name,
+    outcome,
+    detail,
+  });
+  if (!orgRoleCanOwn(context.role)) {
+    await audit("denied", `Role ${context.role || "member"} is not allowed to delete teams`);
+    return reply.code(403).send({ id: "forbidden", message: "Only team owners can delete teams." });
+  }
+
+  const operationID = randomUUID();
+  const blockers = await options.store.beginTeamDeletion({
+    operationID,
+    orgID,
+    actorUserID: context.auth.userID,
+    actorEmail: context.auth.email,
+  });
+  if (hasTeamDeletionBlockers(blockers)) {
+    const message = teamDeletionBlockerMessage(blockers);
+    await audit("denied", message);
+    return reply.code(409).send({ id: "team_deletion_blocked", message });
+  }
+
+  for (const policy of policies) {
+    let decision;
+    try {
+      decision = await policy.checkTeamDeletion({
+        team,
+        actor: { id: context.auth.userID, email: context.auth.email },
+      });
+    } catch (error) {
+      await options.store.cancelTeamDeletion(orgID, operationID);
+      await audit("failed", `Deletion policy unavailable: ${safeErrorMessage(error)}`);
+      return reply.code(503).send({
+        id: "team_deletion_unavailable",
+        message: "Team deletion is temporarily unavailable because all deletion policies could not be checked. Try again later.",
+      });
+    }
+    if (!decision.allowed) {
+      const message = decision.message || "This team cannot be deleted until its external account state is resolved.";
+      await options.store.cancelTeamDeletion(orgID, operationID);
+      await audit("denied", message);
+      return reply.code(409).send({ id: "team_deletion_blocked", message });
+    }
+  }
+
+  try {
+    const api = options.auth.api as unknown as {
+      deleteOrganization(input: { body: { organizationId: string }; headers: Headers }): Promise<unknown>;
+    };
+    await api.deleteOrganization({ body: { organizationId: orgID }, headers: toHeaders(request.headers) });
+    await options.store.completeTeamDeletion(orgID, operationID);
+    await audit("succeeded", "Deleted team after machine and module deletion checks passed");
+    return reply.code(200).send({ deleted: true, team: { id: team.id, name: team.name, slug: team.slug } });
+  } catch (error) {
+    let organizationStillExists: boolean | undefined;
+    try {
+      organizationStillExists = Boolean(options.store.db.prepare(
+        "SELECT 1 FROM organization WHERE id = ?",
+      ).get(orgID));
+    } catch (existenceError) {
+      console.error(`could not verify team ${orgID} after deletion failure: ${safeErrorMessage(existenceError)}`);
+    }
+    if (organizationStillExists === false) {
+      // Better Auth committed. Never reopen creates by canceling the guard;
+      // make completion idempotent and repair the durable deleted tombstone.
+      await options.store.repairCompletedTeamDeletion({
+        orgID,
+        operationID,
+        actorUserID: context.auth.userID,
+        actorEmail: context.auth.email,
+      });
+      await audit("succeeded", `Deleted team; repaired completion after Better Auth committed: ${safeErrorMessage(error)}`);
+      return reply.code(200).send({
+        deleted: true,
+        recovered: true,
+        team: { id: team.id, name: team.name, slug: team.slug },
+      });
+    }
+    if (organizationStillExists === undefined) {
+      // The organization may already be gone. Preserve the deleting guard when
+      // commit state cannot be proven, rather than risking orphaned resources.
+      await audit("failed", `Could not verify Better Auth organization deletion: ${safeErrorMessage(error)}`);
+      return reply.code(500).send({
+        id: "team_deletion_verification_failed",
+        message: "Team deletion could not be verified. Box creation remains blocked; contact your operator before retrying.",
+      });
+    }
+    const racedBlockers = await options.store.teamDeletionBlockers(orgID);
+    await options.store.cancelTeamDeletion(orgID, operationID);
+    if (racedBlockers.machines > 0 || racedBlockers.provisioning > 0 || racedBlockers.policies.length > 0) {
+      const message = teamDeletionBlockerMessage({ ...racedBlockers, deletionState: undefined });
+      await audit("denied", `Concurrent safety check blocked deletion: ${message}`);
+      return reply.code(409).send({ id: "team_deletion_blocked", message });
+    }
+    await audit("failed", `Better Auth organization deletion failed: ${safeErrorMessage(error)}`);
+    return reply.code(500).send({
+      id: "team_deletion_failed",
+      message: "The team was not deleted. No boxes or billing state were changed; try again or contact your operator.",
+    });
+  }
+}
+
+function hasTeamDeletionBlockers(blockers: TeamDeletionBlockers): boolean {
+  return blockers.machines > 0
+    || blockers.provisioning > 0
+    || blockers.policies.length > 0
+    || Boolean(blockers.deletionState);
+}
+
+function teamDeletionBlockerMessage(blockers: TeamDeletionBlockers): string {
+  const messages: string[] = [];
+  if (blockers.machines > 0) {
+    messages.push(`Destroy ${blockers.machines === 1 ? "the box" : `all ${blockers.machines} boxes`} in this team, then try again. Failed boxes still require explicit destruction because provider cleanup is not proven.`);
+  }
+  if (blockers.provisioning > 0) {
+    messages.push(`Wait for ${blockers.provisioning === 1 ? "the box creation" : `${blockers.provisioning} box creations`} in this team to finish, then destroy any resulting boxes.`);
+  }
+  messages.push(...blockers.policies.map((blocker) => blocker.message));
+  if (blockers.deletionState === "deleting") messages.push("This team is already being deleted. Wait for the current attempt to finish.");
+  if (blockers.deletionState === "deleted") messages.push("This team has already been deleted.");
+  return messages.join(" ") || "This team cannot be deleted yet.";
+}
+
+function orgRoleCanOwn(role: string): boolean {
+  return role.split(",").some((part) => part.trim().toLowerCase() === "owner");
+}
+
+function safeErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return "Unknown error";
+  return `${error.name}: ${error.message}`.slice(0, 300);
+}
+
+function sqliteConstraint(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error
+    && String((error as { code?: unknown }).code).startsWith("SQLITE_CONSTRAINT"));
+}
+
 function startModules(modules: BackendModule[], context: BackendModuleContext): BackendModuleRuntime[] {
   const names = new Set<string>();
   return modules.map((module) => {
@@ -931,6 +1146,7 @@ async function createMachine(
   auth: AuthContext,
   provider: MachineProvider,
   body: CreateMachineRequest,
+  createOperationID: string,
   orgID: string,
   teams: TeamInfo[],
   commercialPolicy: CommercialPolicy,
@@ -940,7 +1156,7 @@ async function createMachine(
   const timings: MachineCreateTimings = {};
   const totalStarted = Date.now();
 
-  body.provider_name = providerMachineName(auth.userID, body.name);
+  body.provider_name = body.provider_name || providerMachineName(auth.userID, body.name);
   const agentBackendURL = (options.apiPublicURL || "").trim().replace(/\/+$/, "");
   if (!agentBackendURL) {
     throw new Error("backend public API URL is required to provision remote machine agent credentials");
@@ -958,7 +1174,7 @@ async function createMachine(
   await syncProviderMachines(options, auth);
   recordMachineCreateTiming(timings, "provider_sync_ms", phaseStarted);
   const existing = await options.store.getMachine(auth.userID, body.name);
-  if (existing) {
+  if (existing && existing.create_operation_id !== createOperationID) {
     return reply.code(409).send(machineNameConflict(body.name));
   }
 
@@ -1071,7 +1287,7 @@ async function syncProviderMachines(options: BackendOptions, auth: AuthContext):
         continue;
       }
       const name = existing?.name || item.machine.name;
-      const machine = normalizeMachine(options, {
+      const machineInput: RemoteMachine = {
         ...existing,
         ...item.machine,
         name,
@@ -1079,7 +1295,15 @@ async function syncProviderMachines(options: BackendOptions, auth: AuthContext):
         org_id: existing?.org_id || auth.orgID,
         org_name: existing?.org_name || auth.teams.find((team) => team.id === (existing?.org_id || auth.orgID))?.name,
         org_slug: existing?.org_slug || auth.teams.find((team) => team.id === (existing?.org_id || auth.orgID))?.slug,
-      });
+      };
+      if (existing?.create_state) {
+        // Discovery supplies provider identity for explicit cleanup, but it
+        // cannot prove an interrupted VM received credentials that match core.
+        // Never promote it into a normal or billable machine automatically.
+        delete machineInput.create_operation_id;
+        machineInput.create_state = "recovery_required";
+      }
+      const machine = normalizeMachine(options, machineInput);
       await options.store.putMachine(machine);
       const index = known.findIndex((knownMachine) => knownMachine.name === machine.name);
       if (index === -1) known.push(machine);
@@ -1167,10 +1391,24 @@ function publicMachine(machine: RemoteMachine): RemoteMachine {
   delete safe.agent_token_hash;
   delete safe.org_name;
   delete safe.org_slug;
+  delete safe.create_operation_id;
   for (const key of Object.keys(safe)) {
     if (key.startsWith("ssh_") && key.endsWith("_key")) delete safe[key];
   }
   return safe as RemoteMachine;
+}
+
+function machineCreateRecoveryReply(
+  machine: RemoteMachine,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+): unknown {
+  const recovery = machine.create_state === "recovery_required";
+  return reply.code(409).send({
+    id: recovery ? "machine_recovery_required" : "machine_provisioning",
+    message: recovery
+      ? `Box ${machine.name} has an uncertain provisioning outcome. Destroy it, then create it again.`
+      : `Box ${machine.name} is still provisioning. Wait for creation to finish.`,
+  });
 }
 
 async function warmMachinePreviewTLS(options: BackendOptions, machine: RemoteMachine): Promise<void> {

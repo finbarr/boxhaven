@@ -6,7 +6,8 @@ open-source entrypoint loads no modules and uses the in-process allow-all
 commercial policy.
 
 A module can contribute ordered SQLite migrations, authenticated API routes,
-and a `CommercialPolicy` implementation. It receives the core database,
+a `CommercialPolicy` implementation, and a provider-neutral
+`TeamDeletionPolicy`. It receives the core database,
 provider registry, state store, authentication helpers, and team authorization
 helpers in process. This keeps provisioning, auth, SSH, and lifecycle behavior
 in the open core while allowing a distribution to add its own models and UI.
@@ -66,6 +67,33 @@ entitlement evaluation: `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS` defaults to 30
 seconds and `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS` defaults to five
 minutes. A module can call `requestPolicyReconciliation()` after an external
 entitlement event to request an immediate serialized run.
+
+## Deletion Policy
+
+A module can return `teamDeletionPolicy.checkTeamDeletion`. The input contains
+only the team and requesting actor; the decision is an allow flag and optional
+actionable message. The core has no knowledge of why a module blocks deletion.
+
+Team deletion always fails closed while a core box or provisioning reservation
+exists. Each process-owned provisioning reservation is paired atomically with a
+durable machine record. After a restart, core clears the stale reservation and
+marks that record as requiring recovery; the record continues to block team and
+account deletion until the box is explicitly destroyed. Recovery records are
+not provider-confirmed lifecycle facts and are excluded from commercial-policy
+reconciliation, so a crash cannot activate billing by itself.
+Provider discovery can fill in VM identity and address details for cleanup, but
+it never promotes a recovery record into a usable or billable machine. The box
+must be destroyed and created again. A provider may classify an error as
+definitively not created; only then does core remove the placeholder
+automatically. Unknown outcomes keep the recovery record.
+
+Modules whose external state can change concurrently also maintain a row in the
+generic `core_team_deletion_policy_blockers` table in the same transaction as
+that state. The core checks those rows before deletion and a SQLite trigger
+checks them again inside Better Auth's organization-delete transaction. This
+prevents a late external-state transition from racing a successful delete. Do
+not put provider-specific credentials or payloads in the blocker row; its
+message is user-facing and retained only until the blocker is cleared.
 
 ## Building A Distribution
 

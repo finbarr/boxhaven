@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRightLeft, ChevronRight, MonitorDot, Plus, Settings2, Server, Trash2 } from "lucide-react";
+import { ArrowRightLeft, ChevronRight, MonitorDot, Plus, Settings2, Server, Trash2, TriangleAlert } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CommandBlock, installCommand } from "./access";
 import {
@@ -140,7 +140,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   const missingName = selectedName && machines.data && !selectedMachine ? selectedName : undefined;
   const connect = useQuery({
     queryKey: ["connect", selectedMachine?.name, token],
-    enabled: Boolean(selectedMachine),
+    enabled: Boolean(selectedMachine && !selectedMachine.create_state),
     queryFn: () => apiFetch<ConnectResponse>(`/v1/machines/${encodeURIComponent(selectedMachine?.name || "")}/connect`, token),
   });
 
@@ -198,10 +198,16 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
                     className={machine.name === selectedName ? "selected" : undefined}
                     onClick={() => void navigate({ to: "/boxes/$name", params: { name: machine.name } })}
                   >
-                    <td className="cell-status"><MonitorDot size={16} /></td>
+                    <td className={`cell-status${machine.create_state === "recovery_required" ? " recovery" : ""}`} title={machine.create_state === "recovery_required" ? "Recovery required" : "Box"}>
+                      {machine.create_state === "recovery_required" ? <TriangleAlert size={16} /> : <MonitorDot size={16} />}
+                    </td>
                     <td><strong>{machine.name}</strong></td>
                     <td>{machine.provider_label || machine.provider || "-"} / {machine.region || "-"}</td>
-                    <td><code title={machine.preview_hostname || machine.public_ipv4 || ""}>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code></td>
+                    <td>
+                      {machine.create_state === "recovery_required"
+                        ? <span className="recovery-label">destroy and recreate</span>
+                        : <code title={machine.preview_hostname || machine.public_ipv4 || ""}>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code>}
+                    </td>
                     <td className="cell-chevron"><ChevronRight size={16} /></td>
                   </tr>
                 ))}
@@ -419,15 +425,28 @@ function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClos
           </button>
         )}
       >
+        {machine.create_state === "recovery_required" ? (
+          <div className="recovery-notice" role="alert">
+            <TriangleAlert size={18} />
+            <div>
+              <strong>This box did not finish provisioning.</strong>
+              <span>Its provider outcome is uncertain. Destroy it, then create it again.</span>
+            </div>
+          </div>
+        ) : null}
         <div className="metrics">
           <Metric label="Provider" value={machine.provider_label || machine.provider || "-"} />
           <Metric label="Region" value={machine.region || "-"} />
           <Metric label="Size" value={machine.size_shortcut ? `${machine.size_shortcut} (${machine.size || "-"})` : machine.size || "-"} />
           <Metric label="Image" value={machine.image || "-"} />
         </div>
-        <CommandBlock label="Preview" value={machine.preview_url || ""} />
-        <CommandBlock label="Connect" value={connect?.connect.cli || `bh connect ${machine.name}`} />
-        <CommandBlock label="Run" value={connect?.connect.cli_run || `bh run ${machine.name}`} />
+        {machine.create_state === "recovery_required" ? null : (
+          <>
+            <CommandBlock label="Preview" value={machine.preview_url || ""} />
+            <CommandBlock label="Connect" value={connect?.connect.cli || `bh connect ${machine.name}`} />
+            <CommandBlock label="Run" value={connect?.connect.cli_run || `bh run ${machine.name}`} />
+          </>
+        )}
         <dl className="meta">
           <div><dt>Team</dt><dd>{machine.team_name || machine.team_slug || "-"}</dd></div>
           <div><dt>Provider ID</dt><dd>{machine.provider_id || "-"}</dd></div>
@@ -437,7 +456,9 @@ function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClos
           <div><dt>Last sync</dt><dd>{formatDate(machine.last_synced_at)}</dd></div>
           <div><dt>Updated</dt><dd>{formatDate(machine.updated_at)}</dd></div>
         </dl>
-        <MoveTeamControl key={`${machine.name}:${machine.team_id || ""}`} machine={machine} teams={teams} onMove={onMove} moving={moving} moveError={moveError} />
+        {machine.create_state === "recovery_required" ? null : (
+          <MoveTeamControl key={`${machine.name}:${machine.team_id || ""}`} machine={machine} teams={teams} onMove={onMove} moving={moving} moveError={moveError} />
+        )}
       </Drawer>
     );
   }

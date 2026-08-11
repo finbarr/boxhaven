@@ -27,6 +27,7 @@
     "build": "rm -rf dist && tsc -p tsconfig.json && cp app/src/styles.css dist/console.css && cp app/src/assets/boxhaven-logo.png dist/console-logo.png && npm run app:build",
     "app:build": "vite build",
     "smoke:console": "tsx scripts/console-smoke.mjs",
+    "smoke:docs-deletion": "tsx scripts/docs-deletion-smoke.mjs",
     "smoke:hosted-legal": "tsx scripts/hosted-legal-smoke.mjs",
     "test": "node --import tsx --test src/*.test.ts"
   },

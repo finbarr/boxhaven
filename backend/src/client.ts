@@ -66,6 +66,7 @@ export type Machine = {
   branch?: string;
   last_synced_at?: string;
   bootstrap_complete?: boolean;
+  create_state?: "provisioning" | "recovery_required";
   created_at?: string;
   updated_at?: string;
 };

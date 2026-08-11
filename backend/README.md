@@ -258,6 +258,7 @@ Routes:
 - `POST /v1/machines/:name/commands/record`
 - `POST /v1/machines/:name/move`
 - `DELETE /v1/machines/:name`
+- `DELETE /v1/teams/:orgID` — owner-only guarded deletion; refuses while boxes, provisioning work, or module policy blockers exist
 
 `GET /v1/auth/whoami` returns the authenticated user plus the session's teams:
 `team` is the session's active team (`{id, name, slug}`, or `null` before the
@@ -309,6 +310,19 @@ Team routes (Better Auth organization plugin, mounted under `/v1/auth`):
 - `POST /v1/auth/organization/update-member-role`
 - `POST /v1/auth/organization/set-active`
 - `POST /v1/auth/organization/leave`
+
+Direct `POST /v1/auth/organization/delete` requests are intercepted by the
+same guarded workflow for older clients; Better Auth organization deletion is
+never exposed as an unchecked operation.
+
+Box creation reservations are process-owned, but each is paired atomically
+with a durable provisioning record. Startup clears stale reservations and
+retains those records for explicit provider cleanup, so team and account
+deletion cannot remain blocked by an invisible reservation or reopen after a
+crash. Provider discovery may add the VM identity needed for cleanup, but never
+promotes a recovery record into a usable or billable box. The user must destroy
+and recreate it. Only a provider error that explicitly proves no VM was created
+removes its placeholder automatically; ambiguous outcomes remain fail-closed.
 
 Roles are `owner`, `admin`, and `member`. Invite links take the form
 `<app_url>/invite?id=<invitation-id>` and are accepted by the signed-in user

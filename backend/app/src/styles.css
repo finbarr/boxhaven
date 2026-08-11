@@ -1481,6 +1481,36 @@ a.secondary-button {
   color: #2f6f5c;
 }
 
+.cell-status.recovery,
+.recovery-label {
+  color: #a24b2a;
+}
+
+.recovery-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.recovery-notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid rgba(162, 75, 42, 0.3);
+  border-radius: 10px;
+  color: #7d371f;
+  background: rgba(162, 75, 42, 0.08);
+}
+
+.recovery-notice div {
+  display: grid;
+  gap: 3px;
+}
+
+.recovery-notice span {
+  color: #59463e;
+}
+
 .cell-chevron {
   width: 28px;
   color: #93a097;
@@ -1551,6 +1581,18 @@ a.secondary-button {
 
 .drawer-foot .danger-button {
   width: 100%;
+}
+
+.team-delete-control {
+  display: grid;
+  gap: 10px;
+}
+
+.team-delete-control p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 @keyframes drawer-slide {

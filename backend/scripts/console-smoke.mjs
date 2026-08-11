@@ -52,6 +52,7 @@ try {
 
   const deviceFacts = await checkDevicePage(page, deviceUserCode);
   const gettingStartedFacts = await checkGettingStarted(page);
+  const recoveryFacts = await checkRecoveryBox(page, disabledAccountBackend.store, disabledAccountBackend.whoami);
   const teamMenuFacts = await checkTeamMenu(page);
   const membersFacts = await checkMembersPage(page);
   const teamsFacts = await checkTeamsPage(page);
@@ -91,12 +92,15 @@ try {
       device: join(outDir, "device.png"),
       boxes: join(outDir, "boxes.png"),
       mobileBoxes: join(outDir, "mobile-boxes.png"),
+      recoveryBox: join(outDir, "recovery-box.png"),
+      recoveryBoxMobile: join(outDir, "recovery-box-mobile.png"),
       teamMenuDesktop: join(outDir, "team-menu-desktop.png"),
       teamMenuMobile: join(outDir, "team-menu-mobile.png"),
       teamCreateFromMenu: join(outDir, "team-create-from-menu.png"),
       members: join(outDir, "members.png"),
       teams: join(outDir, "teams.png"),
       teamEditor: join(outDir, "team-editor.png"),
+      mobileTeamEditor: join(outDir, "mobile-team-editor.png"),
       security: join(outDir, "security.png"),
       securityMobile: join(outDir, "security-mobile.png"),
       images: join(outDir, "images.png"),
@@ -110,6 +114,7 @@ try {
     accessFacts,
     deviceFacts,
     gettingStartedFacts,
+    recoveryFacts,
     teamMenuFacts,
     membersFacts,
     teamsFacts,
@@ -268,7 +273,7 @@ async function startSeededBackend({ accountLabel } = {}) {
   assert.equal(device.statusCode, 200, device.body);
   assert.equal(typeof device.json().user_code, "string");
   await app.listen({ host: "127.0.0.1", port: apiPort });
-  return { app, token, deviceUserCode: device.json().user_code, whoami: whoami.json() };
+  return { app, store, token, deviceUserCode: device.json().user_code, whoami: whoami.json() };
 }
 
 async function signUp(app, email, password = "password123") {
@@ -410,6 +415,47 @@ async function checkGettingStarted(page) {
   assert.ok(mobile.bodyScrollWidth <= mobile.viewport, `mobile boxes page overflows: ${mobile.bodyScrollWidth} > ${mobile.viewport}`);
   assert.deepEqual(mobile.clippedCommands, [], `mobile commands are clipped: ${mobile.clippedCommands.join(", ")}`);
   assert.ok((mobile.updateWidth || 0) <= mobile.viewport, `mobile update banner overflows: ${mobile.updateWidth} > ${mobile.viewport}`);
+  return { desktop, mobile };
+}
+
+async function checkRecoveryBox(page, store, whoami) {
+  await store.putMachine({
+    name: "recover-me",
+    user_id: whoami.user.id,
+    org_id: whoami.team.id,
+    provider: "fake",
+    provider_name: "recover-me-smoke",
+    provider_id: "fake-recover-me",
+    create_state: "recovery_required",
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(appURL, { waitUntil: "domcontentloaded" });
+  await waitForConsole(page);
+  await page.getByText("destroy and recreate").waitFor({ timeout: 10_000 });
+  await page.getByText("recover-me", { exact: true }).click();
+  await page.getByRole("alert").waitFor({ timeout: 10_000 });
+  await page.screenshot({ path: join(outDir, "recovery-box.png"), fullPage: true });
+  const desktop = await page.evaluate(() => ({
+    notice: document.querySelector(".recovery-notice")?.textContent?.replace(/\s+/g, " ").trim(),
+    commands: [...document.querySelectorAll(".drawer-panel .command-block")].map((node) => node.textContent?.trim()),
+    bodyScrollWidth: document.documentElement.scrollWidth,
+    viewport: window.innerWidth,
+  }));
+  assert.match(desktop.notice || "", /did not finish provisioning.*Destroy it, then create it again/);
+  assert.deepEqual(desktop.commands, [], "recovery drawer must not offer connect or run commands");
+  assert.ok(desktop.bodyScrollWidth <= desktop.viewport, `recovery desktop overflows: ${desktop.bodyScrollWidth} > ${desktop.viewport}`);
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: join(outDir, "recovery-box-mobile.png"), fullPage: true });
+  const mobile = await page.evaluate(() => ({
+    bodyScrollWidth: document.documentElement.scrollWidth,
+    viewport: window.innerWidth,
+    noticeWidth: document.querySelector(".recovery-notice")?.getBoundingClientRect().width,
+  }));
+  assert.ok(mobile.bodyScrollWidth <= mobile.viewport, `recovery mobile overflows: ${mobile.bodyScrollWidth} > ${mobile.viewport}`);
+  assert.ok((mobile.noticeWidth || 0) <= mobile.viewport, `recovery notice overflows: ${mobile.noticeWidth} > ${mobile.viewport}`);
+  await store.deleteMachine(whoami.user.id, "recover-me");
   return { desktop, mobile };
 }
 
@@ -594,11 +640,14 @@ async function checkTeamsPage(page) {
     title: document.querySelector(".drawer-panel h2")?.textContent?.trim(),
     inputs: [...document.querySelectorAll(".drawer-panel input")].map((input) => input.value),
     buttons: [...document.querySelectorAll(".drawer-panel button")].map((button) => button.textContent?.trim()),
+    deletionGuidance: document.querySelector(".team-delete-control p")?.textContent?.trim(),
   }));
   assert.equal(drawerFacts.title, "Acme Labs");
   assert.deepEqual(drawerFacts.inputs, ["Acme Labs", "acme-labs"]);
   assert.ok(drawerFacts.buttons.some((text) => text?.includes("Save team")), "missing drawer Save action");
   assert.ok(drawerFacts.buttons.some((text) => text?.includes("Delete team")), "missing drawer Delete action");
+  assert.match(drawerFacts.deletionGuidance || "", /Destroy every box first/);
+  assert.match(drawerFacts.deletionGuidance || "", /billing to show inactive/);
   facts.drawerFacts = drawerFacts;
   return facts;
 }
@@ -776,6 +825,18 @@ async function checkMobileTeams(page) {
   }));
   assert.ok(facts.bodyScrollWidth <= facts.viewport, `body overflows horizontally: ${facts.bodyScrollWidth} > ${facts.viewport}`);
   assert.ok((facts.tablePanelScrollWidth || 0) > (facts.tablePanelClientWidth || 0), "teams table should scroll inside its panel on mobile");
+  await page.getByRole("row", { name: /Acme Labs/ }).click();
+  await page.waitForSelector(".team-delete-control", { timeout: 10_000 });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(outDir, "mobile-team-editor.png"), fullPage: true });
+  const editorFacts = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    bodyScrollWidth: document.documentElement.scrollWidth,
+    deletionGuidance: document.querySelector(".team-delete-control p")?.textContent?.trim(),
+  }));
+  assert.ok(editorFacts.bodyScrollWidth <= editorFacts.viewport, `mobile team editor overflows horizontally: ${editorFacts.bodyScrollWidth} > ${editorFacts.viewport}`);
+  assert.match(editorFacts.deletionGuidance || "", /Destroy every box first/);
+  facts.editor = editorFacts;
   return facts;
 }
 
