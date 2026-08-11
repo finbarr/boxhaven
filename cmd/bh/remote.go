@@ -754,6 +754,59 @@ func currentGitRepo(projectDir string) gitRepoInfo {
 	return gitRepoInfo{URL: strings.TrimSpace(url), Branch: branch}
 }
 
+func projectGitRepoURLs(repoURL string, projectDir string) []string {
+	seen := map[string]struct{}{}
+	urls := make([]string, 0, 2)
+	appendURL := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		urls = append(urls, value)
+	}
+
+	appendURL(repoURL)
+	appendURL(currentGitRepo(projectDir).URL)
+
+	entries, err := os.ReadDir(projectDir)
+	if err != nil {
+		return urls
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		child := filepath.Join(projectDir, entry.Name())
+		if _, err := os.Stat(filepath.Join(child, ".git")); err != nil {
+			continue
+		}
+		appendURL(currentGitRepo(child).URL)
+	}
+	return urls
+}
+
+func githubRepoURLForProject(repoURL string, projectDir string) string {
+	for _, candidate := range projectGitRepoURLs(repoURL, projectDir) {
+		if isGitHubRepoURL(candidate) {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func shouldForwardSSHAgentForProject(repoURL string, projectDir string) bool {
+	for _, candidate := range projectGitRepoURLs(repoURL, projectDir) {
+		if shouldForwardSSHAgent(candidate) {
+			return true
+		}
+	}
+	return false
+}
+
 func currentGitIdentity(projectDir string) gitIdentity {
 	name, _ := gitOutput(projectDir, "config", "--get", "user.name")
 	email, _ := gitOutput(projectDir, "config", "--get", "user.email")
@@ -1215,7 +1268,7 @@ func runRemoteMachineCommand(cfg Config, machine remoteMachine, commandArgs []st
 		return err
 	}
 	info("Running on remote %s via direct SSH", machine.Name)
-	if err := runSSHCommand(machine, remoteCommand, false, shouldForwardSSHAgent(machine.RepoURL)); err != nil {
+	if err := runSSHCommand(machine, remoteCommand, false, shouldForwardSSHAgentForProject(machine.RepoURL, sourcePath)); err != nil {
 		return err
 	}
 	if err := recordRemoteBackendCommand(cfg, machine, commandArgs); err != nil {
@@ -1381,7 +1434,7 @@ func syncRemoteAuthState(machine remoteMachine, projectDir string) error {
 	var script strings.Builder
 	script.WriteString("set -euo pipefail\numask 077\n")
 	script.WriteString(remoteAuthSyncLockScript())
-	script.WriteString(remoteSessionEnvScript(remoteGitAuthEnv(machine.RepoURL)))
+	script.WriteString(remoteSessionEnvScript(remoteGitAuthEnv(githubRepoURLForProject(machine.RepoURL, projectDir))))
 	script.WriteString(remoteGitIdentityScript(currentGitIdentity(projectDir)))
 	script.WriteString(remoteAuthFilesScript(machine, localRemoteAuthFiles(machine.SSHUser)))
 	info("Syncing session auth to remote %s", machine.Name)

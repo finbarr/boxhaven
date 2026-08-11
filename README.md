@@ -310,8 +310,9 @@ bh image rm <image-id> --force
 
 ## GitHub Repository Access
 
-When the current project's `origin` points at GitHub, `bh create`, `bh run`,
-`bh connect`, and `bh sync up` forward GitHub auth to the remote box in
+When the current project's `origin`, or the `origin` of an immediate child
+repository in a multi-repository workspace, points at GitHub, `bh create`,
+`bh run`, `bh connect`, and `bh sync up` forward GitHub auth to the remote box in
 `/run/boxhaven/session.env`. The file lives in tmpfs, is readable only by the
 remote SSH user and root, and is replaced or removed by the CLI on the next
 command. The remote image includes a Git credential helper that uses those

@@ -373,7 +373,8 @@ additional rsync-style exclude patterns from `.boxhavenignore`. Sync completion
 reports elapsed time, network bytes, changed bytes, and file counts.
 
 The remote image also includes a GitHub HTTPS credential helper. When the CLI
-detects a GitHub project, it writes GitHub auth over direct SSH to
+detects a GitHub project or an immediate child GitHub repository in a
+multi-repository workspace, it writes GitHub auth over direct SSH to
 `/run/boxhaven/session.env` on the VM. `GH_TOKEN` or `GITHUB_TOKEN` are used when
 set; otherwise the CLI falls back to the local GitHub CLI via `gh auth token`.
 The machine agent sources that tmpfs file before setup commands, direct
