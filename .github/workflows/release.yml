@@ -157,29 +157,30 @@ jobs:
           diff -u checked-release-notes.md release-notes.md
           scripts/verify-release-artifacts.sh "${GITHUB_REF_NAME}" dist
 
-      - name: Refuse to replace an existing release
+      - name: Create or reuse verified draft
         run: |
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            echo "release ${GITHUB_REF_NAME} already exists; refusing to replace its assets" >&2
-            exit 1
+          if existing_draft="$(gh release view "${GITHUB_REF_NAME}" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [ "$existing_draft" != true ]; then
+              echo "release ${GITHUB_REF_NAME} is already published; refusing to replace it" >&2
+              exit 1
+            fi
+            echo "reusing existing ${GITHUB_REF_NAME} draft for exact asset verification"
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --verify-tag \
+              --draft \
+              --title "${GITHUB_REF_NAME}" \
+              --notes-file release-notes.md \
+              "dist/bh_${GITHUB_REF_NAME}_darwin_amd64.tar.gz" \
+              "dist/bh_${GITHUB_REF_NAME}_darwin_arm64.tar.gz" \
+              "dist/bh_${GITHUB_REF_NAME}_linux_amd64.tar.gz" \
+              "dist/bh_${GITHUB_REF_NAME}_linux_arm64.tar.gz" \
+              dist/SHA256SUMS
           fi
-
-      - name: Create draft and upload exact assets
-        run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --verify-tag \
-            --draft \
-            --title "${GITHUB_REF_NAME}" \
-            --notes-file release-notes.md \
-            "dist/bh_${GITHUB_REF_NAME}_darwin_amd64.tar.gz" \
-            "dist/bh_${GITHUB_REF_NAME}_darwin_arm64.tar.gz" \
-            "dist/bh_${GITHUB_REF_NAME}_linux_amd64.tar.gz" \
-            "dist/bh_${GITHUB_REF_NAME}_linux_arm64.tar.gz" \
-            dist/SHA256SUMS
 
       - name: Verify draft asset names and GitHub digests
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" > draft-release.json
+          gh release view "${GITHUB_REF_NAME}" --json tagName,isDraft,assets > draft-release.json
           python3 - "${GITHUB_REF_NAME}" dist/SHA256SUMS draft-release.json <<'PY'
           import json
           import pathlib
@@ -199,7 +200,7 @@ jobs:
           ).hexdigest()
           release = json.loads(release_path.read_text(encoding="utf-8"))
           actual = {asset["name"]: asset.get("digest") for asset in release.get("assets", [])}
-          if release.get("tag_name") != tag or not release.get("draft"):
+          if release.get("tagName") != tag or not release.get("isDraft"):
               raise SystemExit("uploaded release is not the expected draft")
           if actual != expected:
               raise SystemExit(f"draft assets differ: expected {expected}, got {actual}")
