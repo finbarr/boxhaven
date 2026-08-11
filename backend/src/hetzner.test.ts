@@ -116,6 +116,35 @@ test("Hetzner creates servers with labels, cloud-init, and a throwaway SSH key",
   }
 });
 
+test("Hetzner release is idempotent and waits until the server is absent", async () => {
+  const methods: string[] = [];
+  const originalFetch = globalThis.fetch;
+  let deleted = false;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    assert.match(String(input), /\/servers\/42$/);
+    const method = init?.method || "GET";
+    methods.push(method);
+    if (method === "DELETE") {
+      if (deleted) return new Response("", { status: 404 });
+      deleted = true;
+      return jsonResponse({ action: { id: 99, status: "running" } });
+    }
+    return new Response("", { status: 404 });
+  }) as typeof fetch;
+  try {
+    const provider = hetznerProviderFromEnv({
+      HCLOUD_TOKEN: "hcloud-test",
+      BOXHAVEN_HETZNER_API_URL: "https://hetzner.example.test",
+    });
+    const machine = { name: "one", provider: "hetzner", provider_id: "42" };
+    await provider.releaseMachine(machine);
+    await provider.releaseMachine(machine);
+    assert.deepEqual(methods, ["DELETE", "GET", "DELETE", "GET"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Hetzner exposes server types with regional prices", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
