@@ -110,7 +110,9 @@ func runSizeList(args []string, projectDir string, plans bool) error {
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	if plans {
-		fmt.Fprintln(w, "PLAN\tCPU\tMEMORY\tDISK\tGPU\tPRICE")
+		if _, err := fmt.Fprintln(w, "PLAN\tCPU\tMEMORY\tDISK\tGPU\tPRICE"); err != nil {
+			return err
+		}
 		sort.Slice(response.Plans, func(i, j int) bool { return response.Plans[i].Slug < response.Plans[j].Slug })
 		for _, plan := range response.Plans {
 			if !plan.Available {
@@ -124,16 +126,22 @@ func runSizeList(args []string, projectDir string, plans bool) error {
 			if plan.HourlyPriceCents != nil {
 				price = formatDollarPrice(*plan.HourlyPriceCents)
 			}
-			fmt.Fprintf(w, "%s\t%d\t%s\t%d GB\t%s\t%s\n", plan.Slug, plan.VCPUs, formatMemory(plan.MemoryMB), plan.DiskGB, gpu, price)
+			if _, err := fmt.Fprintf(w, "%s\t%d\t%s\t%d GB\t%s\t%s\n", plan.Slug, plan.VCPUs, formatMemory(plan.MemoryMB), plan.DiskGB, gpu, price); err != nil {
+				return err
+			}
 		}
 	} else {
-		fmt.Fprintln(w, "NAME\tKIND\tPROVIDER PLAN\tCPU\tMEMORY\tPRICE")
+		if _, err := fmt.Fprintln(w, "NAME\tKIND\tPROVIDER PLAN\tCPU\tMEMORY\tPRICE"); err != nil {
+			return err
+		}
 		for _, size := range response.Sizes {
 			price := formatProviderPrice(size.Plan.Prices)
 			if size.HourlyPriceCents != nil {
 				price = formatDollarPrice(*size.HourlyPriceCents)
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s/%s\t%d\t%s\t%s\n", size.Name, size.Kind, size.Provider, size.Plan.Slug, size.Plan.VCPUs, formatMemory(size.Plan.MemoryMB), price)
+			if _, err := fmt.Fprintf(w, "%s\t%s\t%s/%s\t%d\t%s\t%s\n", size.Name, size.Kind, size.Provider, size.Plan.Slug, size.Plan.VCPUs, formatMemory(size.Plan.MemoryMB), price); err != nil {
+				return err
+			}
 		}
 	}
 	return w.Flush()
