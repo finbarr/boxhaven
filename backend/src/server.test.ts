@@ -1489,7 +1489,7 @@ test("authenticated users can change their password and rotate the bearer sessio
 test("hosted policy fails new creates closed while existing box access and destroy stay available", async () => {
   const facts: MachineLifecycleEvent[] = [];
   const checkedMachineIDs: string[] = [];
-  const checkedActors: Array<{ email_verified?: boolean; can_manage: boolean }> = [];
+  const checkedActors: Array<{ email_verified?: boolean; can_manage: boolean; is_initial_owner?: boolean }> = [];
   let reconcileCalls = 0;
   let reconcileFailure = true;
   let createFailure = false;
@@ -1533,6 +1533,7 @@ test("hosted policy fails new creates closed while existing box access and destr
     email: "policy@example.com",
     email_verified: true,
     can_manage: true,
+    is_initial_owner: true,
   });
   const activeSnapshot = reconciliationSnapshot(await store.listMachines(), "2026-07-11T00:00:00.000Z");
   assert.deepEqual(activeSnapshot.machines[0], { team: facts[0].team, machine: facts[0].machine });

@@ -341,13 +341,15 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const team = resolveTeamReference(auth, bodyString(request.query?.team), reply);
     if (!team) return;
     try {
+      const role = await orgRoleForUser(options, request.headers, team.id, auth.userID);
       return await commercialPolicy.getAccountSummary({
         team: policyTeam(team),
         actor: {
           id: auth.userID,
           email: auth.email,
           email_verified: auth.emailVerified,
-          can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
+          can_manage: orgRoleCanManage(role),
+          is_initial_owner: orgRoleIsOwner(role) && isInitialTeamOwner(options, team.id, auth.userID),
         },
       });
     } catch (error) {
@@ -364,11 +366,13 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     }
     const team = resolveTeamReference(auth, bodyString(request.body?.team), reply);
     if (!team) return;
+    const role = await orgRoleForUser(options, request.headers, team.id, auth.userID);
     const actor = {
       id: auth.userID,
       email: auth.email,
       email_verified: auth.emailVerified,
-      can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
+      can_manage: orgRoleCanManage(role),
+      is_initial_owner: orgRoleIsOwner(role) && isInitialTeamOwner(options, team.id, auth.userID),
     };
     if (!actor.can_manage) {
       return reply.code(403).send({ id: "forbidden", message: "Only team owners and admins can manage the plan." });
@@ -443,13 +447,15 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (team) {
       let decision;
       try {
+        const role = await orgRoleForUser(options, request.headers, team.id, auth.userID);
         decision = await commercialPolicy.checkCreate({
           team: policyTeam(team),
           actor: {
             id: auth.userID,
             email: auth.email,
             email_verified: auth.emailVerified,
-            can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
+            can_manage: orgRoleCanManage(role),
+            is_initial_owner: orgRoleIsOwner(role) && isInitialTeamOwner(options, team.id, auth.userID),
           },
           machine: policyMachineIdentity({
             name: body.name,
@@ -1344,6 +1350,27 @@ function validateCreateOverride(field: "image" | "region", value: string | undef
 function orgRoleCanManage(role: string): boolean {
   const roles = role.split(",").map((part) => part.trim().toLowerCase());
   return roles.includes("owner") || roles.includes("admin");
+}
+
+function orgRoleIsOwner(role: string): boolean {
+  return role.split(",").some((part) => part.trim().toLowerCase() === "owner");
+}
+
+function isInitialTeamOwner(options: BackendOptions, orgID: string, userID: string): boolean {
+  try {
+    const owner = options.store.db.prepare(`
+      SELECT userId
+      FROM member
+      WHERE organizationId = ?
+        AND (',' || replace(lower(role), ' ', '') || ',') LIKE '%,owner,%'
+      ORDER BY createdAt ASC, id ASC
+      LIMIT 1
+    `).get(orgID) as { userId: string } | undefined;
+    return owner?.userId === userID;
+  } catch {
+    // A missing or unexpected membership record must fail closed for benefits.
+    return false;
+  }
 }
 
 async function listOrgMembers(
