@@ -44,6 +44,9 @@ jobs:
       - name: Install backend dependencies
         run: npm --prefix backend ci
 
+      - name: Audit production dependencies
+        run: npm --prefix backend audit --omit=dev --audit-level=high
+
       - name: Build backend
         run: npm --prefix backend run build
 
