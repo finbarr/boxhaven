@@ -6,7 +6,8 @@ open-source entrypoint loads no modules and uses the in-process allow-all
 commercial policy.
 
 A module can contribute ordered SQLite migrations, authenticated API routes,
-and a `CommercialPolicy` implementation. It receives the core database,
+a `CommercialPolicy` implementation, and a provider-neutral
+`TeamDeletionPolicy`. It receives the core database,
 provider registry, state store, authentication helpers, and team authorization
 helpers in process. This keeps provisioning, auth, SSH, and lifecycle behavior
 in the open core while allowing a distribution to add its own models and UI.
@@ -42,6 +43,22 @@ If a policy throws or returns an invalid create decision, BoxHaven returns
 `503 entitlement_unavailable` and does not provision the box. An explicit
 denial returns `403 entitlement_denied`. Listing, connecting, running, syncing,
 moving, and destroying existing boxes do not wait for policy delivery.
+
+## Deletion Policy
+
+A module can return `teamDeletionPolicy.checkTeamDeletion`. The input contains
+only the team and requesting actor; the decision is an allow flag and optional
+actionable message. The core has no knowledge of why a module blocks deletion.
+
+Team deletion always fails closed while a core box or provisioning reservation
+exists. Modules whose external state can change concurrently also maintain a
+row in the generic `core_team_deletion_policy_blockers` table in the same
+transaction as that state. The core checks those rows before deletion and a
+SQLite trigger checks them again inside Better Auth's organization-delete
+transaction. This prevents a late external-state transition from racing a
+successful delete. Do not put provider-specific credentials or payloads in the
+blocker row; its message is user-facing and retained only until the blocker is
+cleared.
 
 ## Building A Distribution
 

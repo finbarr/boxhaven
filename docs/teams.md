@@ -82,6 +82,19 @@ When you leave a team (or are removed), your boxes in it move back to your
 active team the next time you list them; until that next listing, the old
 team can still see and destroy them.
 
+## Deleting A Team
+
+Only an owner can delete a team. BoxHaven refuses deletion while any box is
+still recorded in that team, including a box whose create or bootstrap failed,
+or while a box creation is in progress. Destroy every box, wait for in-progress
+creates to finish, and then retry from the console. A destroyed box is terminal
+because provider cleanup completed and its core record was removed.
+
+Distributions may add another deletion policy through a backend module. For
+example, a hosted deployment can require its external account to be inactive
+first. The console returns that policy's actionable message instead of deleting
+the team and leaving external state behind.
+
 ## Sharing A Box Setup
 
 Moving or sharing never copies a box. To hand a teammate a box like yours,

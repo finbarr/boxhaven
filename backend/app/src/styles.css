@@ -1553,6 +1553,18 @@ a.secondary-button {
   width: 100%;
 }
 
+.team-delete-control {
+  display: grid;
+  gap: 10px;
+}
+
+.team-delete-control p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 @keyframes drawer-slide {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }

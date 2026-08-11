@@ -258,6 +258,7 @@ Routes:
 - `POST /v1/machines/:name/commands/record`
 - `POST /v1/machines/:name/move`
 - `DELETE /v1/machines/:name`
+- `DELETE /v1/teams/:orgID` — owner-only guarded deletion; refuses while boxes, provisioning work, or module policy blockers exist
 
 `GET /v1/auth/whoami` returns the authenticated user plus the session's teams:
 `team` is the session's active team (`{id, name, slug}`, or `null` before the
@@ -303,6 +304,10 @@ Team routes (Better Auth organization plugin, mounted under `/v1/auth`):
 - `POST /v1/auth/organization/update-member-role`
 - `POST /v1/auth/organization/set-active`
 - `POST /v1/auth/organization/leave`
+
+Direct `POST /v1/auth/organization/delete` requests are intercepted by the
+same guarded workflow for older clients; Better Auth organization deletion is
+never exposed as an unchecked operation.
 
 Roles are `owner`, `admin`, and `member`. Invite links take the form
 `<app_url>/invite?id=<invitation-id>` and are accepted by the signed-in user

@@ -157,10 +157,7 @@ function TeamSettingsDrawer({ open, token, user, org, onClose }: {
     },
   });
   const deleteTeam = useMutation({
-    mutationFn: () => apiFetch("/v1/auth/organization/delete", token, {
-      method: "POST",
-      body: { organizationId: org?.id },
-    }),
+    mutationFn: () => apiFetch(`/v1/teams/${encodeURIComponent(org?.id || "")}`, token, { method: "DELETE" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["orgs", token] });
       void queryClient.invalidateQueries({ queryKey: ["session", token] });
@@ -195,17 +192,20 @@ function TeamSettingsDrawer({ open, token, user, org, onClose }: {
       title={org?.name || "Team"}
       footer={org ? (
         isOwner ? (
-          <button
-            className="danger-button"
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              if (window.confirm(`Delete ${org.name}?`)) deleteTeam.mutate();
-            }}
-          >
-            <Trash2 size={16} />
-            {deleteTeam.isPending ? "Deleting" : "Delete team"}
-          </button>
+          <div className="team-delete-control">
+            <p>Destroy every box first. On hosted BoxHaven, cancel the team subscription and wait for billing to show inactive.</p>
+            <button
+              className="danger-button"
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (window.confirm(`Delete ${org.name}? Every box must be destroyed and hosted billing must be inactive.`)) deleteTeam.mutate();
+              }}
+            >
+              <Trash2 size={16} />
+              {deleteTeam.isPending ? "Deleting" : "Delete team"}
+            </button>
+          </div>
         ) : (
           <button
             className="danger-button"

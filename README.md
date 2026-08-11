@@ -285,6 +285,12 @@ When you leave a team (or are removed), your boxes in it move back to your
 active team the next time you list them; until that next listing, the old
 team can still see and destroy them.
 
+Only an owner can delete a team. Deletion is refused until every box in the
+team has been destroyed and every in-progress create has finished. Failed
+boxes still require explicit destruction because BoxHaven does not assume
+provider cleanup succeeded. A deployment-specific module can add another
+fail-closed check for external account state.
+
 Moving or sharing never copies a box. To hand a teammate a box like yours,
 snapshot it into a team image and create a new box from the resulting image:
 

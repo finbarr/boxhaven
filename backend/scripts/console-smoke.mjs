@@ -97,6 +97,7 @@ try {
       members: join(outDir, "members.png"),
       teams: join(outDir, "teams.png"),
       teamEditor: join(outDir, "team-editor.png"),
+      mobileTeamEditor: join(outDir, "mobile-team-editor.png"),
       security: join(outDir, "security.png"),
       securityMobile: join(outDir, "security-mobile.png"),
       images: join(outDir, "images.png"),
@@ -594,11 +595,14 @@ async function checkTeamsPage(page) {
     title: document.querySelector(".drawer-panel h2")?.textContent?.trim(),
     inputs: [...document.querySelectorAll(".drawer-panel input")].map((input) => input.value),
     buttons: [...document.querySelectorAll(".drawer-panel button")].map((button) => button.textContent?.trim()),
+    deletionGuidance: document.querySelector(".team-delete-control p")?.textContent?.trim(),
   }));
   assert.equal(drawerFacts.title, "Acme Labs");
   assert.deepEqual(drawerFacts.inputs, ["Acme Labs", "acme-labs"]);
   assert.ok(drawerFacts.buttons.some((text) => text?.includes("Save team")), "missing drawer Save action");
   assert.ok(drawerFacts.buttons.some((text) => text?.includes("Delete team")), "missing drawer Delete action");
+  assert.match(drawerFacts.deletionGuidance || "", /Destroy every box first/);
+  assert.match(drawerFacts.deletionGuidance || "", /billing to show inactive/);
   facts.drawerFacts = drawerFacts;
   return facts;
 }
@@ -776,6 +780,18 @@ async function checkMobileTeams(page) {
   }));
   assert.ok(facts.bodyScrollWidth <= facts.viewport, `body overflows horizontally: ${facts.bodyScrollWidth} > ${facts.viewport}`);
   assert.ok((facts.tablePanelScrollWidth || 0) > (facts.tablePanelClientWidth || 0), "teams table should scroll inside its panel on mobile");
+  await page.getByRole("row", { name: /Acme Labs/ }).click();
+  await page.waitForSelector(".team-delete-control", { timeout: 10_000 });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(outDir, "mobile-team-editor.png"), fullPage: true });
+  const editorFacts = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    bodyScrollWidth: document.documentElement.scrollWidth,
+    deletionGuidance: document.querySelector(".team-delete-control p")?.textContent?.trim(),
+  }));
+  assert.ok(editorFacts.bodyScrollWidth <= editorFacts.viewport, `mobile team editor overflows horizontally: ${editorFacts.bodyScrollWidth} > ${editorFacts.viewport}`);
+  assert.match(editorFacts.deletionGuidance || "", /Destroy every box first/);
+  facts.editor = editorFacts;
   return facts;
 }
 
