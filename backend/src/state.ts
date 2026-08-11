@@ -379,6 +379,17 @@ export class StateStore {
   private writeMachine(machine: RemoteMachine): void {
     const userID = machine.user_id;
     if (!userID) throw new Error("machine user_id is required");
+    const userDeletion = this.db.prepare(
+      "SELECT state FROM core_user_deletions WHERE user_id = ?",
+    ).get(userID) as { state: "deleting" | "deleted" } | undefined;
+    if (userDeletion) {
+      throw new DeletionGuardError(
+        "user_deleting",
+        userDeletion.state === "deleted"
+          ? "This account has been deleted."
+          : "This account is being deleted.",
+      );
+    }
     if (machine.org_id) {
       const deletion = this.db.prepare(
         "SELECT state FROM core_team_deletions WHERE org_id = ?",

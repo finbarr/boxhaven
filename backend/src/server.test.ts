@@ -13,7 +13,7 @@ import { CommercialPolicy, CreatePolicyDecision, MachineLifecycleEvent } from ".
 import { reconciliationSnapshot } from "./policy_delivery.js";
 import type { ReleaseUpdateChecker } from "./releases.js";
 import type { BackendModule } from "./module.js";
-import { StateStore } from "./state.js";
+import { DeletionGuardError, StateStore } from "./state.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { CreateMachineRequest, MachineImage, MachinePlan, MachineProvider, RemoteMachine, defaultSSHUser } from "./types.js";
@@ -1163,6 +1163,30 @@ test("a deletion guard rejects concurrent creates and a late module blocker abor
   const organization = store.db.prepare("SELECT id FROM organization WHERE id = ?").get(teamID);
   assert.ok(organization, "the Better Auth deletion transaction must roll back");
   assert.equal(store.db.prepare("SELECT state FROM core_team_deletions WHERE org_id = ?").get(teamID), undefined);
+  await app.close();
+});
+
+test("an account deletion guard rejects concurrent creates and provider imports", async () => {
+  const { app, provider, store, token } = await createTestBackend("account-race@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  const now = new Date().toISOString();
+  store.db.prepare(`
+    INSERT INTO core_user_deletions (
+      user_id, operation_id, state, actor_user_id, actor_email, started_at, updated_at
+    ) VALUES (?, 'account-delete-race', 'deleting', 'operator', 'operator@example.com', ?, ?)
+  `).run(whoami.json().user.id, now, now);
+
+  const create = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "too-late" } });
+  assert.equal(create.statusCode, 409, create.body);
+  assert.equal(create.json().id, "user_deleting");
+  assert.equal(provider.created.length, 0);
+  await assert.rejects(store.putMachine({
+    name: "late-import",
+    user_id: whoami.json().user.id,
+    org_id: whoami.json().team.id,
+    provider: "fake",
+  }), (error: unknown) => error instanceof DeletionGuardError && error.code === "user_deleting");
   await app.close();
 });
 
