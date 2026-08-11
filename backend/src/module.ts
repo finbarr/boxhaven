@@ -14,6 +14,7 @@ export type BackendTeam = {
 export type BackendUserContext = {
   userID: string;
   email: string;
+  emailVerified: boolean;
   orgID: string;
   teams: BackendTeam[];
 };

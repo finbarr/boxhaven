@@ -1568,7 +1568,7 @@ function providerPlanHourlyPrice(plan: MachinePlan, region = ""): number {
 }
 
 function policyActor(auth: AuthContext, canManage: boolean): PolicyActor {
-  return { id: auth.userID, email: auth.email, can_manage: canManage };
+  return { id: auth.userID, email: auth.email, email_verified: auth.emailVerified, can_manage: canManage };
 }
 
 function policyTeam(team: TeamInfo): PolicyTeam {
@@ -1586,7 +1586,7 @@ function machineFact(
   return {
     type,
     team: policyTeam(team || { id: teamID, name: teamID }),
-    actor: { id: auth.userID, email: auth.email },
+    actor: { id: auth.userID, email: auth.email, email_verified: auth.emailVerified },
     machine: policyMachineIdentity(machine),
   };
 }
@@ -1803,6 +1803,7 @@ async function requireAuth(options: BackendOptions, request: { headers: Record<s
   return {
     userID: session.user.id,
     email: session.user.email,
+    emailVerified: session.user.emailVerified,
     orgID,
     teams,
   };
