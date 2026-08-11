@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { WebSocketServer } from "ws";
 import { createBackendAuth, migrateBackendAuth } from "./auth.js";
+import type { EmailMessage, EmailSender } from "./email.js";
 import { ProviderRegistry } from "./providers.js";
 import { CommercialPolicy, CreatePolicyDecision, MachineLifecycleEvent } from "./policy.js";
 import { reconciliationSnapshot } from "./policy_delivery.js";
@@ -19,6 +20,25 @@ import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { CreateMachineRequest, MachineCreateError, MachineImage, MachinePlan, MachineProvider, RemoteMachine, defaultSSHUser } from "./types.js";
 
 const testSSHUserPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBxsqJzPGdcbwFthXVe2lyIImV6BwTw4Ee5WcoeczwJf test";
+
+class TestEmailSender implements EmailSender {
+  readonly messages: EmailMessage[] = [];
+
+  async send(message: EmailMessage): Promise<void> {
+    this.messages.push(message);
+  }
+
+  verificationURL(email: string): URL {
+    const message = [...this.messages].reverse().find((candidate) => (
+      candidate.to === email && candidate.subject === "Verify your BoxHaven email"
+    ));
+    const match = message?.text.match(/https?:\/\/\S+\/verify-email\?\S+/);
+    if (!match) throw new Error(`verification URL was not sent to ${email}`);
+    return new URL(match[0]);
+  }
+}
+
+const backendEmails = new WeakMap<ReturnType<typeof createBackend>, TestEmailSender>();
 
 class FakeProvider implements MachineProvider {
   readonly name: string;
@@ -41,6 +61,8 @@ class FakeProvider implements MachineProvider {
   snapshotted: Array<{ machine: string; name: string }> = [];
   deletedImages: string[] = [];
   publicIPv4 = "203.0.113.10";
+  createBarrier: Promise<void> | undefined;
+  failCreates = 0;
 
   constructor(name = "fake", label = "Fake Cloud") {
     this.name = name;
@@ -49,6 +71,11 @@ class FakeProvider implements MachineProvider {
 
   async createMachine(request: CreateMachineRequest) {
     this.created.push(request);
+    if (this.createBarrier) await this.createBarrier;
+    if (this.failCreates > 0) {
+      this.failCreates -= 1;
+      throw new MachineCreateError("provider create failed", "not_created");
+    }
     return {
       status: "created",
       machine: {
@@ -1410,6 +1437,104 @@ test("backend enforces the per-user machine limit", async () => {
   assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "two" } })).statusCode, 201);
 });
 
+test("concurrent machine creates cannot bypass the per-user reservation", async () => {
+  const { app, provider, token, store } = await createTestBackend("concurrent-limit@example.com", "password123", { maxMachinesPerUser: 1 });
+  const headers = { authorization: `Bearer ${token}` };
+  let unblock!: () => void;
+  provider.createBarrier = new Promise<void>((resolve) => { unblock = resolve; });
+
+  const first = app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "first" } });
+  await waitFor(() => provider.created.length === 1);
+  const second = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "second" } });
+  assert.equal(second.statusCode, 403, second.body);
+  assert.equal(second.json().id, "limit_reached");
+  assert.equal(provider.created.length, 1);
+
+  unblock();
+  const created = await first;
+  assert.equal(created.statusCode, 201, created.body);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_machine_creates").get() as { count: number }).count, 0);
+});
+
+test("provider create failure releases capacity for a retry", async () => {
+  const { app, provider, token, store } = await createTestBackend("failure-retry@example.com", "password123", { maxMachinesPerUser: 1 });
+  const headers = { authorization: `Bearer ${token}` };
+  provider.failCreates = 1;
+  const failed = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "retry-box" } });
+  assert.equal(failed.statusCode, 500, failed.body);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_machine_creates").get() as { count: number }).count, 0);
+
+  const retried = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "retry-box" } });
+  assert.equal(retried.statusCode, 201, retried.body);
+  assert.equal(provider.created.length, 2);
+});
+
+test("machine capacity is shared across every team the user owns", async () => {
+  const { app, token } = await createTestBackend("cross-team-limit@example.com", "password123", { maxMachinesPerUser: 1 });
+  const headers = { authorization: `Bearer ${token}` };
+  const session = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  assert.equal(session.statusCode, 200, session.body);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "personal" } })).statusCode, 201);
+  const team = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name: "Side Project", slug: "side-project-limit" },
+  });
+  assert.equal(team.statusCode, 200, team.body);
+  const teamID = team.json().id || team.json().organization?.id;
+  assert.equal((await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/set-active",
+    headers,
+    payload: { organizationId: teamID },
+  })).statusCode, 200);
+  const denied = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "side-project" } });
+  assert.equal(denied.statusCode, 403, denied.body);
+  assert.equal(denied.json().id, "limit_reached");
+});
+
+test("team creation is capped by ownership and concurrent requests reserve slots", async () => {
+  const { app, token, store } = await createTestBackend("team-limit@example.com", "password123", { maxTeamsPerUser: 3 });
+  const headers = { authorization: `Bearer ${token}` };
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  assert.equal(whoami.statusCode, 200, whoami.body);
+  assert.equal(whoami.json().teams.length, 1);
+
+  const creates = await Promise.all(["two", "three", "four"].map((slug) => app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name: slug, slug },
+  })));
+  assert.deepEqual(creates.map((response) => response.statusCode).sort(), [200, 200, 403]);
+  const denied = creates.find((response) => response.statusCode === 403);
+  assert.equal(denied?.json().code, "TEAM_LIMIT_REACHED");
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM member WHERE userId = ? AND role = 'owner'").get(whoami.json().user.id) as { count: number }).count, 3);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_team_creation_reservations").get() as { count: number }).count, 0);
+});
+
+test("failed team creation releases its slot for a valid retry", async () => {
+  const { app, token, store } = await createTestBackend("team-retry@example.com", "password123", { maxTeamsPerUser: 2 });
+  const headers = { authorization: `Bearer ${token}` };
+  await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  const invalid = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name: "", slug: "invalid" },
+  });
+  assert.equal(invalid.statusCode, 400, invalid.body);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_team_creation_reservations").get() as { count: number }).count, 0);
+  const retried = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name: "Valid", slug: "valid" },
+  });
+  assert.equal(retried.statusCode, 200, retried.body);
+});
+
 test("backend scopes team machine listing and destroy to the box's team", async () => {
   const { app, provider, token } = await createTestBackend("owner@example.com");
   const memberToken = await signUp(app, "member@example.com");
@@ -1611,8 +1736,9 @@ test("backend moves boxes between the owner's teams", async () => {
   assert.deepEqual(teamView.json().machines.map((machine: { name: string }) => machine.name), ["wanderer"]);
 });
 
-test("backend starts GitHub sign-in", async () => {
+test("GitHub provider-verified email creates a usable account without redundant verification", async () => {
   const { app } = await createTestBackend("gh@example.com", "password123", { github: true });
+  const verificationEmailsBefore = backendEmails.get(app)?.messages.length;
   const social = await app.inject({
     method: "POST",
     url: "/v1/auth/sign-in/social",
@@ -1621,6 +1747,55 @@ test("backend starts GitHub sign-in", async () => {
   assert.equal(social.statusCode, 200, social.body);
   assert.match(social.json().url, /github\.com\/login\/oauth\/authorize/);
   assert.match(social.json().url, /client_id=test-client-id/);
+  const authorizationURL = new URL(social.json().url);
+  const state = authorizationURL.searchParams.get("state");
+  assert.ok(state);
+  const oauthCookies = responseCookies(social.headers["set-cookie"]);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "https://github.com/login/oauth/access_token") {
+      return new Response(JSON.stringify({ access_token: "github-access-token", token_type: "bearer", scope: "read:user,user:email" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url === "https://api.github.com/user") {
+      return new Response(JSON.stringify({ id: 4242, login: "verified-oauth", name: "Verified OAuth", email: null, avatar_url: null }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url === "https://api.github.com/user/emails") {
+      return new Response(JSON.stringify([{ email: "oauth-verified@example.com", primary: true, verified: true }]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  };
+  try {
+    const callback = await app.inject({
+      method: "GET",
+      url: `/v1/auth/callback/github?code=test-code&state=${encodeURIComponent(state)}`,
+      headers: { cookie: oauthCookies },
+    });
+    assert.equal(callback.statusCode, 302, callback.body);
+    assert.equal(callback.headers.location, "http://127.0.0.1/auth/github");
+    const sessionCookies = responseCookies(callback.headers["set-cookie"]);
+    const session = await app.inject({
+      method: "GET",
+      url: "/v1/auth/get-session",
+      headers: { cookie: sessionCookies },
+    });
+    assert.equal(session.statusCode, 200, session.body);
+    assert.equal(session.json().user.email, "oauth-verified@example.com");
+    assert.equal(session.json().user.emailVerified, true);
+    assert.equal(backendEmails.get(app)?.messages.length, verificationEmailsBefore);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await app.close();
+  }
 });
 
 test("authenticated users can change their password and rotate the bearer session", async () => {
@@ -1673,6 +1848,7 @@ test("authenticated users can change their password and rotate the bearer sessio
 test("hosted policy fails new creates closed while existing box access and destroy stay available", async () => {
   const facts: MachineLifecycleEvent[] = [];
   const checkedMachineIDs: string[] = [];
+  const checkedActors: Array<{ email_verified?: boolean; can_manage: boolean; is_initial_owner?: boolean }> = [];
   let reconcileCalls = 0;
   let reconcileFailure = true;
   let createFailure = false;
@@ -1680,6 +1856,7 @@ test("hosted policy fails new creates closed while existing box access and destr
     lifecycleEventsEnabled: true,
     async checkCreate(input): Promise<CreatePolicyDecision> {
       checkedMachineIDs.push(input.machine.id);
+      checkedActors.push(input.actor);
       if (createFailure) throw new Error("policy offline");
       return { allowed: true };
     },
@@ -1710,6 +1887,13 @@ test("hosted policy fails new creates closed while existing box access and destr
   assert.equal(facts[0].machine.size, "large");
   assert.equal(facts[0].machine.provider_plan, "large");
   assert.equal(facts[0].machine.id, checkedMachineIDs[0]);
+  assert.deepEqual(checkedActors[0], {
+    id: facts[0].actor.id,
+    email: "policy@example.com",
+    email_verified: true,
+    can_manage: true,
+    is_initial_owner: true,
+  });
   const activeSnapshot = reconciliationSnapshot(await store.listMachines(), "2026-07-11T00:00:00.000Z");
   assert.deepEqual(activeSnapshot.machines[0], { team: facts[0].team, machine: facts[0].machine });
 
@@ -1846,6 +2030,7 @@ async function createTestBackend(
     machineReadyTimeoutMs?: number;
     adminEmails?: string[];
     extraProviders?: MachineProvider[];
+    maxTeamsPerUser?: number;
     maxMachinesPerUser?: number;
     github?: boolean;
     previewTLSWarmup?: (previewURL: string) => Promise<void>;
@@ -1868,6 +2053,7 @@ async function createTestBackend(
     databasePath,
     secret: "test-secret-with-at-least-thirty-two-bytes",
     deviceVerificationURL: "http://127.0.0.1/device",
+    email: new TestEmailSender(),
     ...(options.github ? { github: { clientId: "test-client-id", clientSecret: "test-client-secret" } } : {}),
   };
   await migrateBackendAuth(authOptions);
@@ -1878,6 +2064,7 @@ async function createTestBackend(
     store,
     sshCA,
     adminEmails: options.adminEmails,
+    maxTeamsPerUser: options.maxTeamsPerUser,
     maxMachinesPerUser: options.maxMachinesPerUser,
     commercialPolicy: options.commercialPolicy,
     policyEventRetryMs: options.policyEventRetryMs,
@@ -1892,11 +2079,19 @@ async function createTestBackend(
     releaseChecker: options.releaseChecker,
     corsOrigins: options.corsOrigins,
   });
-  const token = await signUp(app, email, password);
+  backendEmails.set(app, authOptions.email);
+  const token = await signUp(app, email, password, authOptions.email);
   return { app, provider, providers, store, token, databasePath, authOptions, sshCA };
 }
 
-async function signUp(app: ReturnType<typeof createBackend>, email: string, password = "password123"): Promise<string> {
+async function signUp(
+  app: ReturnType<typeof createBackend>,
+  email: string,
+  password = "password123",
+  emails?: TestEmailSender,
+): Promise<string> {
+  emails ||= backendEmails.get(app);
+  if (!emails) throw new Error("test backend email sender is unavailable");
   const response = await app.inject({
     method: "POST",
     url: "/v1/auth/sign-up/email",
@@ -1908,12 +2103,30 @@ async function signUp(app: ReturnType<typeof createBackend>, email: string, pass
   });
   assert.equal(response.statusCode, 200, response.body);
   const body = response.json();
-  assert.equal(typeof body.token, "string");
-  return body.token;
+  assert.equal(body.token, null);
+  const verificationURL = emails.verificationURL(email);
+  const verified = await app.inject({
+    method: "GET",
+    url: `${verificationURL.pathname}?token=${encodeURIComponent(verificationURL.searchParams.get("token") || "")}`,
+  });
+  assert.equal(verified.statusCode, 200, verified.body);
+  const signIn = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-in/email",
+    payload: { email, password },
+  });
+  assert.equal(signIn.statusCode, 200, signIn.body);
+  assert.equal(typeof signIn.json().token, "string");
+  return signIn.json().token as string;
 }
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function responseCookies(value: string | string[] | number | undefined): string {
+  const cookies = Array.isArray(value) ? value : value ? [String(value)] : [];
+  return cookies.map((cookie) => cookie.split(";", 1)[0]).join("; ");
 }
 
 async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 1000): Promise<void> {

@@ -24,6 +24,7 @@ export type BackendOptions = {
   store: StateStore;
   sshCA: SSHCertificateAuthority;
   adminEmails?: string[];
+  maxTeamsPerUser?: number;
   maxMachinesPerUser?: number;
   commercialPolicy?: CommercialPolicy;
   policyEventRetryMs?: number;
@@ -319,6 +320,28 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     return deleteTeam(options, teamDeletionPolicies, request, reply, bodyString(request.body?.organizationId));
   });
 
+  app.post("/v1/auth/organization/create", async (request, reply) => {
+    const limit = options.maxTeamsPerUser;
+    const session = limit ? await options.auth.api.getSession({ headers: toHeaders(request.headers) }) : null;
+    if (!limit || !session) {
+      await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
+      return;
+    }
+    const reservation = await options.store.reserveTeamCreation(session.user.id, limit);
+    if (reservation.status !== "reserved") {
+      return reply.code(403).send({
+        id: "team_limit_reached",
+        code: "TEAM_LIMIT_REACHED",
+        message: `You have reached the limit of ${limit} teams.`,
+      });
+    }
+    try {
+      await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
+    } finally {
+      await options.store.releaseTeamCreationReservation(reservation.id);
+    }
+  });
+
   app.all("/v1/auth/*", async (request, reply) => {
     await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
   });
@@ -332,12 +355,15 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const team = resolveTeamReference(auth, bodyString(request.query?.team), reply);
     if (!team) return;
     try {
+      const role = await orgRoleForUser(options, request.headers, team.id, auth.userID);
       return await commercialPolicy.getAccountSummary({
         team: policyTeam(team),
         actor: {
           id: auth.userID,
           email: auth.email,
-          can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
+          email_verified: auth.emailVerified,
+          can_manage: orgRoleCanManage(role),
+          is_initial_owner: orgRoleIsOwner(role) && isInitialTeamOwner(options, team.id, auth.userID),
         },
       });
     } catch (error) {
@@ -354,10 +380,13 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     }
     const team = resolveTeamReference(auth, bodyString(request.body?.team), reply);
     if (!team) return;
+    const role = await orgRoleForUser(options, request.headers, team.id, auth.userID);
     const actor = {
       id: auth.userID,
       email: auth.email,
-      can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
+      email_verified: auth.emailVerified,
+      can_manage: orgRoleCanManage(role),
+      is_initial_owner: orgRoleIsOwner(role) && isInitialTeamOwner(options, team.id, auth.userID),
     };
     if (!actor.can_manage) {
       return reply.code(403).send({ id: "forbidden", message: "Only team owners and admins can manage the plan." });
@@ -394,13 +423,6 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (imageError) return reply.code(400).send({ id: "bad_request", message: imageError });
     const regionError = validateCreateOverride("region", body.region);
     if (regionError) return reply.code(400).send({ id: "bad_request", message: regionError });
-    const limit = options.maxMachinesPerUser || 0;
-    if (limit > 0 && (await options.store.listMachinesForUser(auth.userID)).length >= limit) {
-      return reply.code(403).send({
-        id: "limit_reached",
-        message: `you have reached the limit of ${limit} boxes; destroy one with bh destroy <name> first`,
-      });
-    }
     let team = auth.teams.find((candidate) => candidate.id === auth.orgID);
     if (body.team) {
       const found = findTeam(auth.teams, body.team);
@@ -439,12 +461,15 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (team) {
       let decision;
       try {
+        const role = await orgRoleForUser(options, request.headers, team.id, auth.userID);
         decision = await commercialPolicy.checkCreate({
           team: policyTeam(team),
           actor: {
             id: auth.userID,
             email: auth.email,
-            can_manage: false,
+            email_verified: auth.emailVerified,
+            can_manage: orgRoleCanManage(role),
+            is_initial_owner: orgRoleIsOwner(role) && isInitialTeamOwner(options, team.id, auth.userID),
           },
           machine: policyMachineIdentity({
             name: body.name,
@@ -493,7 +518,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       create_operation_id: createOperationID,
     });
     try {
-      await options.store.reserveMachineCreate({
+      const reservation = await options.store.reserveMachineCreate({
         operationID: createOperationID,
         orgID,
         userID: auth.userID,
@@ -501,7 +526,17 @@ export function createBackend(options: BackendOptions): FastifyInstance {
         provider: provider.name,
         providerName: body.provider_name,
         machine: provisioningMachine,
+        limit: options.maxMachinesPerUser,
       });
+      if (reservation.status === "conflict") {
+        return reply.code(409).send(machineNameConflict(body.name));
+      }
+      if (reservation.status === "limit_reached") {
+        return reply.code(403).send({
+          id: "limit_reached",
+          message: `you have reached the limit of ${options.maxMachinesPerUser} boxes; destroy one with bh destroy <name> first`,
+        });
+      }
     } catch (reservationError) {
       if (reservationError instanceof DeletionGuardError) {
         return reply.code(409).send({ id: reservationError.code, message: reservationError.message });
@@ -1210,7 +1245,10 @@ async function createMachine(
     ssh_principal: sshPrincipal,
   });
   phaseStarted = Date.now();
-  await options.store.putMachine(machine, machineLifecycleEvent(commercialPolicy, machineFact("machine.created", auth, machine, teams)));
+  await options.store.putMachine(
+    machine,
+    machineLifecycleEvent(commercialPolicy, machineFact("machine.created", auth, machine, teams)),
+  );
   policyDelivery.notify();
   recordMachineCreateTiming(timings, "store_machine_ms", phaseStarted);
   let ready: RemoteMachine;
@@ -1556,6 +1594,27 @@ function orgRoleCanManage(role: string): boolean {
   return roles.includes("owner") || roles.includes("admin");
 }
 
+function orgRoleIsOwner(role: string): boolean {
+  return role.split(",").some((part) => part.trim().toLowerCase() === "owner");
+}
+
+function isInitialTeamOwner(options: BackendOptions, orgID: string, userID: string): boolean {
+  try {
+    const owner = options.store.db.prepare(`
+      SELECT userId
+      FROM member
+      WHERE organizationId = ?
+        AND (',' || replace(lower(role), ' ', '') || ',') LIKE '%,owner,%'
+      ORDER BY createdAt ASC, id ASC
+      LIMIT 1
+    `).get(orgID) as { userId: string } | undefined;
+    return owner?.userId === userID;
+  } catch {
+    // A missing or unexpected membership record must fail closed for benefits.
+    return false;
+  }
+}
+
 async function listOrgMembers(
   options: BackendOptions,
   headers: Record<string, string | string[] | undefined>,
@@ -1781,7 +1840,7 @@ function providerPlanHourlyPrice(plan: MachinePlan, region = ""): number {
 }
 
 function policyActor(auth: AuthContext, canManage: boolean): PolicyActor {
-  return { id: auth.userID, email: auth.email, can_manage: canManage };
+  return { id: auth.userID, email: auth.email, email_verified: auth.emailVerified, can_manage: canManage };
 }
 
 function policyTeam(team: TeamInfo): PolicyTeam {
@@ -1799,7 +1858,7 @@ function machineFact(
   return {
     type,
     team: policyTeam(team || { id: teamID, name: teamID }),
-    actor: { id: auth.userID, email: auth.email },
+    actor: { id: auth.userID, email: auth.email, email_verified: auth.emailVerified },
     machine: policyMachineIdentity(machine),
   };
 }
@@ -2016,6 +2075,7 @@ async function requireAuth(options: BackendOptions, request: { headers: Record<s
   return {
     userID: session.user.id,
     email: session.user.email,
+    emailVerified: session.user.emailVerified,
     orgID,
     teams,
   };
@@ -2045,10 +2105,21 @@ async function ensureActiveTeam(
   let orgID = existingTeams?.[0]?.id || "";
   if (!orgID) {
     try {
-      const created = await api.createOrganization({
-        headers,
-        body: { name: defaultTeamName(user), slug: defaultTeamSlug(user) },
-      });
+      let reservationID = "";
+      if (options.maxTeamsPerUser) {
+        const reservation = await options.store.reserveTeamCreation(user.id, options.maxTeamsPerUser);
+        if (reservation.status !== "reserved") throw new Error("team creation limit reached");
+        reservationID = reservation.id;
+      }
+      let created;
+      try {
+        created = await api.createOrganization({
+          headers,
+          body: { name: defaultTeamName(user), slug: defaultTeamSlug(user) },
+        });
+      } finally {
+        if (reservationID) await options.store.releaseTeamCreationReservation(reservationID);
+      }
       orgID = created?.id || created?.organization?.id || "";
     } catch {
       // A concurrent request may have created the team; fall through to re-list.

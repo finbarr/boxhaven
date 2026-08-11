@@ -85,7 +85,7 @@ export type MachineImage = {
 };
 
 export type ImagesResponse = { images: MachineImage[] };
-export type LoginResponse = { token: string; user?: AuthUser };
+export type LoginResponse = { token: string | null; user?: AuthUser };
 export type MachineResponse = { machine: Machine; status?: string };
 export type MachinesResponse = { machines: Machine[] };
 export type OrgMachinesResponse = { machines: Machine[]; role: string };

@@ -31,6 +31,7 @@ cd backend
 npm ci
 BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
 DIGITALOCEAN_ACCESS_TOKEN=dop_v1_example \
+RESEND_API_KEY=re_replace_with_a_key \
 npm run dev
 ```
 
@@ -58,6 +59,7 @@ From the repository root:
 ```bash
 export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
 export DIGITALOCEAN_ACCESS_TOKEN=dop_v1_example
+export RESEND_API_KEY=re_replace_with_a_key
 export BOXHAVEN_VERSION="$(git describe --tags --always)"
 docker compose -f docker-compose.backend.yml up --build
 ```
@@ -94,6 +96,9 @@ need to duplicate the core API, auth, provider, SSH, or CLI implementations.
 - `BETTER_AUTH_SECRET`: required signing secret for Better Auth sessions.
 - `BETTER_AUTH_URL`: public auth base URL, default `http://<listen>/v1/auth`.
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated trusted browser origins.
+- `RESEND_API_KEY`: required Resend API key. Password signups must follow an emailed verification link before signing in; this requirement has no feature flag or legacy delivery fallback.
+- `BOXHAVEN_EMAIL_FROM`: transactional From address, default `BoxHaven <noreply@boxhaven.dev>`.
+- `BOXHAVEN_EMAIL_VERIFICATION_EXPIRES_SECONDS`: positive verification-link lifetime, default `3600`.
 - `BOXHAVEN_APP_URL`: public console/auth app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_API_URL`: public API URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_VERSION`: current backend version used by the public `/v1/version` release-status endpoint. Set it to the checkout tag or `git describe` output; the production deploy script does this automatically.
@@ -105,7 +110,8 @@ need to duplicate the core API, auth, provider, SSH, or CLI implementations.
 - `BOXHAVEN_BACKEND_LISTEN`: listen address, default `127.0.0.1:8787`.
 - `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_DATABASE_PATH`.
 - `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
-- `BOXHAVEN_MAX_MACHINES_PER_USER`: per-user cap on concurrently existing boxes; `0` or unset means unlimited. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. The hosted control plane sets this; self-hosted deployments normally leave it unset.
+- `BOXHAVEN_MAX_TEAMS_PER_USER`: optional positive cap on teams a user owns. Concurrent creates reserve capacity and invitations to someone else's team do not consume an ownership slot.
+- `BOXHAVEN_MAX_MACHINES_PER_USER`: optional positive per-user cap on existing and provisioning boxes across all of their teams. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. Capacity is released after a definitive provider failure or successful destroy. Hosted distributions set this; self-hosted deployments may leave it unset.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed policy delivery or policy-requested machine cleanup retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: complete active-machine reconciliation and lifecycle-policy evaluation interval, default `300000`.
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
@@ -153,7 +159,10 @@ the secret values:
 cp deploy/digitalocean/env.production.example deploy/digitalocean/.env.production
 ```
 
-`BETTER_AUTH_SECRET` must be a long random value. The backend also needs
+`BETTER_AUTH_SECRET` must be a long random value and `RESEND_API_KEY` is
+required for password-account verification in every self-hosted deployment.
+There is intentionally no mode that permits unverified password accounts, so
+configure a Resend-verified `BOXHAVEN_EMAIL_FROM` before startup. The backend also needs
 `DIGITALOCEAN_ACCESS_TOKEN` so it can create remote VMs for users. The
 backend SSH user CA is stored at `/opt/boxhaven/data/backend/ssh_ca_ed25519`
 and is included in the backend data backups. Set
@@ -296,7 +305,7 @@ WebSockets, including Vite HMR, use the same preview URL. The default
 ## Hosted Versus Self-Hosted
 
 `app.boxhaven.dev` is the hosted control plane run by the BoxHaven operators.
-Hosted boxes are provisioned from the operators' cloud provider accounts, and
-the operators can cap boxes per account with
-`BOXHAVEN_MAX_MACHINES_PER_USER`. The same open-source backend self-hosts
+Hosted boxes are provisioned from the operators' cloud provider accounts, with
+per-user team and active-box capacity policies enforced by the control plane.
+The same open-source backend self-hosts
 with your own provider credentials and no built-in limits.

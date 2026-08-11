@@ -1618,6 +1618,19 @@ a.secondary-button {
   scroll-margin-top: 24px;
 }
 
+.verification-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.verification-panel > svg {
+  color: var(--green, #2f6f5c);
+}
+
+.verification-panel .panel-heading p {
+  margin: 8px 0 0;
+}
+
 .legal-consent {
   grid-template-columns: 17px minmax(0, 1fr);
   align-items: start;

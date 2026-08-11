@@ -13,6 +13,10 @@ export type EmailMessage = {
   text: string;
 };
 
+export type EmailSender = {
+  send(message: EmailMessage): Promise<void>;
+};
+
 export class EmailService {
   private readonly apiURL: string;
 

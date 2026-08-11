@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
@@ -64,6 +64,10 @@ export class MachineCleanupPendingError extends Error {
     super(`machine ${machineName} is pending policy cleanup`);
   }
 }
+
+export type CapacityReservation =
+  | { status: "reserved"; id: string }
+  | { status: "conflict" | "limit_reached" };
 
 export class StateStore {
   readonly db: Database.Database;
@@ -135,10 +139,11 @@ export class StateStore {
     provider: string;
     providerName: string;
     machine: RemoteMachine;
-  }): Promise<void> {
-    await this.enqueue(async () => {
+    limit?: number;
+  }): Promise<CapacityReservation> {
+    return this.enqueue(async () => {
       await this.beforeMutation();
-      this.db.transaction(() => {
+      return this.db.transaction(() => {
         const teamDeletion = this.db.prepare(
           "SELECT state FROM core_team_deletions WHERE org_id = ?",
         ).get(input.orgID) as { state: "deleting" | "deleted" } | undefined;
@@ -170,6 +175,16 @@ export class StateStore {
         ) {
           throw new Error("machine create reservation does not match its durable provisioning record");
         }
+        const existing = this.db.prepare(
+          "SELECT 1 FROM core_machines WHERE user_id = ? AND name = ?",
+        ).get(input.userID, input.name);
+        if (existing) return { status: "conflict" } as const;
+        if (input.limit) {
+          const machines = (this.db.prepare(
+            "SELECT COUNT(*) AS count FROM core_machines WHERE user_id = ?",
+          ).get(input.userID) as { count: number }).count;
+          if (machines >= input.limit) return { status: "limit_reached" } as const;
+        }
         const startedAt = new Date().toISOString();
         this.db.prepare(`
           INSERT INTO core_machine_creates (
@@ -195,6 +210,7 @@ export class StateStore {
           JSON.stringify(input.machine),
         );
         this.touch();
+        return { status: "reserved", id: input.operationID } as const;
       })();
     });
   }
@@ -377,6 +393,33 @@ export class StateStore {
     });
   }
 
+  async reserveTeamCreation(userID: string, limit: number, now = new Date()): Promise<CapacityReservation> {
+    return this.enqueue(async () => {
+      await this.beforeMutation();
+      return this.db.transaction(() => {
+        const owned = (this.db.prepare(`
+          SELECT COUNT(*) AS count FROM member
+          WHERE userId = ? AND (',' || replace(lower(role), ' ', '') || ',') LIKE '%,owner,%'
+        `).get(userID) as { count: number }).count;
+        const reservations = (this.db.prepare("SELECT COUNT(*) AS count FROM core_team_creation_reservations WHERE user_id = ?").get(userID) as { count: number }).count;
+        if (owned + reservations >= limit) return { status: "limit_reached" } as const;
+        const id = randomUUID();
+        this.db.prepare(`
+          INSERT INTO core_team_creation_reservations (reservation_id, user_id, created_at)
+          VALUES (?, ?, ?)
+        `).run(id, userID, now.toISOString());
+        this.touch();
+        return { status: "reserved", id } as const;
+      })();
+    });
+  }
+
+  async releaseTeamCreationReservation(reservationID: string): Promise<void> {
+    await this.mutate(() => {
+      this.db.prepare("DELETE FROM core_team_creation_reservations WHERE reservation_id = ?").run(reservationID);
+    });
+  }
+
   async renameMachine(userID: string, fromName: string, machine: RemoteMachine): Promise<void> {
     if (!machine.user_id) throw new Error("machine user_id is required");
     if (machine.user_id !== userID) throw new Error("machine user_id does not match rename owner");
@@ -390,6 +433,7 @@ export class StateStore {
   async deleteMachine(userID: string, name: string, policyEvent?: MachineLifecycleEvent): Promise<void> {
     await this.mutate(() => {
       const deleted = this.db.prepare("DELETE FROM core_machines WHERE user_id = ? AND name = ?").run(userID, name);
+      this.db.prepare("DELETE FROM core_machine_creates WHERE user_id = ? AND name = ?").run(userID, name);
       this.db.prepare("DELETE FROM core_machine_cleanups WHERE user_id = ? AND name = ?").run(userID, name);
       if (policyEvent && deleted.changes === 1) this.writePolicyEvent(policyEvent, true);
     });
@@ -733,6 +777,9 @@ export class StateStore {
 
   private migrate(): void {
     applyBackendMigrations(this.db, "core", coreMigrations);
+    // Team reservations represent live requests in the single control-plane
+    // process. Machine create records are durable and recovered below.
+    this.db.exec("DELETE FROM core_team_creation_reservations;");
     this.db.prepare("INSERT OR IGNORE INTO core_metadata (key, value) VALUES ('provider', ?)").run(this.provider);
   }
 
@@ -910,6 +957,18 @@ const coreMigrations: BackendDatabaseMigration[] = [{
       CREATE INDEX core_deletion_audit_target ON core_deletion_audit(target_id, occurred_at DESC);
     `);
   },
+}, {
+  version: 5,
+  migrate(database) {
+    database.exec(`
+      CREATE TABLE core_team_creation_reservations (
+        reservation_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX core_team_creation_reservations_user ON core_team_creation_reservations(user_id, created_at);
+    `);
+  },
 }];
 
 function parsePayload<T>(value: string, label: string): T {
@@ -931,7 +990,7 @@ function machineKey(userID: string, name: string): string {
 }
 
 // Keep this deterministic fallback aligned with the provider resource naming
-// used by the server. It recovers reservations written by core migration v3,
+// used by the server. It recovers reservations written by core migration v4,
 // before provider identity was persisted in the reservation row.
 function providerMachineNameForRecovery(userID: string, machineName: string): string {
   const hash = createHash("sha256").update(userID).digest("hex").slice(0, 10);

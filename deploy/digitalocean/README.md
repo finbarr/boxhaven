@@ -41,8 +41,9 @@ secret values:
 cp deploy/digitalocean/env.production.example deploy/digitalocean/.env.production
 ```
 
-`BETTER_AUTH_SECRET` must be a long random value. The backend also needs
-`DIGITALOCEAN_ACCESS_TOKEN` so it can create remote VMs for users. Normal user
+`BETTER_AUTH_SECRET` must be a long random value and `RESEND_API_KEY` is
+required so password signups can verify their email before signing in. The
+backend also needs `DIGITALOCEAN_ACCESS_TOKEN` so it can create remote VMs for users. Normal user
 VMs do not receive reusable DigitalOcean account SSH keys; the backend uses a
 one-time no-login key during create only to prevent provider password emails,
 then deletes the account key. Cloud-init configures VMs to trust short-lived

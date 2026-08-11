@@ -1,5 +1,13 @@
 export type PolicyTeam = { id: string; name: string; slug?: string };
-export type PolicyActor = { id: string; email: string; can_manage: boolean };
+export type PolicyActor = {
+  id: string;
+  email: string;
+  email_verified?: boolean;
+  can_manage: boolean;
+  // Distinct from can_manage: admins and later co-owners may manage billing,
+  // but only the durable initial owner may claim owner-scoped launch benefits.
+  is_initial_owner?: boolean;
+};
 export type PolicyMachine = {
   id: string;
   name: string;
@@ -32,7 +40,7 @@ export type AccountSummary = {
 export type MachineLifecycleFact = {
   type: "machine.created" | "machine.destroyed" | "machine.moved";
   team: PolicyTeam;
-  actor: { id: string; email: string };
+  actor: { id: string; email: string; email_verified?: boolean };
   machine: PolicyMachine;
   previous_team_id?: string;
 };
