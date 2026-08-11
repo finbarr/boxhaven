@@ -3,15 +3,140 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "v*.*.*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    name: Release
+  verification:
+    name: Full Public Verification
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install verification dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq shellcheck sqlite3
+
+      - name: Build and smoke the CLI
+        run: |
+          make clean
+          make build
+          ./bh version
+          ./bh help
+          ./bh config
+
+      - name: Run Go tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Install backend dependencies
+        run: npm --prefix backend ci
+
+      - name: Build backend and web app
+        run: npm --prefix backend run build
+
+      - name: Test backend
+        run: npm --prefix backend test
+
+      - name: Test backup integrity
+        run: make backup-test
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+      - name: Check release shell scripts
+        run: |
+          shellcheck \
+            install.sh \
+            scripts/build-release-artifacts.sh \
+            scripts/check-release-metadata.sh \
+            scripts/render-homebrew-formula.sh \
+            scripts/test-release-tooling.sh \
+            scripts/verify-published-release.sh \
+            scripts/verify-release-artifacts.sh
+
+      - name: Validate workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
+  package:
+    name: Reproducible Release Artifacts
+    needs: verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Check release metadata
+        run: |
+          git fetch --no-tags origin master
+          git merge-base --is-ancestor HEAD origin/master || {
+            echo "release tag must point to a commit on origin/master" >&2
+            exit 1
+          }
+          scripts/check-release-metadata.sh "${GITHUB_REF_NAME}" release-notes.md
+
+      - name: Build and verify release artifacts twice
+        run: |
+          scripts/build-release-artifacts.sh "${GITHUB_REF_NAME}" dist
+          scripts/verify-release-artifacts.sh "${GITHUB_REF_NAME}" dist
+          scripts/build-release-artifacts.sh "${GITHUB_REF_NAME}" dist-rebuild
+          scripts/verify-release-artifacts.sh "${GITHUB_REF_NAME}" dist-rebuild
+          diff -ru dist dist-rebuild
+
+      - name: Upload verified workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ github.ref_name }}
+          path: |
+            dist
+            release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish Verified Draft
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v6
 
@@ -21,32 +146,64 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      - name: Build release archives
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          mkdir -p dist
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
-            goos="${target%/*}"
-            goarch="${target#*/}"
-            stage="dist/bh_${tag}_${goos}_${goarch}"
-            mkdir -p "$stage"
-            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-              go build -ldflags "-X main.Version=${tag}" -o "$stage/bh" ./cmd/bh
-            tar -czf "dist/bh_${tag}_${goos}_${goarch}.tar.gz" -C "$stage" bh
-            rm -r "$stage"
-          done
-          (cd dist && sha256sum bh_*.tar.gz > SHA256SUMS)
-          cat dist/SHA256SUMS
-
-      - name: Extract release notes
-        run: |
-          python3 .github/scripts/extract-release-notes.py "${GITHUB_REF_NAME}" CHANGELOG.md > release-notes.md
-          cat release-notes.md
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+      - name: Download verified workflow artifact
+        uses: actions/download-artifact@v8
         with:
-          body_path: release-notes.md
-          files: |
-            dist/bh_*.tar.gz
+          name: release-${{ github.ref_name }}
+
+      - name: Re-verify downloaded artifacts and metadata
+        run: |
+          scripts/check-release-metadata.sh "${GITHUB_REF_NAME}" checked-release-notes.md
+          diff -u checked-release-notes.md release-notes.md
+          scripts/verify-release-artifacts.sh "${GITHUB_REF_NAME}" dist
+
+      - name: Refuse to replace an existing release
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "release ${GITHUB_REF_NAME} already exists; refusing to replace its assets" >&2
+            exit 1
+          fi
+
+      - name: Create draft and upload exact assets
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --draft \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md \
+            "dist/bh_${GITHUB_REF_NAME}_darwin_amd64.tar.gz" \
+            "dist/bh_${GITHUB_REF_NAME}_darwin_arm64.tar.gz" \
+            "dist/bh_${GITHUB_REF_NAME}_linux_amd64.tar.gz" \
+            "dist/bh_${GITHUB_REF_NAME}_linux_arm64.tar.gz" \
             dist/SHA256SUMS
+
+      - name: Verify draft asset names and GitHub digests
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" > draft-release.json
+          python3 - "${GITHUB_REF_NAME}" dist/SHA256SUMS draft-release.json <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          tag = sys.argv[1]
+          sums_path = pathlib.Path(sys.argv[2])
+          release_path = pathlib.Path(sys.argv[3])
+          expected = {
+              name: f"sha256:{digest}"
+              for digest, name in (
+                  line.split() for line in sums_path.read_text(encoding="utf-8").splitlines()
+              )
+          }
+          expected["SHA256SUMS"] = "sha256:" + __import__("hashlib").sha256(
+              sums_path.read_bytes()
+          ).hexdigest()
+          release = json.loads(release_path.read_text(encoding="utf-8"))
+          actual = {asset["name"]: asset.get("digest") for asset in release.get("assets", [])}
+          if release.get("tag_name") != tag or not release.get("draft"):
+              raise SystemExit("uploaded release is not the expected draft")
+          if actual != expected:
+              raise SystemExit(f"draft assets differ: expected {expected}, got {actual}")
+          PY
+
+      - name: Publish verified draft
+        run: gh release edit "${GITHUB_REF_NAME}" --draft=false --latest
