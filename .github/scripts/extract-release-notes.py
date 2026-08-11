@@ -13,8 +13,8 @@ def main() -> int:
     changelog = pathlib.Path(sys.argv[2])
     version = tag[1:] if tag.startswith("v") else tag
     if not changelog.exists():
-        print(f"See CHANGELOG.md for {tag}.")
-        return 0
+        print(f"changelog does not exist: {changelog}", file=sys.stderr)
+        return 1
 
     lines = changelog.read_text(encoding="utf-8").splitlines()
     heading = re.compile(rf"^##\s+v?{re.escape(version)}(?:\s+-.*)?\s*$")
@@ -26,8 +26,8 @@ def main() -> int:
             break
 
     if start is None:
-        print(f"See CHANGELOG.md for {tag}.")
-        return 0
+        print(f"changelog has no section for {tag}", file=sys.stderr)
+        return 1
 
     end = len(lines)
     for idx in range(start + 1, len(lines)):
@@ -36,7 +36,10 @@ def main() -> int:
             break
 
     section = "\n".join(lines[start:end]).strip()
-    print(section if section else f"See CHANGELOG.md for {tag}.")
+    if not section:
+        print(f"changelog section for {tag} is empty", file=sys.stderr)
+        return 1
+    print(section)
     return 0
 
 

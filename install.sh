@@ -205,8 +205,8 @@ verify_checksum() {
 
   tool="$(sha256_tool)"
   if [ -z "$tool" ]; then
-    warn "No sha256sum or shasum found, skipping checksum verification"
-    return 0
+    error "sha256sum or shasum is required to verify the release archive"
+    exit 1
   fi
 
   expected="$(grep " ${asset_name}\$" "$sums_file" | awk '{print $1}' || true)"
