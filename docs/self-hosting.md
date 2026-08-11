@@ -106,8 +106,8 @@ need to duplicate the core API, auth, provider, SSH, or CLI implementations.
 - `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_DATABASE_PATH`.
 - `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
 - `BOXHAVEN_MAX_MACHINES_PER_USER`: per-user cap on concurrently existing boxes; `0` or unset means unlimited. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. The hosted control plane sets this; self-hosted deployments normally leave it unset.
-- `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed policy delivery retry delay, default `30000`.
-- `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: complete active-machine reconciliation interval, default `300000`.
+- `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed policy delivery or policy-requested machine cleanup retry delay, default `30000`.
+- `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: complete active-machine reconciliation and lifecycle-policy evaluation interval, default `300000`.
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
 
 Provider credentials and image variables (`DIGITALOCEAN_*`, `HCLOUD_TOKEN`,

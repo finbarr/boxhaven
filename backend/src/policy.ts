@@ -49,13 +49,24 @@ export type PolicyReconciliation = {
   machines: Array<{ team: PolicyTeam; machine: PolicyMachine }>;
 };
 
+export type MachineLifecycleAction = {
+  type: "machine.destroy";
+  team_id: string;
+  machine_id: string;
+  reason: string;
+};
+
+export type PolicyReconciliationResult = {
+  actions: MachineLifecycleAction[];
+};
+
 export interface CommercialPolicy {
   readonly lifecycleEventsEnabled: boolean;
   readonly accountCapability?: { label: string };
   checkCreate(input: CreatePolicyInput): Promise<CreatePolicyDecision>;
   quoteMachine?(input: CreatePolicyInput): Promise<MachinePriceQuote>;
   emitMachineFact(event: MachineLifecycleEvent): Promise<void>;
-  reconcile(input: PolicyReconciliation): Promise<void>;
+  reconcile(input: PolicyReconciliation): Promise<PolicyReconciliationResult | void>;
   getAccountSummary?(input: { team: PolicyTeam; actor: PolicyActor }): Promise<AccountSummary>;
   createAccountAction?(input: { team: PolicyTeam; actor: PolicyActor }): Promise<string>;
 }

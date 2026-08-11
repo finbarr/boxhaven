@@ -1,12 +1,31 @@
+import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { applyBackendMigrations, type BackendDatabaseMigration } from "./database.js";
-import type { MachineLifecycleEvent } from "./policy.js";
+import { policyMachineIdentity } from "./policy.js";
+import type { MachineLifecycleAction, MachineLifecycleEvent } from "./policy.js";
 import { BackendState, MachineSizeShortcut, RemoteMachine, TeamImageRecord, stateVersion } from "./types.js";
 
 type PayloadRow = { payload_json: string };
 type MetadataRow = { value: string };
+
+export type MachineCleanupRecord = {
+  machine_id: string;
+  team_id: string;
+  reason: string;
+  requested_at: string;
+  event_id: string;
+  machine: RemoteMachine;
+};
+
+type MachineCleanupRow = Omit<MachineCleanupRecord, "machine"> & { payload_json: string };
+
+export class MachineCleanupPendingError extends Error {
+  constructor(readonly machineName: string) {
+    super(`machine ${machineName} is pending policy cleanup`);
+  }
+}
 
 export class StateStore {
   readonly db: Database.Database;
@@ -81,6 +100,7 @@ export class StateStore {
     if (!machine.user_id) throw new Error("machine user_id is required");
     if (machine.user_id !== userID) throw new Error("machine user_id does not match rename owner");
     await this.mutate(() => {
+      if (this.machineCleanupRow(userID, fromName)) throw new MachineCleanupPendingError(fromName);
       this.db.prepare("DELETE FROM core_machines WHERE user_id = ? AND name = ?").run(userID, fromName);
       this.writeMachine(machine);
     });
@@ -88,9 +108,94 @@ export class StateStore {
 
   async deleteMachine(userID: string, name: string, policyEvent?: MachineLifecycleEvent): Promise<void> {
     await this.mutate(() => {
-      this.db.prepare("DELETE FROM core_machines WHERE user_id = ? AND name = ?").run(userID, name);
-      if (policyEvent) this.writePolicyEvent(policyEvent, true);
+      const deleted = this.db.prepare("DELETE FROM core_machines WHERE user_id = ? AND name = ?").run(userID, name);
+      this.db.prepare("DELETE FROM core_machine_cleanups WHERE user_id = ? AND name = ?").run(userID, name);
+      if (policyEvent && deleted.changes === 1) this.writePolicyEvent(policyEvent, true);
     });
+  }
+
+  async requestMachineCleanup(action: MachineLifecycleAction, requestedAt = new Date()): Promise<boolean> {
+    return this.mutate(() => {
+      if (action.type !== "machine.destroy") throw new Error(`unsupported machine lifecycle action: ${action.type}`);
+      const machine = this.listMachinesSync().find((candidate) => policyMachineIdentity(candidate).id === action.machine_id);
+      if (!machine?.user_id) return false;
+      const teamID = machine.org_id || machine.user_id;
+      if (teamID !== action.team_id) return false;
+      const requested = requestedAt.toISOString();
+      const eventID = cleanupEventID(action, machine);
+      const inserted = this.db.prepare(`
+        INSERT OR IGNORE INTO core_machine_cleanups (
+          machine_id, user_id, name, team_id, reason, requested_at, event_id, payload_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        action.machine_id,
+        machine.user_id,
+        machine.name,
+        action.team_id,
+        action.reason,
+        requested,
+        eventID,
+        JSON.stringify(machine),
+      );
+      return inserted.changes === 1;
+    });
+  }
+
+  async listMachineCleanups(): Promise<MachineCleanupRecord[]> {
+    const rows = this.db.prepare(`
+      SELECT machine_id, team_id, reason, requested_at, event_id, payload_json
+      FROM core_machine_cleanups ORDER BY requested_at, machine_id
+    `).all() as MachineCleanupRow[];
+    return rows.map(({ payload_json, ...row }) => ({
+      ...row,
+      machine: parsePayload<RemoteMachine>(payload_json, "machine cleanup"),
+    }));
+  }
+
+  async completeMachineCleanup(machineID: string, providerEndedAt = new Date()): Promise<boolean> {
+    return this.mutate(() => {
+      const cleanup = this.db.prepare(`
+        SELECT machine_id, team_id, reason, requested_at, event_id, payload_json
+        FROM core_machine_cleanups WHERE machine_id = ?
+      `).get(machineID) as MachineCleanupRow | undefined;
+      if (!cleanup) return false;
+      const snapshot = parsePayload<RemoteMachine>(cleanup.payload_json, "machine cleanup");
+      if (!snapshot.user_id) throw new Error(`machine cleanup ${machineID} has no user identity`);
+      const current = this.db.prepare(
+        "SELECT payload_json FROM core_machines WHERE user_id = ? AND name = ?",
+      ).get(snapshot.user_id, snapshot.name) as PayloadRow | undefined;
+      if (!current) {
+        this.db.prepare("DELETE FROM core_machine_cleanups WHERE machine_id = ?").run(machineID);
+        return false;
+      }
+      const machine = parsePayload<RemoteMachine>(current.payload_json, "machine");
+      if (policyMachineIdentity(machine).id !== machineID) {
+        throw new Error(`machine cleanup ${machineID} no longer matches stored machine ${machine.name}`);
+      }
+      const deleted = this.db.prepare(
+        "DELETE FROM core_machines WHERE user_id = ? AND name = ?",
+      ).run(snapshot.user_id, snapshot.name);
+      if (deleted.changes !== 1) return false;
+      this.writePolicyEvent({
+        version: 1,
+        id: cleanup.event_id,
+        occurred_at: providerEndedAt.toISOString(),
+        type: "machine.destroyed",
+        team: {
+          id: cleanup.team_id,
+          name: machine.org_name || cleanup.team_id,
+          ...(machine.org_slug ? { slug: machine.org_slug } : {}),
+        },
+        actor: { id: "boxhaven-policy", email: "" },
+        machine: policyMachineIdentity(machine),
+      }, true);
+      this.db.prepare("DELETE FROM core_machine_cleanups WHERE machine_id = ?").run(machineID);
+      return true;
+    });
+  }
+
+  machineCleanupPending(userID: string, name: string): boolean {
+    return Boolean(this.machineCleanupRow(userID, name));
   }
 
   async listPolicyEvents(): Promise<MachineLifecycleEvent[]> {
@@ -176,12 +281,13 @@ export class StateStore {
 
   protected async beforeMutation(): Promise<void> {}
 
-  private async mutate(fn: () => void): Promise<void> {
-    await this.enqueue(async () => {
+  private async mutate<T>(fn: () => T): Promise<T> {
+    return this.enqueue(async () => {
       await this.beforeMutation();
-      this.db.transaction(() => {
-        fn();
+      return this.db.transaction(() => {
+        const result = fn();
         this.touch();
+        return result;
       })();
     });
   }
@@ -195,6 +301,10 @@ export class StateStore {
   private writeMachine(machine: RemoteMachine): void {
     const userID = machine.user_id;
     if (!userID) throw new Error("machine user_id is required");
+    const cleanup = this.machineCleanupRow(userID, machine.name);
+    if (cleanup && (machine.org_id || userID) !== cleanup.team_id) {
+      throw new MachineCleanupPendingError(machine.name);
+    }
     this.db.prepare(`
       INSERT INTO core_machines (user_id, name, org_id, provider, payload_json)
       VALUES (?, ?, ?, ?, ?)
@@ -203,6 +313,13 @@ export class StateStore {
         provider = excluded.provider,
         payload_json = excluded.payload_json
     `).run(userID, machine.name, machine.org_id || null, machine.provider || null, JSON.stringify(machine));
+  }
+
+  private machineCleanupRow(userID: string, name: string): MachineCleanupRow | undefined {
+    return this.db.prepare(`
+      SELECT machine_id, team_id, reason, requested_at, event_id, payload_json
+      FROM core_machine_cleanups WHERE user_id = ? AND name = ?
+    `).get(userID, name) as MachineCleanupRow | undefined;
   }
 
   private writeImage(image: TeamImageRecord): void {
@@ -343,6 +460,24 @@ const coreMigrations: BackendDatabaseMigration[] = [{
       CREATE INDEX core_size_shortcuts_provider ON core_size_shortcuts(provider, plan);
     `);
   },
+}, {
+  version: 3,
+  migrate(database) {
+    database.exec(`
+      CREATE TABLE core_machine_cleanups (
+        machine_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        team_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        requested_at TEXT NOT NULL,
+        event_id TEXT NOT NULL UNIQUE,
+        payload_json TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX core_machine_cleanups_machine_name
+        ON core_machine_cleanups(user_id, name);
+    `);
+  },
 }];
 
 function parsePayload<T>(value: string, label: string): T {
@@ -365,4 +500,12 @@ function machineKey(userID: string, name: string): string {
 
 function imageKey(image: TeamImageRecord): string {
   return `${image.org_id}:${image.provider}:${image.id || image.name}`;
+}
+
+function cleanupEventID(action: MachineLifecycleAction, machine: RemoteMachine): string {
+  const generation = machine.created_at || machine.provider_id || machine.provider_name || machine.name;
+  const digest = createHash("sha256")
+    .update(`${action.team_id}\n${action.machine_id}\n${generation}`)
+    .digest("hex");
+  return `policy-cleanup:${digest}`;
 }

@@ -1,12 +1,16 @@
 import { policyMachineIdentity } from "./policy.js";
-import type { CommercialPolicy, MachineLifecycleEvent, PolicyReconciliation } from "./policy.js";
-import type { StateStore } from "./state.js";
+import type { CommercialPolicy, MachineLifecycleAction, MachineLifecycleEvent, PolicyReconciliation } from "./policy.js";
+import type { MachineCleanupRecord, StateStore } from "./state.js";
+import type { RemoteMachine } from "./types.js";
+
+export type MachineCleanupExecutor = (machine: RemoteMachine) => Promise<void>;
 
 export class PolicyEventDelivery {
   private timer: NodeJS.Timeout | undefined;
   private reconcileTimer: NodeJS.Timeout | undefined;
   private running = false;
   private reconciling = false;
+  private reconcilePending = false;
   private stopped = false;
 
   constructor(
@@ -14,6 +18,7 @@ export class PolicyEventDelivery {
     private readonly policy: CommercialPolicy,
     private readonly retryMs = 30_000,
     private readonly reconcileIntervalMs = 5 * 60_000,
+    private readonly cleanupMachine?: MachineCleanupExecutor,
   ) {}
 
   start(): void {
@@ -25,6 +30,15 @@ export class PolicyEventDelivery {
   notify(): void {
     if (!this.policy.lifecycleEventsEnabled || this.stopped) return;
     this.schedule(0);
+  }
+
+  notifyReconcile(): void {
+    if (!this.policy.lifecycleEventsEnabled || this.stopped) return;
+    if (this.reconciling) {
+      this.reconcilePending = true;
+      return;
+    }
+    this.scheduleReconcile(0);
   }
 
   stop(): void {
@@ -86,16 +100,65 @@ export class PolicyEventDelivery {
     this.reconciling = true;
     let failed = false;
     try {
+      const attempted = new Set<string>();
+      failed = !(await this.processCleanups(attempted));
       const snapshot = await this.store.captureMachineSnapshot();
-      await this.policy.reconcile(reconciliationSnapshot(snapshot.machines, snapshot.generatedAt));
+      const result = await this.policy.reconcile(reconciliationSnapshot(snapshot.machines, snapshot.generatedAt));
+      const actions = normalizedActions(result?.actions || []);
+      let inserted = false;
+      for (const action of actions) {
+        inserted = (await this.store.requestMachineCleanup(action)) || inserted;
+      }
+      if (inserted) failed = !(await this.processCleanups(attempted)) || failed;
     } catch (error) {
       failed = true;
       console.error(`commercial policy reconciliation failed: ${(error as Error).message}`);
     } finally {
       this.reconciling = false;
-      if (!this.stopped) this.scheduleReconcile(failed ? this.retryMs : this.reconcileIntervalMs);
+      const pending = this.reconcilePending;
+      this.reconcilePending = false;
+      if (!this.stopped) this.scheduleReconcile(pending ? 0 : failed ? this.retryMs : this.reconcileIntervalMs);
     }
   }
+
+  private async processCleanups(attempted: Set<string>): Promise<boolean> {
+    let succeeded = true;
+    for (const cleanup of await this.store.listMachineCleanups()) {
+      if (this.stopped) return succeeded;
+      if (attempted.has(cleanup.machine_id)) continue;
+      attempted.add(cleanup.machine_id);
+      try {
+        await this.executeCleanup(cleanup);
+      } catch (error) {
+        succeeded = false;
+        console.error(`commercial policy cleanup ${cleanup.machine_id} failed: ${(error as Error).message}`);
+      }
+    }
+    return succeeded;
+  }
+
+  private async executeCleanup(cleanup: MachineCleanupRecord): Promise<void> {
+    if (!this.cleanupMachine) throw new Error("machine cleanup executor is not configured");
+    await this.cleanupMachine(cleanup.machine);
+    if (await this.store.completeMachineCleanup(cleanup.machine_id)) this.notify();
+  }
+}
+
+function normalizedActions(actions: MachineLifecycleAction[]): MachineLifecycleAction[] {
+  const byMachine = new Map<string, MachineLifecycleAction>();
+  for (const action of actions) {
+    if (action.type !== "machine.destroy" || !action.team_id || !action.machine_id || !action.reason) {
+      throw new Error("commercial policy returned an invalid machine lifecycle action");
+    }
+    const existing = byMachine.get(action.machine_id);
+    if (existing && (existing.team_id !== action.team_id || existing.type !== action.type)) {
+      throw new Error(`commercial policy returned conflicting actions for machine ${action.machine_id}`);
+    }
+    byMachine.set(action.machine_id, action);
+  }
+  return [...byMachine.values()].sort((left, right) => (
+    left.team_id.localeCompare(right.team_id) || left.machine_id.localeCompare(right.machine_id)
+  ));
 }
 
 export function reconciliationSnapshot(

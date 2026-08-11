@@ -15,11 +15,13 @@ export type {
   CommercialPolicy,
   CreatePolicyDecision,
   CreatePolicyInput,
+  MachineLifecycleAction,
   MachineLifecycleEvent,
   MachinePriceQuote,
   PolicyActor,
   PolicyMachine,
   PolicyReconciliation,
+  PolicyReconciliationResult,
   PolicyTeam,
 } from "./policy.js";
 export type { MachinePlan, MachinePlanGPU, MachinePlanPrice, MachineSizeOption, MachineSizeShortcut } from "./types.js";

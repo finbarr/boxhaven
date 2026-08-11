@@ -279,6 +279,163 @@ test("hosted reconciliation runs at startup, retries failures, and remains perio
   ]);
 });
 
+test("policy cleanup persists, retries provider failures, and completes other providers independently", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-cleanup-"));
+  const path = join(dir, "boxhaven.sqlite");
+  const store = new StateStore(path, "fake-a");
+  for (const [name, provider] of [["blocked", "fake-a"], ["healthy", "fake-b"]] as const) {
+    await store.putMachine({
+      name,
+      user_id: "user-1",
+      provider,
+      provider_name: `${provider}-${name}`,
+      provider_id: `${provider}-id`,
+      org_id: "team-1",
+      org_name: "Team One",
+      size: "small",
+      size_shortcut: "small",
+      provider_hourly_price: 0.1,
+      created_at: `2026-07-11T00:00:0${name === "blocked" ? "0" : "1"}.000Z`,
+    });
+  }
+  let allowBlocked = false;
+  const attempts: string[] = [];
+  const facts: MachineLifecycleEvent[] = [];
+  const policy: CommercialPolicy = {
+    lifecycleEventsEnabled: true,
+    async checkCreate() { return { allowed: true }; },
+    async emitMachineFact(fact) { facts.push(fact); },
+    async reconcile(input) {
+      return {
+        actions: input.machines.map((item) => ({
+          type: "machine.destroy" as const,
+          team_id: item.team.id,
+          machine_id: item.machine.id,
+          reason: "entitlement ended",
+        })),
+      };
+    },
+  };
+  const delivery = new PolicyEventDelivery(store, policy, 10, 60_000, async (machine) => {
+    attempts.push(`${machine.provider}:${machine.name}`);
+    if (machine.name === "blocked" && !allowBlocked) throw new Error("fake-a unavailable");
+  });
+  delivery.start();
+  await waitFor(async () => (await store.getMachine("user-1", "healthy")) === undefined);
+  delivery.stop();
+
+  assert.equal((await store.getMachine("user-1", "blocked"))?.provider, "fake-a");
+  assert.deepEqual((await store.listMachineCleanups()).map((item) => item.machine_id), ["fake-a:fake-a-blocked"]);
+  assert.ok(attempts.includes("fake-b:healthy"), "the healthy provider is cleaned up despite another provider failing");
+  store.close();
+
+  const restarted = new StateStore(path, "fake-a");
+  allowBlocked = true;
+  const restartedDelivery = new PolicyEventDelivery(restarted, policy, 10, 60_000, async (machine) => {
+    attempts.push(`restart:${machine.provider}:${machine.name}`);
+  });
+  restartedDelivery.start();
+  await waitFor(async () => (await restarted.listMachines()).length === 0);
+  await waitFor(() => facts.length === 2);
+  restartedDelivery.stop();
+
+  assert.deepEqual(await restarted.listMachineCleanups(), []);
+  assert.deepEqual(facts.map((item) => item.type), ["machine.destroyed", "machine.destroyed"]);
+  assert.deepEqual(facts.map((item) => item.actor), [
+    { id: "boxhaven-policy", email: "" },
+    { id: "boxhaven-policy", email: "" },
+  ]);
+});
+
+test("duplicate actions and concurrent reconciliation notifications cannot duplicate cleanup", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-cleanup-concurrent-"));
+  const store = new StateStore(join(dir, "boxhaven.sqlite"), "fake");
+  await store.putMachine({
+    name: "one",
+    user_id: "user-1",
+    provider: "fake",
+    provider_name: "stable-one",
+    provider_id: "provider-one",
+    org_id: "team-1",
+    size: "small",
+    provider_hourly_price: 0.1,
+    created_at: "2026-07-11T00:00:00.000Z",
+  });
+  let reconciles = 0;
+  let activeReconciles = 0;
+  let maxActiveReconciles = 0;
+  let releaseReconcile!: () => void;
+  const firstReconcileGate = new Promise<void>((resolve) => { releaseReconcile = resolve; });
+  const facts: MachineLifecycleEvent[] = [];
+  const policy: CommercialPolicy = {
+    lifecycleEventsEnabled: true,
+    async checkCreate() { return { allowed: true }; },
+    async emitMachineFact(fact) { facts.push(fact); },
+    async reconcile(input) {
+      reconciles += 1;
+      activeReconciles += 1;
+      maxActiveReconciles = Math.max(maxActiveReconciles, activeReconciles);
+      if (reconciles === 1) await firstReconcileGate;
+      activeReconciles -= 1;
+      const action = {
+        type: "machine.destroy" as const,
+        team_id: "team-1",
+        machine_id: "fake:stable-one",
+        reason: "entitlement ended",
+      };
+      return { actions: input.machines.length ? [action, action] : [] };
+    },
+  };
+  let releases = 0;
+  const delivery = new PolicyEventDelivery(store, policy, 10, 60_000, async () => { releases += 1; });
+  delivery.start();
+  await waitFor(() => activeReconciles === 1);
+  delivery.notifyReconcile();
+  delivery.notifyReconcile();
+  releaseReconcile();
+  await waitFor(async () => (await store.listMachines()).length === 0);
+  await waitFor(() => reconciles >= 2);
+  await waitFor(() => facts.length === 1);
+  delivery.stop();
+
+  assert.equal(maxActiveReconciles, 1);
+  assert.equal(releases, 1);
+  assert.equal(facts.filter((item) => item.type === "machine.destroyed").length, 1);
+});
+
+test("manual deletion wins a cleanup race without a duplicate destroyed fact", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-cleanup-user-delete-"));
+  const store = new StateStore(join(dir, "boxhaven.sqlite"), "fake");
+  const machine = {
+    name: "one",
+    user_id: "user-1",
+    provider: "fake",
+    provider_name: "stable-one",
+    org_id: "team-1",
+    size: "small",
+    provider_hourly_price: 0.1,
+    created_at: "2026-07-11T00:00:00.000Z",
+  };
+  await store.putMachine(machine);
+  await store.requestMachineCleanup({
+    type: "machine.destroy",
+    team_id: "team-1",
+    machine_id: "fake:stable-one",
+    reason: "entitlement ended",
+  }, new Date("2026-07-11T01:00:00.000Z"));
+  const userEvent: MachineLifecycleEvent = {
+    ...event,
+    id: "user-destroy",
+    occurred_at: "2026-07-11T01:01:00.000Z",
+    type: "machine.destroyed",
+    machine: { ...event.machine, id: "fake:stable-one", name: "one" },
+  };
+  await store.deleteMachine("user-1", "one", userEvent);
+  assert.equal(await store.completeMachineCleanup("fake:stable-one"), false);
+  assert.deepEqual((await store.listPolicyEvents()).map((item) => item.id), ["user-destroy"]);
+  assert.deepEqual(await store.listMachineCleanups(), []);
+});
+
 class FlakyDeleteStateStore extends StateStore {
   private fail = true;
 

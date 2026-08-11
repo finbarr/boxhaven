@@ -80,7 +80,7 @@ test("DigitalOcean creates machines with a throwaway no-login SSH key", async ()
       });
     }
     if (url.endsWith("/v2/account/keys/321") && method === "DELETE") {
-      return new Response("", { status: 204 });
+      return new Response(null, { status: 204 });
     }
     throw new Error(`unexpected request ${method} ${url}`);
   }) as typeof fetch;
@@ -106,6 +106,35 @@ test("DigitalOcean creates machines with a throwaway no-login SSH key", async ()
     assert.equal(createRequest.body.size, "s-4vcpu-8gb-amd");
     assert.equal(typeof createRequest.body.user_data, "string");
     assert.equal(requests.some((request) => request.method === "DELETE" && request.url.endsWith("/v2/account/keys/321")), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("DigitalOcean release is idempotent and waits until the droplet is absent", async () => {
+  const methods: string[] = [];
+  const originalFetch = globalThis.fetch;
+  let deleted = false;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    assert.match(String(input), /\/v2\/droplets\/123$/);
+    const method = init?.method || "GET";
+    methods.push(method);
+    if (method === "DELETE") {
+      if (deleted) return new Response("", { status: 404 });
+      deleted = true;
+      return new Response(null, { status: 204 });
+    }
+    return new Response("", { status: 404 });
+  }) as typeof fetch;
+  try {
+    const provider = digitalOceanProviderFromEnv({
+      DIGITALOCEAN_ACCESS_TOKEN: "dop_v1_test",
+      BOXHAVEN_DIGITALOCEAN_API_URL: "https://digitalocean.example.test",
+    });
+    const machine = { name: "one", provider: "digitalocean", provider_id: "123" };
+    await provider.releaseMachine(machine);
+    await provider.releaseMachine(machine);
+    assert.deepEqual(methods, ["DELETE", "GET", "DELETE", "GET"]);
   } finally {
     globalThis.fetch = originalFetch;
   }

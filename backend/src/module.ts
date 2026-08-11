@@ -37,6 +37,7 @@ export type BackendModuleContext = {
   teamRole(request: BackendRequest, teamID: string, userID: string): Promise<string>;
   roleCanManage(role: string): boolean;
   isAdministrator(user: BackendUserContext): boolean;
+  requestPolicyReconciliation(): void;
 };
 
 export type BackendModuleRuntime = {

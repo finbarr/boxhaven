@@ -157,7 +157,9 @@ export class DigitalOceanProvider implements MachineProvider {
   async releaseMachine(machine: RemoteMachine): Promise<void> {
     const id = machine.provider_id || (await this.findDroplet(machine.provider_name || machine.name))?.id;
     if (!id) return;
-    await this.request(`/v2/droplets/${encodeURIComponent(String(id))}`, { method: "DELETE" });
+    const path = `/v2/droplets/${encodeURIComponent(String(id))}`;
+    await this.request(path, { method: "DELETE", notFoundOK: true });
+    await this.waitForDeletion(path, id);
   }
 
   async listImages(): Promise<MachineImage[]> {
@@ -311,7 +313,17 @@ export class DigitalOceanProvider implements MachineProvider {
     return [...new Set([...this.config.tags, machineTag(name)])];
   }
 
-  private async request<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  private async waitForDeletion(path: string, id: string | number): Promise<void> {
+    const deadline = Date.now() + 4 * 60 * 1000;
+    while (Date.now() < deadline) {
+      const response = await this.request<{ droplet: Droplet } | undefined>(path, { notFoundOK: true });
+      if (!response) return;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    throw new Error(`timed out waiting for DigitalOcean droplet ${id} to be deleted`);
+  }
+
+  private async request<T = unknown>(path: string, init: { method?: string; body?: unknown; notFoundOK?: boolean } = {}): Promise<T> {
     const response = await fetch(`${this.apiURL}${path}`, {
       method: init.method || "GET",
       headers: {
@@ -320,6 +332,7 @@ export class DigitalOceanProvider implements MachineProvider {
       },
       body: init.body ? JSON.stringify(init.body) : undefined,
     });
+    if (response.status === 404 && init.notFoundOK) return undefined as T;
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(`DigitalOcean ${init.method || "GET"} ${path} failed: ${detail || response.statusText}`);
