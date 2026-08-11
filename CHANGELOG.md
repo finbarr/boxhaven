@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v0.2.0 - TBD
+## v0.2.0 - 2026-08-11
 
 ### Added
 
