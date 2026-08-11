@@ -1,7 +1,7 @@
-import { useMutation } from "@tanstack/react-query";
-import { Copy, KeyRound, Play, Send } from "lucide-react";
+import { useMutation, type UseMutationResult } from "@tanstack/react-query";
+import { Copy, KeyRound, MailCheck, Play, RotateCw, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { apiFetch, formatUserCode, LoginResponse } from "./api";
+import { apiFetch, BoxHavenAPIError, formatUserCode, LoginResponse } from "./api";
 import { GitHubMark, isHostedService, privacyURL, termsURL } from "./shell";
 
 export const installCommand = "curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh";
@@ -24,7 +24,9 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
   notice?: string;
   initialMode?: "signin" | "signup";
 }) {
-  const [mode, setMode] = useState<"signin" | "signup">(initialMode ?? "signup");
+  const verified = new URLSearchParams(window.location.search).get("verified") === "true";
+  const verificationError = verificationErrorMessage(new URLSearchParams(window.location.search).get("error"));
+  const [mode, setMode] = useState<"signin" | "signup">(initialMode ?? (verified || verificationError ? "signin" : "signup"));
   const [forgot, setForgot] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const requiresTerms = isHostedService && mode === "signup";
@@ -40,6 +42,13 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const resend = useMutation({
+    mutationFn: () => apiFetch<{ status: boolean }>("/v1/auth/send-verification-email", "", {
+      method: "POST",
+      body: { email: verificationEmail, callbackURL: verificationCallbackURL() },
+    }),
+  });
   const mutation = useMutation({
     mutationFn: async () => {
       const endpoint = mode === "signup" ? "/v1/auth/sign-up/email" : "/v1/auth/sign-in/email";
@@ -48,11 +57,19 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
         body: {
           email,
           password,
-          ...(mode === "signup" ? { name: name || email.split("@")[0] } : {}),
+          ...(mode === "signup" ? { name: name || email.split("@")[0], callbackURL: verificationCallbackURL() } : {}),
         },
       });
     },
-    onSuccess: (data) => onToken(data.token),
+    onSuccess: (data) => {
+      if (data.token) onToken(data.token);
+      else setVerificationEmail(email);
+    },
+    onError: (error) => {
+      if (error instanceof BoxHavenAPIError && error.code === "EMAIL_NOT_VERIFIED") {
+        setVerificationEmail(email);
+      }
+    },
   });
 
   function submit(event: FormEvent) {
@@ -63,7 +80,18 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
 
   return (
     <>
-      {forgot ? (
+      {verificationEmail ? (
+        <VerificationPending
+          email={verificationEmail}
+          resend={resend}
+          onUseAnother={() => {
+            setVerificationEmail("");
+            setMode("signin");
+            mutation.reset();
+            resend.reset();
+          }}
+        />
+      ) : forgot ? (
         <ForgotPasswordForm onBack={() => setForgot(false)} />
       ) : (
         <form id="signup" className="auth-panel signup-panel" onSubmit={submit}>
@@ -71,6 +99,8 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
             <span>{mode === "signup" ? "create account" : "welcome back"}</span>
             <h1>{mode === "signup" ? "Create a BoxHaven account" : "Open the console"}</h1>
           </div>
+          {verified ? <p className="success-text">Email verified. Sign in to open the console.</p> : null}
+          {verificationError ? <p className="error" role="alert">{verificationError}</p> : null}
           {notice ? <p className="hint">{notice}</p> : null}
           <div className="segmented">
             <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>Sign up</button>
@@ -123,6 +153,43 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
       )}
     </>
   );
+}
+
+function VerificationPending({ email, resend, onUseAnother }: {
+  email: string;
+  resend: UseMutationResult<{ status: boolean }, Error, void>;
+  onUseAnother: () => void;
+}) {
+  return (
+    <section className="auth-panel verification-panel" aria-live="polite">
+      <MailCheck size={30} />
+      <div className="panel-heading">
+        <span>verify your email</span>
+        <h1>Check your inbox</h1>
+        <p>We sent a verification link to <strong>{email}</strong>. Open it within one hour, then sign in.</p>
+      </div>
+      {resend.isSuccess ? <p className="success-text">A fresh verification link is on its way.</p> : null}
+      {resend.error ? <p className="error" role="alert">{resend.error.message}</p> : null}
+      <button className="primary-button" type="button" disabled={resend.isPending} onClick={() => resend.mutate()}>
+        <RotateCw size={16} />
+        {resend.isPending ? "Sending" : "Resend verification email"}
+      </button>
+      <button className="link-button" type="button" onClick={onUseAnother}>Use another email</button>
+    </section>
+  );
+}
+
+function verificationCallbackURL(): string {
+  const callback = new URL(window.location.href);
+  callback.searchParams.delete("error");
+  callback.searchParams.set("verified", "true");
+  return callback.toString();
+}
+
+function verificationErrorMessage(error: string | null): string {
+  if (error === "TOKEN_EXPIRED") return "That verification link has expired. Sign in and request a fresh link.";
+  if (error) return "That verification link is invalid. Sign in and request a fresh link.";
+  return "";
 }
 
 function ForgotPasswordForm({ onBack }: { onBack: () => void }) {

@@ -1,4 +1,6 @@
-import { apiRequest, type APIRequestInit } from "../../src/client";
+import { apiRequest, BoxHavenAPIError, type APIRequestInit } from "../../src/client";
+
+export { BoxHavenAPIError };
 
 export type {
   AccountSummary,

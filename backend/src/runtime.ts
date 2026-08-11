@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createBackendAuth, migrateBackendAuth } from "./auth.js";
+import { createBackendAuth, defaultEmailVerificationExpiresInSeconds, migrateBackendAuth } from "./auth.js";
 import { emailServiceFromEnv } from "./email.js";
 import type { BackendModule } from "./module.js";
 import { providerRegistryFromEnv } from "./providers.js";
@@ -31,6 +31,7 @@ export async function startBackendFromEnv(runtime: BackendRuntimeOptions = {}) {
   const apiPublicURL = trimURL(process.env.BOXHAVEN_API_URL) || defaultPublicURL;
   const appPublicURL = trimURL(process.env.BOXHAVEN_APP_URL) || defaultPublicURL;
   const email = emailServiceFromEnv();
+  if (!email) throw new Error("RESEND_API_KEY is required for account email verification");
   const github = process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
     ? { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET }
     : undefined;
@@ -42,6 +43,11 @@ export async function startBackendFromEnv(runtime: BackendRuntimeOptions = {}) {
     deviceVerificationURL: `${appPublicURL}/device`,
     appURL: appPublicURL,
     email,
+    emailVerificationExpiresInSeconds: positiveInteger(
+      process.env.BOXHAVEN_EMAIL_VERIFICATION_EXPIRES_SECONDS,
+      defaultEmailVerificationExpiresInSeconds,
+      "BOXHAVEN_EMAIL_VERIFICATION_EXPIRES_SECONDS",
+    ),
     github,
   };
   await migrateBackendAuth(authOptions);
@@ -130,4 +136,10 @@ function delay(ms: number): Promise<void> {
 
 function trimURL(value: string | undefined): string {
   return (value || "").trim().replace(/\/+$/, "");
+}
+
+function positiveInteger(value: string | undefined, fallback: number, name: string): number {
+  const parsed = value === undefined || value === "" ? fallback : Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${name} must be a positive integer`);
+  return parsed;
 }

@@ -88,6 +88,7 @@ try {
     outDir,
     screenshots: {
       access: join(outDir, "access.png"),
+      verification: join(outDir, "verification.png"),
       device: join(outDir, "device.png"),
       boxes: join(outDir, "boxes.png"),
       mobileBoxes: join(outDir, "mobile-boxes.png"),
@@ -205,6 +206,10 @@ async function startSeededBackend({ accountLabel } = {}) {
     trustedOrigins: [appURL],
     deviceVerificationURL: `${appURL}/device`,
     appURL,
+    email: {
+      messages: [],
+      async send(message) { this.messages.push(message); },
+    },
   };
   await migrateBackendAuth(authOptions);
   const auth = createBackendAuth(authOptions);
@@ -233,7 +238,7 @@ async function startSeededBackend({ accountLabel } = {}) {
       },
     },
   });
-  const token = await signUp(app, "admin@example.com");
+  const token = await signUp(app, "admin@example.com", "password123", authOptions.email.messages);
   const headers = { authorization: `Bearer ${token}` };
   await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
   const acme = await createOrganization(app, headers, "Acme Labs", "acme-labs");
@@ -271,15 +276,27 @@ async function startSeededBackend({ accountLabel } = {}) {
   return { app, token, deviceUserCode: device.json().user_code, whoami: whoami.json() };
 }
 
-async function signUp(app, email, password = "password123") {
+async function signUp(app, email, password = "password123", messages = []) {
   const response = await app.inject({
     method: "POST",
     url: "/v1/auth/sign-up/email",
     payload: { email, password, name: email.split("@")[0] },
   });
   assert.equal(response.statusCode, 200, response.body);
-  assert.equal(typeof response.json().token, "string");
-  return response.json().token;
+  assert.equal(response.json().token, null);
+  const message = messages.findLast((candidate) => candidate.to === email && candidate.subject === "Verify your BoxHaven email");
+  const match = message?.text.match(/https?:\/\/\S+\/verify-email\?\S+/);
+  assert.ok(match, `verification URL sent to ${email}`);
+  const url = new URL(match[0]);
+  const verified = await app.inject({ method: "GET", url: `${url.pathname}?token=${encodeURIComponent(url.searchParams.get("token") || "")}` });
+  assert.equal(verified.statusCode, 200, verified.body);
+  const signedIn = await app.inject({
+    method: "POST",
+    url: "/v1/auth/sign-in/email",
+    payload: { email, password },
+  });
+  assert.equal(signedIn.statusCode, 200, signedIn.body);
+  return signedIn.json().token;
 }
 
 async function createOrganization(app, headers, name, slug) {
@@ -341,7 +358,21 @@ async function checkAccessPage(page) {
   assert.equal(facts.updateHref, "https://github.com/finbarr/boxhaven/releases/tag/v0.2.0");
   assert.equal(facts.updateTarget, "_blank");
   assert.equal(facts.updateLabel, "View the BoxHaven v0.2.0 release in a new tab");
-  return facts;
+  await page.getByLabel("Email").fill("verification-smoke@example.com");
+  await page.getByLabel("Name").fill("Verification Smoke");
+  await page.getByLabel("Password").fill("password123");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByRole("heading", { name: "Check your inbox" }).waitFor({ timeout: 10_000 });
+  await page.screenshot({ path: join(outDir, "verification.png"), fullPage: true });
+  const verification = await page.evaluate(() => ({
+    email: document.querySelector(".verification-panel strong")?.textContent?.trim(),
+    copy: document.querySelector(".verification-panel .panel-heading p")?.textContent?.replace(/\s+/g, " ").trim(),
+    resend: [...document.querySelectorAll(".verification-panel button")].find((button) => button.textContent?.includes("Resend"))?.textContent?.trim(),
+  }));
+  assert.equal(verification.email, "verification-smoke@example.com");
+  assert.ok(verification.copy?.includes("within one hour"));
+  assert.equal(verification.resend, "Resend verification email");
+  return { ...facts, verification };
 }
 
 async function checkDevicePage(page, userCode) {

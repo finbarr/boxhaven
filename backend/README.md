@@ -26,6 +26,7 @@ for an hour, and returns quietly without an update when offline.
 npm ci
 BETTER_AUTH_SECRET=replace-with-a-random-secret-at-least-32-bytes \
 DIGITALOCEAN_ACCESS_TOKEN=dop_v1_example \
+RESEND_API_KEY=re_replace_with_a_key \
 npm run dev
 ```
 
@@ -190,8 +191,9 @@ Environment:
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event and reconciliation retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: full active-machine reconciliation interval, default `300000`.
-- `RESEND_API_KEY`: Resend API key; setting it enables password reset and team invitation emails.
+- `RESEND_API_KEY`: required Resend API key for password-account verification, password resets, and team invitations.
 - `BOXHAVEN_EMAIL_FROM`: From address for transactional email, default `BoxHaven <noreply@boxhaven.dev>`.
+- `BOXHAVEN_EMAIL_VERIFICATION_EXPIRES_SECONDS`: positive verification-link lifetime, default `3600` (one hour).
 - `BOXHAVEN_RESEND_API_URL`: Resend API base URL override for tests.
 
 Team images are optional per-box overrides. When `POST /v1/machines` includes
@@ -277,11 +279,13 @@ self-hosted policy does not create outbox entries. See
 Reconciliation failures are logged and retried in the background and do not
 affect box operations.
 
-Transactional email (enabled by setting `RESEND_API_KEY`) sends password
-reset links and team invitation links (`<app_url>/invite?id=<invitation-id>`)
-through Resend from `BOXHAVEN_EMAIL_FROM`. Without it, both hooks log to the
-backend console instead, and invitation links remain copyable from the team
-console.
+Transactional email sends required password-account verification links,
+password reset links, and team invitation links
+(`<app_url>/invite?id=<invitation-id>`) through Resend from
+`BOXHAVEN_EMAIL_FROM`. Verification delivery is required and startup fails
+without `RESEND_API_KEY`; invitation delivery remains best-effort because the
+team console exposes a copyable link. GitHub accounts whose provider email is
+verified do not receive a redundant BoxHaven verification email.
 
 Image management routes:
 
@@ -306,9 +310,9 @@ Team routes (Better Auth organization plugin, mounted under `/v1/auth`):
 
 Roles are `owner`, `admin`, and `member`. Invite links take the form
 `<app_url>/invite?id=<invitation-id>` and are accepted by the signed-in user
-whose email matches the invitation. When `RESEND_API_KEY` is set the backend
-emails that link to the invitee; otherwise the link is shared manually from
-the console.
+whose verified email matches the invitation. The backend emails that link to
+the invitee; if invitation delivery fails, it can still be shared manually
+from the console.
 
 Each session has an active team. `POST /v1/auth/organization/set-active`
 switches it for that session only — CLI login sessions and browser sessions

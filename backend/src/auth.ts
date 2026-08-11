@@ -4,10 +4,11 @@ import { betterAuth, type Auth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { bearer, deviceAuthorization, organization } from "better-auth/plugins";
 import Database from "better-sqlite3";
-import { EmailService } from "./email.js";
+import type { EmailSender } from "./email.js";
 
 const sessionExpiresInSeconds = 60 * 60 * 24 * 30;
 const sessionUpdateAgeSeconds = 60 * 60 * 24;
+export const defaultEmailVerificationExpiresInSeconds = 60 * 60;
 
 export type BackendAuthOptions = {
   baseURL: string;
@@ -16,7 +17,8 @@ export type BackendAuthOptions = {
   trustedOrigins?: string[];
   deviceVerificationURL?: string;
   appURL?: string;
-  email?: EmailService;
+  email?: EmailSender;
+  emailVerificationExpiresInSeconds?: number;
   github?: { clientId: string; clientSecret: string };
 };
 
@@ -57,9 +59,29 @@ function authConfig(options: BackendAuthOptions, database: Database.Database) {
         trustedProviders: ["github"],
       },
     },
+    emailVerification: {
+      expiresIn: options.emailVerificationExpiresInSeconds || defaultEmailVerificationExpiresInSeconds,
+      sendOnSignUp: true,
+      sendOnSignIn: false,
+      autoSignInAfterVerification: false,
+      async sendVerificationEmail(data: { user: { email: string }; url: string }) {
+        await sendRequiredEmail(options.email, {
+          to: data.user.email,
+          subject: "Verify your BoxHaven email",
+          text: [
+            "Verify your email address to finish creating your BoxHaven account.",
+            "",
+            `Verify your email: ${data.url}`,
+            "",
+            `This link expires in ${formatDuration(options.emailVerificationExpiresInSeconds || defaultEmailVerificationExpiresInSeconds)}.`,
+            "If you did not create this account, you can ignore this email.",
+          ].join("\n"),
+        }, `verification email for ${data.user.email}`);
+      },
+    },
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: false,
+      requireEmailVerification: true,
       async sendResetPassword(data: { user: { email: string }; url: string }) {
         await sendEmailOrLog(options.email, {
           to: data.user.email,
@@ -84,10 +106,7 @@ function authConfig(options: BackendAuthOptions, database: Database.Database) {
         validateClient: (clientID: string) => clientID === "boxhaven-cli",
       }),
       organization({
-        // BoxHaven accounts are usable without email verification, so the
-        // invitation flow must not require verified addresses. Invites are
-        // shared as links and are only redeemable by the invited email.
-        requireEmailVerificationOnInvitation: false,
+        requireEmailVerificationOnInvitation: true,
         invitationExpiresIn: 60 * 60 * 24 * 7,
         membershipLimit: 200,
         async sendInvitationEmail(data: { id: string; email: string; organization: { name: string } }) {
@@ -122,7 +141,7 @@ function openAuthDatabase(path: string): Database.Database {
 // Email delivery is best-effort: invitations stay shareable as copyable links
 // and password reset responses are intentionally generic, so a missing
 // RESEND_API_KEY or a delivery failure must never fail the auth request.
-async function sendEmailOrLog(email: EmailService | undefined, message: { to: string; subject: string; text: string }, context: string): Promise<void> {
+async function sendEmailOrLog(email: EmailSender | undefined, message: { to: string; subject: string; text: string }, context: string): Promise<void> {
   if (!email) {
     console.error(`email is not configured (set RESEND_API_KEY); skipped ${context}`);
     return;
@@ -132,6 +151,21 @@ async function sendEmailOrLog(email: EmailService | undefined, message: { to: st
   } catch (error) {
     console.error(`email delivery failed for ${context}: ${(error as Error).message}`);
   }
+}
+
+async function sendRequiredEmail(email: EmailSender | undefined, message: { to: string; subject: string; text: string }, context: string): Promise<void> {
+  if (!email) throw new Error(`email is not configured; cannot send ${context}`);
+  try {
+    await email.send(message);
+  } catch (error) {
+    throw new Error(`email delivery failed for ${context}: ${(error as Error).message}`);
+  }
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds % 3600 === 0) return `${seconds / 3600} ${seconds === 3600 ? "hour" : "hours"}`;
+  if (seconds % 60 === 0) return `${seconds / 60} ${seconds === 60 ? "minute" : "minutes"}`;
+  return `${seconds} seconds`;
 }
 
 function urlOrigin(value: string | undefined): string {
