@@ -449,7 +449,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
             id: auth.userID,
             email: auth.email,
             email_verified: auth.emailVerified,
-            can_manage: false,
+            can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
           },
           machine: policyMachineIdentity({
             name: body.name,
