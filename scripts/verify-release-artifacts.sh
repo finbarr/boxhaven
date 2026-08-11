@@ -21,7 +21,9 @@ sha256_file() {
   fi
 }
 
-[ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  usage
+fi
 
 tag="$1"
 artifact_dir="${2:-dist}"
@@ -50,8 +52,9 @@ EOF
 : > "$actual_inventory"
 for path in "$artifact_dir"/* "$artifact_dir"/.[!.]* "$artifact_dir"/..?*; do
   [ -e "$path" ] || continue
-  [ -f "$path" ] && [ ! -L "$path" ] \
-    || fail "artifact directory contains a non-regular file: ${path}"
+  if [ ! -f "$path" ] || [ -L "$path" ]; then
+    fail "artifact directory contains a non-regular file: ${path}"
+  fi
   basename "$path" >> "$actual_inventory"
 done
 LC_ALL=C sort -o "$actual_inventory" "$actual_inventory"
@@ -98,8 +101,9 @@ while read -r expected asset extra; do
   extracted="${temporary_dir}/${goos}-${goarch}"
   mkdir "$extracted"
   tar -xzf "$archive" -C "$extracted"
-  [ -f "${extracted}/bh" ] && [ ! -L "${extracted}/bh" ] && [ -x "${extracted}/bh" ] \
-    || fail "${asset} does not contain an executable regular bh binary"
+  if [ ! -f "${extracted}/bh" ] || [ -L "${extracted}/bh" ] || [ ! -x "${extracted}/bh" ]; then
+    fail "${asset} does not contain an executable regular bh binary"
+  fi
 
   build_info="$(go version -m "${extracted}/bh")"
   grep -Fq "GOOS=${goos}" <<< "$build_info" \
