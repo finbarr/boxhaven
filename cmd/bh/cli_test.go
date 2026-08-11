@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -436,6 +437,52 @@ func TestGitHubRepoURLDetection(t *testing.T) {
 		if got := isGitHubRepoURL(repoURL); got != want {
 			t.Fatalf("isGitHubRepoURL(%q) = %t, want %t", repoURL, got, want)
 		}
+	}
+}
+
+func TestProjectGitRepoURLsIncludeImmediateChildRepositories(t *testing.T) {
+	workspace := t.TempDir()
+	child := filepath.Join(workspace, "boxhaven")
+	if err := os.MkdirAll(child, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init", child},
+		{"-C", child, "remote", "add", "origin", "https://github.com/finbarr/boxhaven.git"},
+	} {
+		command := exec.Command("git", args...)
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, output)
+		}
+	}
+
+	urls := projectGitRepoURLs("", workspace)
+	if len(urls) != 1 || urls[0] != "https://github.com/finbarr/boxhaven.git" {
+		t.Fatalf("projectGitRepoURLs() = %#v", urls)
+	}
+	if got := githubRepoURLForProject("", workspace); got != urls[0] {
+		t.Fatalf("githubRepoURLForProject() = %q, want %q", got, urls[0])
+	}
+}
+
+func TestProjectSSHAgentForwardingIncludesImmediateChildRepositories(t *testing.T) {
+	workspace := t.TempDir()
+	child := filepath.Join(workspace, "private-repo")
+	if err := os.MkdirAll(child, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init", child},
+		{"-C", child, "remote", "add", "origin", "git@github.com:finbarr/private-repo.git"},
+	} {
+		command := exec.Command("git", args...)
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, output)
+		}
+	}
+
+	if !shouldForwardSSHAgentForProject("", workspace) {
+		t.Fatal("workspace child SSH remote did not enable agent forwarding")
 	}
 }
 
