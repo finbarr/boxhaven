@@ -188,8 +188,8 @@ Environment:
 - `HETZNER_SERVER_TYPE`: provider plan behind the built-in `small` size, default `cpx22`. Built-in sizes map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large); use a team size shortcut for other plans.
 - `HETZNER_IMAGE`: Hetzner image fallback, default `ubuntu-24.04`.
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
-- `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event and reconciliation retry delay, default `30000`.
-- `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: full active-machine reconciliation interval, default `300000`.
+- `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event, reconciliation, and policy-requested machine cleanup retry delay, default `30000`.
+- `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: full active-machine reconciliation and lifecycle-policy evaluation interval, default `300000`.
 - `RESEND_API_KEY`: Resend API key; setting it enables password reset and team invitation emails.
 - `BOXHAVEN_EMAIL_FROM`: From address for transactional email, default `BoxHaven <noreply@boxhaven.dev>`.
 - `BOXHAVEN_RESEND_API_URL`: Resend API base URL override for tests.
@@ -276,6 +276,12 @@ self-hosted policy does not create outbox entries. See
 [`docs/operator-policy.md`](../docs/operator-policy.md) for the payload contract.
 Reconciliation failures are logged and retried in the background and do not
 affect box operations.
+
+A commercial policy may return provider-neutral `machine.destroy` actions from
+reconciliation. Core stores accepted cleanup requests durably, retries real
+provider deletion after failures and restarts, and removes local machine state
+only after the configured provider confirms the resource is absent. Cleanup is
+isolated per machine, so one unavailable provider does not hold up another.
 
 Transactional email (enabled by setting `RESEND_API_KEY`) sends password
 reset links and team invitation links (`<app_url>/invite?id=<invitation-id>`)

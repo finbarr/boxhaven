@@ -31,6 +31,8 @@ A module can return a `CommercialPolicy` from `start()`. The policy can:
 - receive idempotent `machine.created`, `machine.destroyed`, and
   `machine.moved` lifecycle facts;
 - reconcile against the authoritative active-machine set;
+- request provider-neutral destruction of machines whose entitlement has
+  ended;
 - provide an account summary and account action to its own routes or UI.
 
 The complete lifecycle event is written to the shared SQLite database in the
@@ -38,10 +40,32 @@ same transaction as the machine mutation. Delivery happens asynchronously;
 failures remain in the durable outbox and retry after restarts. Stable event
 IDs make duplicate delivery safe.
 
+Reconciliation may return `machine.destroy` actions keyed by authoritative
+team ID and stable policy machine ID. Core persists each accepted request
+before contacting the machine's provider. Provider deletion is retried across
+reconciliation runs and process restarts, and a failure for one machine or
+provider does not stop other pending cleanups. Core removes the machine and
+emits its final `machine.destroyed` fact only after the provider confirms the
+resource is absent. Duplicate actions and concurrent policy runs converge on
+the same pending cleanup.
+
+Once cleanup is pending, a machine cannot be renamed or moved to another team.
+A concurrent user-requested destroy may complete the same cleanup; the state
+transaction emits only one destroyed fact. Policies should return actions in a
+deterministic order and continue returning them while the corresponding
+machine remains in reconciliation. Core also retains accepted requests, so a
+restart does not depend on the policy returning the action again.
+
 If a policy throws or returns an invalid create decision, BoxHaven returns
 `503 entitlement_unavailable` and does not provision the box. An explicit
 denial returns `403 entitlement_denied`. Listing, connecting, running, syncing,
 moving, and destroying existing boxes do not wait for policy delivery.
+
+The generic policy timing settings also control cleanup retries and fresh
+entitlement evaluation: `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS` defaults to 30
+seconds and `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS` defaults to five
+minutes. A module can call `requestPolicyReconciliation()` after an external
+entitlement event to request an immediate serialized run.
 
 ## Building A Distribution
 
