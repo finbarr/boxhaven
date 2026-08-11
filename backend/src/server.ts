@@ -15,7 +15,7 @@ import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { GitHubReleaseChecker, ReleaseUpdateChecker } from "./releases.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
-import { StateStore } from "./state.js";
+import { MachineCleanupPendingError, StateStore } from "./state.js";
 import { CreateMachineRequest, MachineImage, MachinePlan, MachineProvider, MachineSizeOption, MachineSizeShortcut, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
 
 export type BackendOptions = {
@@ -144,16 +144,18 @@ const agentRPCDefaultTimeout = 60_000;
 const agentRPCSetupTimeout = 30 * 60_000;
 
 export function createBackend(options: BackendOptions): FastifyInstance {
-  const moduleContext = createModuleContext(options);
+  let policyDelivery: PolicyEventDelivery | undefined;
+  const moduleContext = createModuleContext(options, () => policyDelivery?.notifyReconcile());
   const moduleRuntimes = startModules(options.modules || [], moduleContext);
   const app = Fastify({ logger: false });
   const releaseChecker = options.releaseChecker || new GitHubReleaseChecker(options.version || "dev");
   const commercialPolicy = resolveCommercialPolicy(options.commercialPolicy, moduleRuntimes);
-  const policyDelivery = new PolicyEventDelivery(
+  policyDelivery = new PolicyEventDelivery(
     options.store,
     commercialPolicy,
     options.policyEventRetryMs,
     options.policyReconcileIntervalMs,
+    async (machine) => options.providers.forMachine(machine).releaseMachine(machine),
   );
   policyDelivery.start();
   app.addHook("onClose", async () => policyDelivery.stop());
@@ -551,7 +553,14 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       user_id: auth.userID,
       updated_at: new Date().toISOString(),
     });
-    await options.store.renameMachine(auth.userID, fromName, renamed);
+    try {
+      await options.store.renameMachine(auth.userID, fromName, renamed);
+    } catch (renameError) {
+      if (renameError instanceof MachineCleanupPendingError) {
+        return reply.code(409).send({ id: "cleanup_pending", message: "machine destruction is already in progress" });
+      }
+      throw renameError;
+    }
     const agent = agents.get(oldAgentKey);
     if (agent) {
       agents.delete(oldAgentKey);
@@ -850,10 +859,17 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       org_slug: found.team.slug,
       updated_at: new Date().toISOString(),
     });
-    await options.store.putMachine(moved, machineLifecycleEvent(commercialPolicy, {
-      ...machineFact("machine.moved", auth, moved, auth.teams),
-      previous_team_id: machine.org_id,
-    }));
+    try {
+      await options.store.putMachine(moved, machineLifecycleEvent(commercialPolicy, {
+        ...machineFact("machine.moved", auth, moved, auth.teams),
+        previous_team_id: machine.org_id,
+      }));
+    } catch (moveError) {
+      if (moveError instanceof MachineCleanupPendingError) {
+        return reply.code(409).send({ id: "cleanup_pending", message: "machine destruction is already in progress" });
+      }
+      throw moveError;
+    }
     policyDelivery.notify();
     return { machine: decorateTeam(publicMachine(moved), auth.teams) };
   });
@@ -893,7 +909,7 @@ function resolveCommercialPolicy(
   return configured || policies[0] || new AllowAllCommercialPolicy();
 }
 
-function createModuleContext(options: BackendOptions): BackendModuleContext {
+function createModuleContext(options: BackendOptions, requestPolicyReconciliation: () => void): BackendModuleContext {
   return {
     database: options.store.db,
     store: options.store,
@@ -905,6 +921,7 @@ function createModuleContext(options: BackendOptions): BackendModuleContext {
     teamRole: (request, teamID, userID) => orgRoleForUser(options, request.headers, teamID, userID),
     roleCanManage: orgRoleCanManage,
     isAdministrator: (user) => isAdmin(options, user),
+    requestPolicyReconciliation,
   };
 }
 
