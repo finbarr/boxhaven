@@ -96,6 +96,9 @@ deployed product and `master` contain substantial newer CLI behavior.
 - [ ] On a clean machine, test both `install.sh` and Homebrew, then run login,
   create, agent start, disconnect, SSH/SCP, reconnect, and destroy.
 
+Follow the checked-in [release runbook](RELEASING.md) for the gated tag,
+artifact verification, tap update, clean installations, and production smoke.
+
 ## 5. Add detection and prove recovery
 
 DigitalOcean machine backups and complete daily application archives are an
