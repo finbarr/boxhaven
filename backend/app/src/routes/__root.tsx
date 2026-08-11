@@ -42,7 +42,7 @@ function RootShell() {
         </div>
         {onDevice ? null : (
           <footer className="site-footer">
-            <span>© 2026 BoxHaven</span>
+            <span>© 2026 Default Alive LLC dba BoxHaven</span>
             <nav>
               {isHostedService ? <a href={termsURL}>Terms</a> : null}
               {isHostedService ? <a href={privacyURL}>Privacy</a> : null}
