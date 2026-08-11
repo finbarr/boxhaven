@@ -55,7 +55,7 @@ or use "Continue with GitHub" when the operator configures a GitHub OAuth app
 does not need a second verification step; `bh login` then works the same either
 way.
 
-Run as many agents in parallel as you want, each on its own box:
+Run agents in parallel, each on its own box:
 
 ```bash
 bh create work-2 && bh run work-2 codex
@@ -128,8 +128,8 @@ copyright notice and full license text.
 ## Hosted And Self-Hosted
 
 `app.boxhaven.dev` is the hosted control plane run by the BoxHaven operators.
-Hosted boxes are provisioned from the operators' cloud provider accounts, and
-the operators can cap boxes per account with `BOXHAVEN_MAX_MACHINES_PER_USER`.
+Hosted boxes are provisioned from the operators' cloud provider accounts, with
+per-user team and active-box capacity policies enforced by the control plane.
 Use of the hosted service is subject to the [Terms of Service](https://boxhaven.dev/terms/)
 and [Privacy Policy](https://boxhaven.dev/privacy/).
 

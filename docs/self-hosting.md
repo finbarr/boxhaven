@@ -110,7 +110,8 @@ need to duplicate the core API, auth, provider, SSH, or CLI implementations.
 - `BOXHAVEN_BACKEND_LISTEN`: listen address, default `127.0.0.1:8787`.
 - `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_DATABASE_PATH`.
 - `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
-- `BOXHAVEN_MAX_MACHINES_PER_USER`: per-user cap on concurrently existing boxes; `0` or unset means unlimited. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. The hosted control plane sets this; self-hosted deployments normally leave it unset.
+- `BOXHAVEN_MAX_TEAMS_PER_USER`: optional positive cap on teams a user owns. Concurrent creates reserve capacity and invitations to someone else's team do not consume an ownership slot.
+- `BOXHAVEN_MAX_MACHINES_PER_USER`: optional positive per-user cap on existing and provisioning boxes across all of their teams. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. Capacity is released after provider failure or successful destroy. Hosted distributions set this; self-hosted deployments may leave it unset.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed policy delivery retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: complete active-machine reconciliation interval, default `300000`.
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
@@ -302,7 +303,7 @@ WebSockets, including Vite HMR, use the same preview URL. The default
 ## Hosted Versus Self-Hosted
 
 `app.boxhaven.dev` is the hosted control plane run by the BoxHaven operators.
-Hosted boxes are provisioned from the operators' cloud provider accounts, and
-the operators can cap boxes per account with
-`BOXHAVEN_MAX_MACHINES_PER_USER`. The same open-source backend self-hosts
+Hosted boxes are provisioned from the operators' cloud provider accounts, with
+per-user team and active-box capacity policies enforced by the control plane.
+The same open-source backend self-hosts
 with your own provider credentials and no built-in limits.

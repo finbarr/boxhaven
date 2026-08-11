@@ -61,6 +61,8 @@ class FakeProvider implements MachineProvider {
   snapshotted: Array<{ machine: string; name: string }> = [];
   deletedImages: string[] = [];
   publicIPv4 = "203.0.113.10";
+  createBarrier: Promise<void> | undefined;
+  failCreates = 0;
 
   constructor(name = "fake", label = "Fake Cloud") {
     this.name = name;
@@ -69,6 +71,11 @@ class FakeProvider implements MachineProvider {
 
   async createMachine(request: CreateMachineRequest) {
     this.created.push(request);
+    if (this.createBarrier) await this.createBarrier;
+    if (this.failCreates > 0) {
+      this.failCreates -= 1;
+      throw new Error("provider create failed");
+    }
     return {
       status: "created",
       machine: {
@@ -1071,6 +1078,104 @@ test("backend enforces the per-user machine limit", async () => {
   assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "two" } })).statusCode, 201);
 });
 
+test("concurrent machine creates cannot bypass the per-user reservation", async () => {
+  const { app, provider, token, store } = await createTestBackend("concurrent-limit@example.com", "password123", { maxMachinesPerUser: 1 });
+  const headers = { authorization: `Bearer ${token}` };
+  let unblock!: () => void;
+  provider.createBarrier = new Promise<void>((resolve) => { unblock = resolve; });
+
+  const first = app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "first" } });
+  await waitFor(() => provider.created.length === 1);
+  const second = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "second" } });
+  assert.equal(second.statusCode, 403, second.body);
+  assert.equal(second.json().id, "limit_reached");
+  assert.equal(provider.created.length, 1);
+
+  unblock();
+  const created = await first;
+  assert.equal(created.statusCode, 201, created.body);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_machine_reservations").get() as { count: number }).count, 0);
+});
+
+test("provider create failure releases capacity for a retry", async () => {
+  const { app, provider, token, store } = await createTestBackend("failure-retry@example.com", "password123", { maxMachinesPerUser: 1 });
+  const headers = { authorization: `Bearer ${token}` };
+  provider.failCreates = 1;
+  const failed = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "retry-box" } });
+  assert.equal(failed.statusCode, 500, failed.body);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_machine_reservations").get() as { count: number }).count, 0);
+
+  const retried = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "retry-box" } });
+  assert.equal(retried.statusCode, 201, retried.body);
+  assert.equal(provider.created.length, 2);
+});
+
+test("machine capacity is shared across every team the user owns", async () => {
+  const { app, token } = await createTestBackend("cross-team-limit@example.com", "password123", { maxMachinesPerUser: 1 });
+  const headers = { authorization: `Bearer ${token}` };
+  const session = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  assert.equal(session.statusCode, 200, session.body);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "personal" } })).statusCode, 201);
+  const team = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name: "Side Project", slug: "side-project-limit" },
+  });
+  assert.equal(team.statusCode, 200, team.body);
+  const teamID = team.json().id || team.json().organization?.id;
+  assert.equal((await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/set-active",
+    headers,
+    payload: { organizationId: teamID },
+  })).statusCode, 200);
+  const denied = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "side-project" } });
+  assert.equal(denied.statusCode, 403, denied.body);
+  assert.equal(denied.json().id, "limit_reached");
+});
+
+test("team creation is capped by ownership and concurrent requests reserve slots", async () => {
+  const { app, token, store } = await createTestBackend("team-limit@example.com", "password123", { maxTeamsPerUser: 3 });
+  const headers = { authorization: `Bearer ${token}` };
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  assert.equal(whoami.statusCode, 200, whoami.body);
+  assert.equal(whoami.json().teams.length, 1);
+
+  const creates = await Promise.all(["two", "three", "four"].map((slug) => app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name: slug, slug },
+  })));
+  assert.deepEqual(creates.map((response) => response.statusCode).sort(), [200, 200, 403]);
+  const denied = creates.find((response) => response.statusCode === 403);
+  assert.equal(denied?.json().code, "TEAM_LIMIT_REACHED");
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM member WHERE userId = ? AND role = 'owner'").get(whoami.json().user.id) as { count: number }).count, 3);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_team_creation_reservations").get() as { count: number }).count, 0);
+});
+
+test("failed team creation releases its slot for a valid retry", async () => {
+  const { app, token, store } = await createTestBackend("team-retry@example.com", "password123", { maxTeamsPerUser: 2 });
+  const headers = { authorization: `Bearer ${token}` };
+  await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  const invalid = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name: "", slug: "invalid" },
+  });
+  assert.equal(invalid.statusCode, 400, invalid.body);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_team_creation_reservations").get() as { count: number }).count, 0);
+  const retried = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/create",
+    headers,
+    payload: { name: "Valid", slug: "valid" },
+  });
+  assert.equal(retried.statusCode, 200, retried.body);
+});
+
 test("backend scopes team machine listing and destroy to the box's team", async () => {
   const { app, provider, token } = await createTestBackend("owner@example.com");
   const memberToken = await signUp(app, "member@example.com");
@@ -1557,6 +1662,7 @@ async function createTestBackend(
     machineReadyTimeoutMs?: number;
     adminEmails?: string[];
     extraProviders?: MachineProvider[];
+    maxTeamsPerUser?: number;
     maxMachinesPerUser?: number;
     github?: boolean;
     previewTLSWarmup?: (previewURL: string) => Promise<void>;
@@ -1590,6 +1696,7 @@ async function createTestBackend(
     store,
     sshCA,
     adminEmails: options.adminEmails,
+    maxTeamsPerUser: options.maxTeamsPerUser,
     maxMachinesPerUser: options.maxMachinesPerUser,
     commercialPolicy: options.commercialPolicy,
     policyEventRetryMs: options.policyEventRetryMs,

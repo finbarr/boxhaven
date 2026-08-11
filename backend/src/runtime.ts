@@ -58,7 +58,8 @@ export async function startBackendFromEnv(runtime: BackendRuntimeOptions = {}) {
     store,
     sshCA,
     adminEmails: splitList(process.env.BOXHAVEN_ADMIN_EMAILS),
-    maxMachinesPerUser: Number(process.env.BOXHAVEN_MAX_MACHINES_PER_USER || 0) || undefined,
+    maxTeamsPerUser: optionalPositiveInteger(process.env.BOXHAVEN_MAX_TEAMS_PER_USER, "BOXHAVEN_MAX_TEAMS_PER_USER"),
+    maxMachinesPerUser: optionalPositiveInteger(process.env.BOXHAVEN_MAX_MACHINES_PER_USER, "BOXHAVEN_MAX_MACHINES_PER_USER"),
     policyEventRetryMs: Number(process.env.BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS || 30_000),
     policyReconcileIntervalMs: Number(process.env.BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS || 5 * 60_000),
     appDir: runtime.appDir || process.env.BOXHAVEN_BACKEND_APP_DIR || defaultAppDir,
@@ -142,4 +143,9 @@ function positiveInteger(value: string | undefined, fallback: number, name: stri
   const parsed = value === undefined || value === "" ? fallback : Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${name} must be a positive integer`);
   return parsed;
+}
+
+function optionalPositiveInteger(value: string | undefined, name: string): number | undefined {
+  if (value === undefined || value === "") return undefined;
+  return positiveInteger(value, 1, name);
 }

@@ -24,6 +24,7 @@ export type BackendOptions = {
   store: StateStore;
   sshCA: SSHCertificateAuthority;
   adminEmails?: string[];
+  maxTeamsPerUser?: number;
   maxMachinesPerUser?: number;
   commercialPolicy?: CommercialPolicy;
   policyEventRetryMs?: number;
@@ -305,6 +306,28 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     };
   });
 
+  app.post("/v1/auth/organization/create", async (request, reply) => {
+    const limit = options.maxTeamsPerUser;
+    const session = limit ? await options.auth.api.getSession({ headers: toHeaders(request.headers) }) : null;
+    if (!limit || !session) {
+      await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
+      return;
+    }
+    const reservation = await options.store.reserveTeamCreation(session.user.id, limit);
+    if (reservation.status !== "reserved") {
+      return reply.code(403).send({
+        id: "team_limit_reached",
+        code: "TEAM_LIMIT_REACHED",
+        message: `You have reached the limit of ${limit} teams.`,
+      });
+    }
+    try {
+      await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
+    } finally {
+      await options.store.releaseTeamCreationReservation(reservation.id);
+    }
+  });
+
   app.all("/v1/auth/*", async (request, reply) => {
     await sendAuthResponse(reply, await options.auth.handler(toWebRequest(request)));
   });
@@ -380,13 +403,6 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (imageError) return reply.code(400).send({ id: "bad_request", message: imageError });
     const regionError = validateCreateOverride("region", body.region);
     if (regionError) return reply.code(400).send({ id: "bad_request", message: regionError });
-    const limit = options.maxMachinesPerUser || 0;
-    if (limit > 0 && (await options.store.listMachinesForUser(auth.userID)).length >= limit) {
-      return reply.code(403).send({
-        id: "limit_reached",
-        message: `you have reached the limit of ${limit} boxes; destroy one with bh destroy <name> first`,
-      });
-    }
     let team = auth.teams.find((candidate) => candidate.id === auth.orgID);
     if (body.team) {
       const found = findTeam(auth.teams, body.team);
@@ -945,59 +961,85 @@ async function createMachine(
     return reply.code(409).send(machineNameConflict(body.name));
   }
 
-  let provisioned: { machine: RemoteMachine; status?: string };
+  const limit = options.maxMachinesPerUser;
+  const reservation = limit ? await options.store.reserveMachineCapacity(auth.userID, body.name, limit) : undefined;
+  if (reservation?.status === "conflict") return reply.code(409).send(machineNameConflict(body.name));
+  if (reservation?.status === "limit_reached") {
+    return reply.code(403).send({
+      id: "limit_reached",
+      message: `you have reached the limit of ${limit} boxes; destroy one with bh destroy <name> first`,
+    });
+  }
+  const reservationID = reservation?.status === "reserved" ? reservation.id : undefined;
+
   try {
+    let provisioned: { machine: RemoteMachine; status?: string };
+    try {
+      phaseStarted = Date.now();
+      provisioned = await provider.createMachine(body);
+      recordMachineCreateTiming(timings, "provider_create_ms", phaseStarted);
+    } catch (err) {
+      recordMachineCreateTiming(timings, "provider_create_ms", phaseStarted);
+      if ((err as Error).message.includes("already exists")) {
+        return reply.code(409).send(machineNameConflict(body.name));
+      }
+      throw err;
+    }
+    const machine = normalizeMachine(options, {
+      ...provisioned.machine,
+      name: body.name,
+      user_id: auth.userID,
+      org_id: orgID || undefined,
+      org_name: teams.find((team) => team.id === orgID)?.name,
+      org_slug: teams.find((team) => team.id === orgID)?.slug,
+      size: body.provider_size,
+      size_shortcut: body.size || "small",
+      provider_hourly_price: body.provider_hourly_price,
+      ...(body.hourly_price_cents !== undefined ? { hourly_price_cents: body.hourly_price_cents } : {}),
+      provider_name: body.provider_name,
+      source_path: body.source_path,
+      repo_url: body.repo_url,
+      branch: body.branch,
+      ssh_user: provisioned.machine.ssh_user || body.ssh_user || defaultSSHUser,
+      agent_token_hash: hashAgentToken(agentToken),
+      ssh_principal: sshPrincipal,
+    });
     phaseStarted = Date.now();
-    provisioned = await provider.createMachine(body);
-    recordMachineCreateTiming(timings, "provider_create_ms", phaseStarted);
-  } catch (err) {
-    recordMachineCreateTiming(timings, "provider_create_ms", phaseStarted);
-    if ((err as Error).message.includes("already exists")) {
-      return reply.code(409).send(machineNameConflict(body.name));
+    try {
+      const event = machineLifecycleEvent(commercialPolicy, machineFact("machine.created", auth, machine, teams));
+      if (reservationID) await options.store.commitMachineReservation(reservationID, machine, event);
+      else await options.store.putMachine(machine, event);
+    } catch (error) {
+      try {
+        await provider.releaseMachine(machine);
+      } catch (releaseError) {
+        console.error(`provider cleanup failed after box ${body.name} could not be persisted: ${(releaseError as Error).message}`);
+      }
+      throw error;
     }
-    throw err;
-  }
-  const machine = normalizeMachine(options, {
-    ...provisioned.machine,
-    name: body.name,
-    user_id: auth.userID,
-    org_id: orgID || undefined,
-    org_name: teams.find((team) => team.id === orgID)?.name,
-    org_slug: teams.find((team) => team.id === orgID)?.slug,
-    size: body.provider_size,
-    size_shortcut: body.size || "small",
-    provider_hourly_price: body.provider_hourly_price,
-    ...(body.hourly_price_cents !== undefined ? { hourly_price_cents: body.hourly_price_cents } : {}),
-    provider_name: body.provider_name,
-    source_path: body.source_path,
-    repo_url: body.repo_url,
-    branch: body.branch,
-    ssh_user: provisioned.machine.ssh_user || body.ssh_user || defaultSSHUser,
-    agent_token_hash: hashAgentToken(agentToken),
-    ssh_principal: sshPrincipal,
-  });
-  phaseStarted = Date.now();
-  await options.store.putMachine(machine, machineLifecycleEvent(commercialPolicy, machineFact("machine.created", auth, machine, teams)));
-  policyDelivery.notify();
-  recordMachineCreateTiming(timings, "store_machine_ms", phaseStarted);
-  let ready: RemoteMachine;
-  try {
-    ready = await waitForCreatedMachineReady(options, agents, machine, timings);
-  } catch (err) {
-    if (err instanceof AgentRPCError) {
-      recordMachineCreateTiming(timings, "total_ms", totalStarted);
-      logMachineCreateTimings(body.name, timings, "timed out");
-      return reply.code(504).send({ id: err.code, message: err.message, machine: decorateTeam(publicMachine(machine), teams), timings });
+    policyDelivery.notify();
+    recordMachineCreateTiming(timings, "store_machine_ms", phaseStarted);
+    let ready: RemoteMachine;
+    try {
+      ready = await waitForCreatedMachineReady(options, agents, machine, timings);
+    } catch (err) {
+      if (err instanceof AgentRPCError) {
+        recordMachineCreateTiming(timings, "total_ms", totalStarted);
+        logMachineCreateTimings(body.name, timings, "timed out");
+        return reply.code(504).send({ id: err.code, message: err.message, machine: decorateTeam(publicMachine(machine), teams), timings });
+      }
+      throw err;
     }
-    throw err;
+    const readyPublic = publicMachine({ ...ready, org_id: ready.org_id || orgID || undefined });
+    phaseStarted = Date.now();
+    await warmMachinePreviewTLS(options, readyPublic);
+    recordMachineCreateTiming(timings, "preview_tls_warmup_ms", phaseStarted);
+    recordMachineCreateTiming(timings, "total_ms", totalStarted);
+    logMachineCreateTimings(body.name, timings);
+    return reply.code(201).send({ machine: decorateTeam(readyPublic, teams), status: provisioned.status || "created", timings });
+  } finally {
+    if (reservationID) await options.store.releaseMachineReservation(reservationID);
   }
-  const readyPublic = publicMachine({ ...ready, org_id: ready.org_id || orgID || undefined });
-  phaseStarted = Date.now();
-  await warmMachinePreviewTLS(options, readyPublic);
-  recordMachineCreateTiming(timings, "preview_tls_warmup_ms", phaseStarted);
-  recordMachineCreateTiming(timings, "total_ms", totalStarted);
-  logMachineCreateTimings(body.name, timings);
-  return reply.code(201).send({ machine: decorateTeam(readyPublic, teams), status: provisioned.status || "created", timings });
 }
 
 function recordMachineCreateTiming(timings: MachineCreateTimings, key: keyof MachineCreateTimings, startedAt: number): void {
@@ -1790,10 +1832,21 @@ async function ensureActiveTeam(
   let orgID = existingTeams?.[0]?.id || "";
   if (!orgID) {
     try {
-      const created = await api.createOrganization({
-        headers,
-        body: { name: defaultTeamName(user), slug: defaultTeamSlug(user) },
-      });
+      let reservationID = "";
+      if (options.maxTeamsPerUser) {
+        const reservation = await options.store.reserveTeamCreation(user.id, options.maxTeamsPerUser);
+        if (reservation.status !== "reserved") throw new Error("team creation limit reached");
+        reservationID = reservation.id;
+      }
+      let created;
+      try {
+        created = await api.createOrganization({
+          headers,
+          body: { name: defaultTeamName(user), slug: defaultTeamSlug(user) },
+        });
+      } finally {
+        if (reservationID) await options.store.releaseTeamCreationReservation(reservationID);
+      }
       orgID = created?.id || created?.organization?.id || "";
     } catch {
       // A concurrent request may have created the team; fall through to re-list.

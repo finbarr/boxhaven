@@ -174,7 +174,8 @@ Environment:
 - `BOXHAVEN_BACKEND_LISTEN`: listen address, default `127.0.0.1:8787`.
 - `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_DATABASE_PATH`.
 - `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
-- `BOXHAVEN_MAX_MACHINES_PER_USER`: per-user cap on concurrently existing boxes; `0` or unset means unlimited. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. The hosted control plane sets this; self-hosted deployments normally leave it unset.
+- `BOXHAVEN_MAX_TEAMS_PER_USER`: optional positive cap on teams a user owns; concurrent creates reserve capacity.
+- `BOXHAVEN_MAX_MACHINES_PER_USER`: optional positive cap on existing and provisioning boxes across all teams a user owns. When reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`; provider failures and successful destroys release capacity.
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
 - `DIGITALOCEAN_ACCESS_TOKEN`: DigitalOcean token; setting it enables the DigitalOcean provider.
 - `DIGITALOCEAN_REGION`: default `nyc3`.
@@ -191,6 +192,8 @@ Environment:
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event and reconciliation retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: full active-machine reconciliation interval, default `300000`.
+- `BOXHAVEN_MAX_TEAMS_PER_USER`: optional positive cap on teams a user owns. Pending creates reserve a slot so concurrent requests cannot exceed it.
+- `BOXHAVEN_MAX_MACHINES_PER_USER`: optional positive cap on existing and provisioning boxes owned by a user across all teams. Reservations are committed with machine state and released after failed creates or successful destroys.
 - `RESEND_API_KEY`: required Resend API key for password-account verification, password resets, and team invitations.
 - `BOXHAVEN_EMAIL_FROM`: From address for transactional email, default `BoxHaven <noreply@boxhaven.dev>`.
 - `BOXHAVEN_EMAIL_VERIFICATION_EXPIRES_SECONDS`: positive verification-link lifetime, default `3600` (one hour).

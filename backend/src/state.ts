@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
@@ -7,6 +8,9 @@ import { BackendState, MachineSizeShortcut, RemoteMachine, TeamImageRecord, stat
 
 type PayloadRow = { payload_json: string };
 type MetadataRow = { value: string };
+export type CapacityReservation =
+  | { status: "reserved"; id: string }
+  | { status: "conflict" | "limit_reached" };
 
 export class StateStore {
   readonly db: Database.Database;
@@ -77,6 +81,80 @@ export class StateStore {
     });
   }
 
+  async reserveMachineCapacity(userID: string, name: string, limit: number, now = new Date()): Promise<CapacityReservation> {
+    return this.enqueue(async () => {
+      await this.beforeMutation();
+      return this.db.transaction(() => {
+        const existing = this.db.prepare(
+          "SELECT 1 FROM core_machines WHERE user_id = ? AND name = ? UNION ALL SELECT 1 FROM core_machine_reservations WHERE user_id = ? AND name = ? LIMIT 1",
+        ).get(userID, name, userID, name);
+        if (existing) return { status: "conflict" } as const;
+        const machines = (this.db.prepare("SELECT COUNT(*) AS count FROM core_machines WHERE user_id = ?").get(userID) as { count: number }).count;
+        const reservations = (this.db.prepare("SELECT COUNT(*) AS count FROM core_machine_reservations WHERE user_id = ?").get(userID) as { count: number }).count;
+        if (machines + reservations >= limit) return { status: "limit_reached" } as const;
+        const id = randomUUID();
+        this.db.prepare(`
+          INSERT INTO core_machine_reservations (reservation_id, user_id, name, created_at)
+          VALUES (?, ?, ?, ?)
+        `).run(id, userID, name, now.toISOString());
+        this.touch();
+        return { status: "reserved", id } as const;
+      })();
+    });
+  }
+
+  async commitMachineReservation(
+    reservationID: string,
+    machine: RemoteMachine,
+    policyEvent?: MachineLifecycleEvent,
+  ): Promise<void> {
+    if (!machine.user_id) throw new Error("machine user_id is required");
+    await this.mutate(() => {
+      const reservation = this.db.prepare(`
+        SELECT user_id, name FROM core_machine_reservations WHERE reservation_id = ?
+      `).get(reservationID) as { user_id: string; name: string } | undefined;
+      if (!reservation || reservation.user_id !== machine.user_id || reservation.name !== machine.name) {
+        throw new Error("machine capacity reservation is missing or does not match");
+      }
+      this.writeMachine(machine);
+      this.db.prepare("DELETE FROM core_machine_reservations WHERE reservation_id = ?").run(reservationID);
+      if (policyEvent) this.writePolicyEvent(policyEvent, true);
+    });
+  }
+
+  async releaseMachineReservation(reservationID: string): Promise<void> {
+    await this.mutate(() => {
+      this.db.prepare("DELETE FROM core_machine_reservations WHERE reservation_id = ?").run(reservationID);
+    });
+  }
+
+  async reserveTeamCreation(userID: string, limit: number, now = new Date()): Promise<CapacityReservation> {
+    return this.enqueue(async () => {
+      await this.beforeMutation();
+      return this.db.transaction(() => {
+        const owned = (this.db.prepare(`
+          SELECT COUNT(*) AS count FROM member
+          WHERE userId = ? AND (',' || replace(lower(role), ' ', '') || ',') LIKE '%,owner,%'
+        `).get(userID) as { count: number }).count;
+        const reservations = (this.db.prepare("SELECT COUNT(*) AS count FROM core_team_creation_reservations WHERE user_id = ?").get(userID) as { count: number }).count;
+        if (owned + reservations >= limit) return { status: "limit_reached" } as const;
+        const id = randomUUID();
+        this.db.prepare(`
+          INSERT INTO core_team_creation_reservations (reservation_id, user_id, created_at)
+          VALUES (?, ?, ?)
+        `).run(id, userID, now.toISOString());
+        this.touch();
+        return { status: "reserved", id } as const;
+      })();
+    });
+  }
+
+  async releaseTeamCreationReservation(reservationID: string): Promise<void> {
+    await this.mutate(() => {
+      this.db.prepare("DELETE FROM core_team_creation_reservations WHERE reservation_id = ?").run(reservationID);
+    });
+  }
+
   async renameMachine(userID: string, fromName: string, machine: RemoteMachine): Promise<void> {
     if (!machine.user_id) throw new Error("machine user_id is required");
     if (machine.user_id !== userID) throw new Error("machine user_id does not match rename owner");
@@ -89,6 +167,7 @@ export class StateStore {
   async deleteMachine(userID: string, name: string, policyEvent?: MachineLifecycleEvent): Promise<void> {
     await this.mutate(() => {
       this.db.prepare("DELETE FROM core_machines WHERE user_id = ? AND name = ?").run(userID, name);
+      this.db.prepare("DELETE FROM core_machine_reservations WHERE user_id = ? AND name = ?").run(userID, name);
       if (policyEvent) this.writePolicyEvent(policyEvent, true);
     });
   }
@@ -289,6 +368,11 @@ export class StateStore {
 
   private migrate(): void {
     applyBackendMigrations(this.db, "core", coreMigrations);
+    // The deployment runs one control-plane process. Reservations only
+    // represent its live requests, so a fresh process clears crash leftovers
+    // before accepting traffic; provider sync then imports any machine whose
+    // create completed while the old process was exiting.
+    this.db.exec("DELETE FROM core_machine_reservations; DELETE FROM core_team_creation_reservations;");
     this.db.prepare("INSERT OR IGNORE INTO core_metadata (key, value) VALUES ('provider', ?)").run(this.provider);
   }
 }
@@ -341,6 +425,26 @@ const coreMigrations: BackendDatabaseMigration[] = [{
         PRIMARY KEY(org_id, name)
       );
       CREATE INDEX core_size_shortcuts_provider ON core_size_shortcuts(provider, plan);
+    `);
+  },
+}, {
+  version: 3,
+  migrate(database) {
+    database.exec(`
+      CREATE TABLE core_machine_reservations (
+        reservation_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(user_id, name)
+      );
+      CREATE INDEX core_machine_reservations_user ON core_machine_reservations(user_id, created_at);
+      CREATE TABLE core_team_creation_reservations (
+        reservation_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX core_team_creation_reservations_user ON core_team_creation_reservations(user_id, created_at);
     `);
   },
 }];
