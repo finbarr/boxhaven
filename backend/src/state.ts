@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
@@ -7,6 +8,15 @@ import { BackendState, MachineSizeShortcut, RemoteMachine, TeamImageRecord, stat
 
 type PayloadRow = { payload_json: string };
 type MetadataRow = { value: string };
+type MachineCreateReservationRow = {
+  operation_id: string;
+  org_id: string;
+  user_id: string;
+  name: string;
+  provider: string | null;
+  provider_name: string | null;
+  started_at: string;
+};
 
 export type TeamDeletionBlockers = {
   machines: number;
@@ -52,6 +62,7 @@ export class StateStore {
     this.db.pragma("busy_timeout = 5000");
     this.db.pragma("foreign_keys = ON");
     this.migrate();
+    this.recoverInterruptedMachineCreates();
   }
 
   close(): void {
@@ -72,7 +83,7 @@ export class StateStore {
       return this.db.transaction(() => {
         const generatedAt = this.reservePolicyTimestamp(now().toISOString());
         this.touch();
-        return { generatedAt, machines: this.listMachinesSync() };
+        return { generatedAt, machines: this.listMachinesSync().filter((machine) => !machine.create_state) };
       })();
     });
   }
@@ -103,6 +114,9 @@ export class StateStore {
     orgID: string;
     userID: string;
     name: string;
+    provider: string;
+    providerName: string;
+    machine: RemoteMachine;
   }): Promise<void> {
     await this.enqueue(async () => {
       await this.beforeMutation();
@@ -127,10 +141,41 @@ export class StateStore {
             "This account is being deleted and cannot create boxes.",
           );
         }
+        if (
+          input.machine.user_id !== input.userID
+          || input.machine.org_id !== input.orgID
+          || input.machine.name !== input.name
+          || input.machine.provider !== input.provider
+          || input.machine.provider_name !== input.providerName
+          || input.machine.create_operation_id !== input.operationID
+          || input.machine.create_state !== "provisioning"
+        ) {
+          throw new Error("machine create reservation does not match its durable provisioning record");
+        }
+        const startedAt = new Date().toISOString();
         this.db.prepare(`
-          INSERT INTO core_machine_creates (operation_id, org_id, user_id, name, started_at)
+          INSERT INTO core_machine_creates (
+            operation_id, org_id, user_id, name, provider, provider_name, started_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          input.operationID,
+          input.orgID,
+          input.userID,
+          input.name,
+          input.provider,
+          input.providerName,
+          startedAt,
+        );
+        this.db.prepare(`
+          INSERT INTO core_machines (user_id, name, org_id, provider, payload_json)
           VALUES (?, ?, ?, ?, ?)
-        `).run(input.operationID, input.orgID, input.userID, input.name, new Date().toISOString());
+        `).run(
+          input.userID,
+          input.name,
+          input.orgID,
+          input.provider,
+          JSON.stringify(input.machine),
+        );
         this.touch();
       })();
     });
@@ -138,6 +183,11 @@ export class StateStore {
 
   async releaseMachineCreate(operationID: string): Promise<void> {
     await this.mutate(() => {
+      const reservation = this.db.prepare(`
+        SELECT operation_id, org_id, user_id, name, provider, provider_name, started_at
+        FROM core_machine_creates WHERE operation_id = ?
+      `).get(operationID) as MachineCreateReservationRow | undefined;
+      if (reservation) this.markMachineCreateRecoveryRequired(reservation);
       this.db.prepare("DELETE FROM core_machine_creates WHERE operation_id = ?").run(operationID);
     });
   }
@@ -182,7 +232,33 @@ export class StateStore {
         UPDATE core_team_deletions SET state = 'deleted', updated_at = ?
         WHERE org_id = ? AND operation_id = ? AND state = 'deleting'
       `).run(new Date().toISOString(), orgID, operationID);
-      if (updated.changes !== 1) throw new Error("team deletion guard was lost before completion");
+      if (updated.changes === 1) return;
+      const existing = this.db.prepare(`
+        SELECT state FROM core_team_deletions WHERE org_id = ? AND operation_id = ?
+      `).get(orgID, operationID) as { state: "deleting" | "deleted" } | undefined;
+      if (existing?.state !== "deleted") throw new Error("team deletion guard was lost before completion");
+    });
+  }
+
+  async repairCompletedTeamDeletion(input: {
+    orgID: string;
+    operationID: string;
+    actorUserID: string;
+    actorEmail: string;
+  }): Promise<void> {
+    await this.mutate(() => {
+      const now = new Date().toISOString();
+      this.db.prepare(`
+        INSERT INTO core_team_deletions (
+          org_id, operation_id, state, actor_user_id, actor_email, started_at, updated_at
+        ) VALUES (?, ?, 'deleted', ?, ?, ?, ?)
+        ON CONFLICT(org_id) DO UPDATE SET
+          operation_id = excluded.operation_id,
+          state = 'deleted',
+          actor_user_id = excluded.actor_user_id,
+          actor_email = excluded.actor_email,
+          updated_at = excluded.updated_at
+      `).run(input.orgID, input.operationID, input.actorUserID, input.actorEmail, now, now);
     });
   }
 
@@ -521,6 +597,56 @@ export class StateStore {
     applyBackendMigrations(this.db, "core", coreMigrations);
     this.db.prepare("INSERT OR IGNORE INTO core_metadata (key, value) VALUES ('provider', ?)").run(this.provider);
   }
+
+  // Create and capacity reservations are owned by one backend process and are
+  // cleared on startup. The paired machine row is durable: it is either already
+  // the successfully persisted provider machine or becomes recovery-required,
+  // so a crash cannot permanently retain a reservation or reopen deletion.
+  private recoverInterruptedMachineCreates(): void {
+    this.db.transaction(() => {
+      const reservations = this.db.prepare(`
+        SELECT operation_id, org_id, user_id, name, provider, provider_name, started_at
+        FROM core_machine_creates ORDER BY started_at, operation_id
+      `).all() as MachineCreateReservationRow[];
+      for (const reservation of reservations) this.markMachineCreateRecoveryRequired(reservation, true);
+      if (reservations.length > 0) {
+        this.db.prepare("DELETE FROM core_machine_creates").run();
+        this.touch();
+      }
+    })();
+  }
+
+  private markMachineCreateRecoveryRequired(reservation: MachineCreateReservationRow, createIfMissing = false): void {
+    const row = this.db.prepare(`
+      SELECT payload_json FROM core_machines WHERE user_id = ? AND name = ?
+    `).get(reservation.user_id, reservation.name) as PayloadRow | undefined;
+    if (!row) {
+      if (!createIfMissing) return;
+      const recovered: RemoteMachine = {
+        name: reservation.name,
+        user_id: reservation.user_id,
+        org_id: reservation.org_id,
+        provider: reservation.provider || this.provider,
+        provider_name: reservation.provider_name || providerMachineNameForRecovery(reservation.user_id, reservation.name),
+        create_state: "recovery_required",
+        created_at: reservation.started_at,
+        updated_at: new Date().toISOString(),
+      };
+      this.db.prepare(`
+        INSERT INTO core_machines (user_id, name, org_id, provider, payload_json)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(recovered.user_id, recovered.name, recovered.org_id, recovered.provider, JSON.stringify(recovered));
+      return;
+    }
+    const machine = parsePayload<RemoteMachine>(row.payload_json, "machine");
+    if (machine.create_operation_id !== reservation.operation_id) return;
+    delete machine.create_operation_id;
+    machine.create_state = "recovery_required";
+    machine.updated_at = new Date().toISOString();
+    this.db.prepare(`
+      UPDATE core_machines SET payload_json = ? WHERE user_id = ? AND name = ?
+    `).run(JSON.stringify(machine), reservation.user_id, reservation.name);
+  }
 }
 
 const coreMigrations: BackendDatabaseMigration[] = [{
@@ -626,6 +752,14 @@ const coreMigrations: BackendDatabaseMigration[] = [{
       CREATE INDEX core_deletion_audit_target ON core_deletion_audit(target_id, occurred_at DESC);
     `);
   },
+}, {
+  version: 4,
+  migrate(database) {
+    database.exec(`
+      ALTER TABLE core_machine_creates ADD COLUMN provider TEXT;
+      ALTER TABLE core_machine_creates ADD COLUMN provider_name TEXT;
+    `);
+  },
 }];
 
 function parsePayload<T>(value: string, label: string): T {
@@ -644,6 +778,15 @@ function normalizedTimestamp(value: string): string {
 
 function machineKey(userID: string, name: string): string {
   return `${userID}:${name}`;
+}
+
+// Keep this deterministic fallback aligned with the provider resource naming
+// used by the server. It recovers reservations written by core migration v3,
+// before provider identity was persisted in the reservation row.
+function providerMachineNameForRecovery(userID: string, machineName: string): string {
+  const hash = createHash("sha256").update(userID).digest("hex").slice(0, 10);
+  const base = machineName.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "") || "machine";
+  return `${base.slice(0, 52)}-${hash}`;
 }
 
 function imageKey(image: TeamImageRecord): string {

@@ -470,12 +470,35 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       body.hourly_price_cents = decision.hourly_price_cents;
     }
     const createOperationID = randomUUID();
+    body.provider_name = providerMachineName(auth.userID, body.name);
+    const provisioningMachine = normalizeMachine(options, {
+      name: body.name,
+      user_id: auth.userID,
+      org_id: orgID,
+      org_name: team?.name,
+      org_slug: team?.slug,
+      provider: provider.name,
+      provider_name: body.provider_name,
+      size: body.provider_size,
+      size_shortcut: body.size || "small",
+      provider_hourly_price: body.provider_hourly_price,
+      ...(body.hourly_price_cents !== undefined ? { hourly_price_cents: body.hourly_price_cents } : {}),
+      source_path: body.source_path,
+      repo_url: body.repo_url,
+      branch: body.branch,
+      ssh_user: body.ssh_user || defaultSSHUser,
+      create_state: "provisioning",
+      create_operation_id: createOperationID,
+    });
     try {
       await options.store.reserveMachineCreate({
         operationID: createOperationID,
         orgID,
         userID: auth.userID,
         name: body.name,
+        provider: provider.name,
+        providerName: body.provider_name,
+        machine: provisioningMachine,
       });
     } catch (reservationError) {
       if (reservationError instanceof DeletionGuardError) {
@@ -485,7 +508,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       throw reservationError;
     }
     try {
-      return await createMachine(options, agents, auth, provider, body, orgID, auth.teams, commercialPolicy, policyDelivery, reply);
+      return await createMachine(options, agents, auth, provider, body, createOperationID, orgID, auth.teams, commercialPolicy, policyDelivery, reply);
     } finally {
       await options.store.releaseMachineCreate(createOperationID);
     }
@@ -971,6 +994,39 @@ async function deleteTeam(
     await audit("succeeded", "Deleted team after machine and module deletion checks passed");
     return reply.code(200).send({ deleted: true, team: { id: team.id, name: team.name, slug: team.slug } });
   } catch (error) {
+    let organizationStillExists: boolean | undefined;
+    try {
+      organizationStillExists = Boolean(options.store.db.prepare(
+        "SELECT 1 FROM organization WHERE id = ?",
+      ).get(orgID));
+    } catch (existenceError) {
+      console.error(`could not verify team ${orgID} after deletion failure: ${safeErrorMessage(existenceError)}`);
+    }
+    if (organizationStillExists === false) {
+      // Better Auth committed. Never reopen creates by canceling the guard;
+      // make completion idempotent and repair the durable deleted tombstone.
+      await options.store.repairCompletedTeamDeletion({
+        orgID,
+        operationID,
+        actorUserID: context.auth.userID,
+        actorEmail: context.auth.email,
+      });
+      await audit("succeeded", `Deleted team; repaired completion after Better Auth committed: ${safeErrorMessage(error)}`);
+      return reply.code(200).send({
+        deleted: true,
+        recovered: true,
+        team: { id: team.id, name: team.name, slug: team.slug },
+      });
+    }
+    if (organizationStillExists === undefined) {
+      // The organization may already be gone. Preserve the deleting guard when
+      // commit state cannot be proven, rather than risking orphaned resources.
+      await audit("failed", `Could not verify Better Auth organization deletion: ${safeErrorMessage(error)}`);
+      return reply.code(500).send({
+        id: "team_deletion_verification_failed",
+        message: "Team deletion could not be verified. Box creation remains blocked; contact your operator before retrying.",
+      });
+    }
     const racedBlockers = await options.store.teamDeletionBlockers(orgID);
     await options.store.cancelTeamDeletion(orgID, operationID);
     if (racedBlockers.machines > 0 || racedBlockers.provisioning > 0 || racedBlockers.policies.length > 0) {
@@ -1065,6 +1121,7 @@ async function createMachine(
   auth: AuthContext,
   provider: MachineProvider,
   body: CreateMachineRequest,
+  createOperationID: string,
   orgID: string,
   teams: TeamInfo[],
   commercialPolicy: CommercialPolicy,
@@ -1074,7 +1131,7 @@ async function createMachine(
   const timings: MachineCreateTimings = {};
   const totalStarted = Date.now();
 
-  body.provider_name = providerMachineName(auth.userID, body.name);
+  body.provider_name = body.provider_name || providerMachineName(auth.userID, body.name);
   const agentBackendURL = (options.apiPublicURL || "").trim().replace(/\/+$/, "");
   if (!agentBackendURL) {
     throw new Error("backend public API URL is required to provision remote machine agent credentials");
@@ -1092,7 +1149,7 @@ async function createMachine(
   await syncProviderMachines(options, auth);
   recordMachineCreateTiming(timings, "provider_sync_ms", phaseStarted);
   const existing = await options.store.getMachine(auth.userID, body.name);
-  if (existing) {
+  if (existing && existing.create_operation_id !== createOperationID) {
     return reply.code(409).send(machineNameConflict(body.name));
   }
 
@@ -1205,7 +1262,7 @@ async function syncProviderMachines(options: BackendOptions, auth: AuthContext):
         continue;
       }
       const name = existing?.name || item.machine.name;
-      const machine = normalizeMachine(options, {
+      const machineInput: RemoteMachine = {
         ...existing,
         ...item.machine,
         name,
@@ -1213,7 +1270,12 @@ async function syncProviderMachines(options: BackendOptions, auth: AuthContext):
         org_id: existing?.org_id || auth.orgID,
         org_name: existing?.org_name || auth.teams.find((team) => team.id === (existing?.org_id || auth.orgID))?.name,
         org_slug: existing?.org_slug || auth.teams.find((team) => team.id === (existing?.org_id || auth.orgID))?.slug,
-      });
+      };
+      // Provider discovery proves the durable placeholder represents a real
+      // machine; it no longer belongs to a process-local create reservation.
+      delete machineInput.create_operation_id;
+      delete machineInput.create_state;
+      const machine = normalizeMachine(options, machineInput);
       await options.store.putMachine(machine);
       const index = known.findIndex((knownMachine) => knownMachine.name === machine.name);
       if (index === -1) known.push(machine);
@@ -1301,6 +1363,8 @@ function publicMachine(machine: RemoteMachine): RemoteMachine {
   delete safe.agent_token_hash;
   delete safe.org_name;
   delete safe.org_slug;
+  delete safe.create_operation_id;
+  delete safe.create_state;
   for (const key of Object.keys(safe)) {
     if (key.startsWith("ssh_") && key.endsWith("_key")) delete safe[key];
   }

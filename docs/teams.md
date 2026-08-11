@@ -89,6 +89,9 @@ still recorded in that team, including a box whose create or bootstrap failed,
 or while a box creation is in progress. Destroy every box, wait for in-progress
 creates to finish, and then retry from the console. A destroyed box is terminal
 because provider cleanup completed and its core record was removed.
+If the backend restarts during a create, BoxHaven clears the stale in-progress
+reservation but keeps a recovery box record. Destroy that record explicitly;
+it will not leave team or account deletion blocked by an invisible reservation.
 
 Distributions may add another deletion policy through a backend module. For
 example, a hosted deployment can require its external account to be inactive

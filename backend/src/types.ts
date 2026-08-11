@@ -32,6 +32,10 @@ export type RemoteMachine = {
   agent_token_hash?: string;
   agent_last_seen_at?: string;
   ssh_principal?: string;
+  /** Internal durable marker for a create whose provider outcome needs recovery. */
+  create_state?: "provisioning" | "recovery_required";
+  /** Internal process-owned reservation paired with a provisioning record. */
+  create_operation_id?: string;
 };
 
 export type CreateMachineRequest = {

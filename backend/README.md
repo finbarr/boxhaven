@@ -309,6 +309,13 @@ Direct `POST /v1/auth/organization/delete` requests are intercepted by the
 same guarded workflow for older clients; Better Auth organization deletion is
 never exposed as an unchecked operation.
 
+Box creation reservations are process-owned, but each is paired atomically
+with a durable provisioning record. Startup clears stale reservations and
+retains those records for explicit provider cleanup, so team and account
+deletion cannot remain blocked by an invisible reservation or reopen after a
+crash. Provisioning recovery records are excluded from commercial-policy
+reconciliation until provider discovery confirms the machine.
+
 Roles are `owner`, `admin`, and `member`. Invite links take the form
 `<app_url>/invite?id=<invitation-id>` and are accepted by the signed-in user
 whose email matches the invitation. When `RESEND_API_KEY` is set the backend

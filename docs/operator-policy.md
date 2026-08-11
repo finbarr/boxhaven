@@ -51,14 +51,20 @@ only the team and requesting actor; the decision is an allow flag and optional
 actionable message. The core has no knowledge of why a module blocks deletion.
 
 Team deletion always fails closed while a core box or provisioning reservation
-exists. Modules whose external state can change concurrently also maintain a
-row in the generic `core_team_deletion_policy_blockers` table in the same
-transaction as that state. The core checks those rows before deletion and a
-SQLite trigger checks them again inside Better Auth's organization-delete
-transaction. This prevents a late external-state transition from racing a
-successful delete. Do not put provider-specific credentials or payloads in the
-blocker row; its message is user-facing and retained only until the blocker is
-cleared.
+exists. Each process-owned provisioning reservation is paired atomically with a
+durable machine record. After a restart, core clears the stale reservation and
+marks that record as requiring recovery; the record continues to block team and
+account deletion until the box is explicitly destroyed. Recovery records are
+not provider-confirmed lifecycle facts and are excluded from commercial-policy
+reconciliation, so a crash cannot activate billing by itself.
+
+Modules whose external state can change concurrently also maintain a row in the
+generic `core_team_deletion_policy_blockers` table in the same transaction as
+that state. The core checks those rows before deletion and a SQLite trigger
+checks them again inside Better Auth's organization-delete transaction. This
+prevents a late external-state transition from racing a successful delete. Do
+not put provider-specific credentials or payloads in the blocker row; its
+message is user-facing and retained only until the blocker is cleared.
 
 ## Building A Distribution
 
