@@ -22,6 +22,22 @@ export type BackendRequest = {
   headers: Record<string, string | string[] | undefined>;
 };
 
+export type TeamDeletionPolicyInput = {
+  team: BackendTeam;
+  actor: { id: string; email: string };
+};
+
+export type TeamDeletionPolicyDecision = {
+  allowed: boolean;
+  message?: string;
+};
+
+// Distribution-specific state (for example, an external account lifecycle)
+// can veto team deletion without leaking that state into the open core.
+export interface TeamDeletionPolicy {
+  checkTeamDeletion(input: TeamDeletionPolicyInput): Promise<TeamDeletionPolicyDecision>;
+}
+
 export type BackendReply = {
   code(statusCode: number): { send(payload: unknown): unknown };
 };
@@ -41,6 +57,7 @@ export type BackendModuleContext = {
 
 export type BackendModuleRuntime = {
   commercialPolicy?: CommercialPolicy;
+  teamDeletionPolicy?: TeamDeletionPolicy;
   registerRoutes?(app: FastifyInstance, context: BackendModuleContext): void | Promise<void>;
   close?(): void | Promise<void>;
 };

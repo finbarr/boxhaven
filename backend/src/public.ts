@@ -8,6 +8,9 @@ export type {
   BackendRequest,
   BackendTeam,
   BackendUserContext,
+  TeamDeletionPolicy,
+  TeamDeletionPolicyDecision,
+  TeamDeletionPolicyInput,
 } from "./module.js";
 export type {
   AccountState,

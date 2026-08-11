@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { AddressInfo } from "node:net";
 import { test } from "node:test";
@@ -1038,6 +1038,132 @@ test("backend creates a default team automatically and scopes boxes to teams", a
 
   const listed = await app.inject({ method: "GET", url: "/v1/machines", headers });
   assert.equal(listed.json().machines[0].team_slug, whoami.json().team.slug);
+});
+
+test("team deletion is owner-only, audited, and blocks active and failed boxes until destruction", async () => {
+  const { app, store, token } = await createTestBackend("delete-owner@example.com");
+  const ownerHeaders = { authorization: `Bearer ${token}` };
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers: ownerHeaders });
+  const team = whoami.json().team as { id: string; name: string };
+
+  const memberToken = await signUp(app, "delete-member@example.com");
+  const memberHeaders = { authorization: `Bearer ${memberToken}` };
+  const memberSession = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers: memberHeaders });
+  store.db.prepare(`
+    INSERT INTO member (id, organizationId, userId, role, createdAt)
+    VALUES (?, ?, ?, 'member', ?)
+  `).run(randomUUID(), team.id, memberSession.json().user.id, Date.now());
+
+  const unauthorized = await app.inject({ method: "DELETE", url: `/v1/teams/${team.id}`, headers: memberHeaders });
+  assert.equal(unauthorized.statusCode, 403, unauthorized.body);
+  assert.match(unauthorized.json().message, /Only team owners/);
+
+  const active = await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "active-box" } });
+  assert.equal(active.statusCode, 201, active.body);
+  const activeBlocked = await app.inject({ method: "DELETE", url: `/v1/teams/${team.id}`, headers: ownerHeaders });
+  assert.equal(activeBlocked.statusCode, 409, activeBlocked.body);
+  assert.match(activeBlocked.json().message, /Destroy the box/);
+
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/machines/active-box", headers: ownerHeaders })).statusCode, 204);
+  await store.putMachine({
+    name: "failed-box",
+    user_id: whoami.json().user.id,
+    org_id: team.id,
+    provider: "fake",
+    provider_name: "failed-box-provider",
+    ...({ status: "failed" } as Record<string, unknown>),
+  });
+  const failedBlocked = await app.inject({
+    method: "POST",
+    url: "/v1/auth/organization/delete",
+    headers: ownerHeaders,
+    payload: { organizationId: team.id },
+  });
+  assert.equal(failedBlocked.statusCode, 409, failedBlocked.body);
+  assert.match(failedBlocked.json().message, /Failed boxes still require explicit destruction/);
+
+  // Destroyed is the only terminal core state: destruction removes the row.
+  await store.deleteMachine(whoami.json().user.id, "failed-box");
+  const deleted = await app.inject({ method: "DELETE", url: `/v1/teams/${team.id}`, headers: ownerHeaders });
+  assert.equal(deleted.statusCode, 200, deleted.body);
+  assert.equal(deleted.json().deleted, true);
+  const organizations = await app.inject({ method: "GET", url: "/v1/auth/organization/list", headers: ownerHeaders });
+  assert.equal((organizations.json() as Array<{ id: string }>).some((organization) => organization.id === team.id), false);
+
+  const audit = await store.listDeletionAudit();
+  assert.deepEqual(audit.map((entry) => entry.outcome), ["denied", "denied", "denied", "succeeded"]);
+  assert.deepEqual(new Set(audit.map((entry) => entry.actor_email)), new Set(["delete-member@example.com", "delete-owner@example.com"]));
+  await app.close();
+});
+
+test("team deletion and box creation serialize through durable provisioning reservations", async () => {
+  const { app, provider, store, token } = await createTestBackend("provision-race@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  const teamID = whoami.json().team.id as string;
+  const originalCreate = provider.createMachine.bind(provider);
+  let releaseProvider!: () => void;
+  const providerGate = new Promise<void>((resolve) => { releaseProvider = resolve; });
+  provider.createMachine = async (request) => {
+    await providerGate;
+    return originalCreate(request);
+  };
+
+  const creating = app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "racing-box" } });
+  await waitFor(() => (store.db.prepare(
+    "SELECT COUNT(*) AS count FROM core_machine_creates WHERE org_id = ?",
+  ).get(teamID) as { count: number }).count === 1);
+  const deleting = await app.inject({ method: "DELETE", url: `/v1/teams/${teamID}`, headers });
+  assert.equal(deleting.statusCode, 409, deleting.body);
+  assert.match(deleting.json().message, /box creation.*finish/);
+  releaseProvider();
+  const created = await creating;
+  assert.equal(created.statusCode, 201, created.body);
+  assert.equal((store.db.prepare("SELECT COUNT(*) AS count FROM core_machine_creates").get() as { count: number }).count, 0);
+  await app.close();
+});
+
+test("a deletion guard rejects concurrent creates and a late module blocker aborts Better Auth deletion", async () => {
+  let releasePolicy!: () => void;
+  let policyStarted!: () => void;
+  const policyGate = new Promise<void>((resolve) => { releasePolicy = resolve; });
+  const started = new Promise<void>((resolve) => { policyStarted = resolve; });
+  const module: BackendModule = {
+    name: "deletion_race",
+    migrations: [],
+    start() {
+      return {
+        teamDeletionPolicy: {
+          async checkTeamDeletion() {
+            policyStarted();
+            await policyGate;
+            return { allowed: true };
+          },
+        },
+      };
+    },
+  };
+  const { app, provider, store, token } = await createTestBackend("delete-race@example.com", "password123", { modules: [module] });
+  const headers = { authorization: `Bearer ${token}` };
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  const teamID = whoami.json().team.id as string;
+
+  const deleting = app.inject({ method: "DELETE", url: `/v1/teams/${teamID}`, headers });
+  await started;
+  const create = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "too-late" } });
+  assert.equal(create.statusCode, 409, create.body);
+  assert.equal(create.json().id, "team_deleting");
+  assert.equal(provider.created.length, 0);
+
+  await store.setTeamDeletionPolicyBlocker(teamID, "test-policy", "Resolve the newly active external account before deleting this team.");
+  releasePolicy();
+  const blocked = await deleting;
+  assert.equal(blocked.statusCode, 409, blocked.body);
+  assert.match(blocked.json().message, /newly active external account/);
+  const organization = store.db.prepare("SELECT id FROM organization WHERE id = ?").get(teamID);
+  assert.ok(organization, "the Better Auth deletion transaction must roll back");
+  assert.equal(store.db.prepare("SELECT state FROM core_team_deletions WHERE org_id = ?").get(teamID), undefined);
+  await app.close();
 });
 
 test("backend enforces the per-user machine limit", async () => {

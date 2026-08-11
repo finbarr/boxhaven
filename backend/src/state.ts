@@ -8,6 +8,35 @@ import { BackendState, MachineSizeShortcut, RemoteMachine, TeamImageRecord, stat
 type PayloadRow = { payload_json: string };
 type MetadataRow = { value: string };
 
+export type TeamDeletionBlockers = {
+  machines: number;
+  provisioning: number;
+  policies: Array<{ policy: string; message: string }>;
+  deletionState?: "deleting" | "deleted";
+};
+
+export type DeletionAuditRecord = {
+  id: number;
+  occurred_at: string;
+  action: "team.delete";
+  actor_user_id: string;
+  actor_email: string;
+  target_id: string;
+  target_name: string;
+  outcome: "succeeded" | "denied" | "failed";
+  detail: string;
+};
+
+export class DeletionGuardError extends Error {
+  constructor(
+    readonly code: "team_deleting" | "user_deleting",
+    message: string,
+  ) {
+    super(message);
+    this.name = "DeletionGuardError";
+  }
+}
+
 export class StateStore {
   readonly db: Database.Database;
   private pendingUpdate: Promise<void> = Promise.resolve();
@@ -67,6 +96,161 @@ export class StateStore {
       "SELECT payload_json FROM core_machines WHERE user_id = ? AND name = ?",
     ).get(userID, name) as PayloadRow | undefined;
     return row ? parsePayload<RemoteMachine>(row.payload_json, "machine") : undefined;
+  }
+
+  async reserveMachineCreate(input: {
+    operationID: string;
+    orgID: string;
+    userID: string;
+    name: string;
+  }): Promise<void> {
+    await this.enqueue(async () => {
+      await this.beforeMutation();
+      this.db.transaction(() => {
+        const teamDeletion = this.db.prepare(
+          "SELECT state FROM core_team_deletions WHERE org_id = ?",
+        ).get(input.orgID) as { state: "deleting" | "deleted" } | undefined;
+        if (teamDeletion) {
+          throw new DeletionGuardError(
+            "team_deleting",
+            teamDeletion.state === "deleted"
+              ? "This team has been deleted. Choose another team before creating a box."
+              : "This team is being deleted. Wait for deletion to finish or choose another team.",
+          );
+        }
+        const userDeletion = this.db.prepare(
+          "SELECT state FROM core_user_deletions WHERE user_id = ?",
+        ).get(input.userID) as { state: "deleting" | "deleted" } | undefined;
+        if (userDeletion) {
+          throw new DeletionGuardError(
+            "user_deleting",
+            "This account is being deleted and cannot create boxes.",
+          );
+        }
+        this.db.prepare(`
+          INSERT INTO core_machine_creates (operation_id, org_id, user_id, name, started_at)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(input.operationID, input.orgID, input.userID, input.name, new Date().toISOString());
+        this.touch();
+      })();
+    });
+  }
+
+  async releaseMachineCreate(operationID: string): Promise<void> {
+    await this.mutate(() => {
+      this.db.prepare("DELETE FROM core_machine_creates WHERE operation_id = ?").run(operationID);
+    });
+  }
+
+  async beginTeamDeletion(input: {
+    operationID: string;
+    orgID: string;
+    actorUserID: string;
+    actorEmail: string;
+  }): Promise<TeamDeletionBlockers> {
+    return this.enqueue(async () => {
+      await this.beforeMutation();
+      return this.db.transaction(() => {
+        const blockers = this.teamDeletionBlockersSync(input.orgID);
+        if (blockers.machines > 0 || blockers.provisioning > 0 || blockers.policies.length > 0 || blockers.deletionState) {
+          return blockers;
+        }
+        const now = new Date().toISOString();
+        this.db.prepare(`
+          INSERT INTO core_team_deletions (
+            org_id, operation_id, state, actor_user_id, actor_email, started_at, updated_at
+          ) VALUES (?, ?, 'deleting', ?, ?, ?, ?)
+        `).run(input.orgID, input.operationID, input.actorUserID, input.actorEmail, now, now);
+        this.touch();
+        return blockers;
+      })();
+    });
+  }
+
+  async cancelTeamDeletion(orgID: string, operationID: string): Promise<void> {
+    await this.mutate(() => {
+      this.db.prepare(`
+        DELETE FROM core_team_deletions
+        WHERE org_id = ? AND operation_id = ? AND state = 'deleting'
+      `).run(orgID, operationID);
+    });
+  }
+
+  async completeTeamDeletion(orgID: string, operationID: string): Promise<void> {
+    await this.mutate(() => {
+      const updated = this.db.prepare(`
+        UPDATE core_team_deletions SET state = 'deleted', updated_at = ?
+        WHERE org_id = ? AND operation_id = ? AND state = 'deleting'
+      `).run(new Date().toISOString(), orgID, operationID);
+      if (updated.changes !== 1) throw new Error("team deletion guard was lost before completion");
+    });
+  }
+
+  async teamDeletionBlockers(orgID: string): Promise<TeamDeletionBlockers> {
+    return this.teamDeletionBlockersSync(orgID);
+  }
+
+  async setTeamDeletionPolicyBlocker(orgID: string, policy: string, message?: string): Promise<void> {
+    await this.mutate(() => {
+      if (!message) {
+        this.db.prepare(`
+          DELETE FROM core_team_deletion_policy_blockers WHERE org_id = ? AND policy = ?
+        `).run(orgID, policy);
+        return;
+      }
+      this.db.prepare(`
+        INSERT INTO core_team_deletion_policy_blockers (org_id, policy, message, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(org_id, policy) DO UPDATE SET
+          message = excluded.message,
+          updated_at = excluded.updated_at
+      `).run(orgID, policy, message.slice(0, 500), new Date().toISOString());
+    });
+  }
+
+  async recordDeletionAudit(input: Omit<DeletionAuditRecord, "id" | "occurred_at">): Promise<void> {
+    await this.mutate(() => {
+      this.db.prepare(`
+        INSERT INTO core_deletion_audit (
+          occurred_at, action, actor_user_id, actor_email,
+          target_id, target_name, outcome, detail
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        new Date().toISOString(),
+        input.action,
+        input.actor_user_id,
+        input.actor_email,
+        input.target_id,
+        input.target_name,
+        input.outcome,
+        input.detail.slice(0, 500),
+      );
+    });
+  }
+
+  async listDeletionAudit(): Promise<DeletionAuditRecord[]> {
+    return this.db.prepare(`
+      SELECT id, occurred_at, action, actor_user_id, actor_email,
+        target_id, target_name, outcome, detail
+      FROM core_deletion_audit ORDER BY id
+    `).all() as DeletionAuditRecord[];
+  }
+
+  // Better Auth deletes organizations in its own transaction/connection. This
+  // trigger is the final race barrier after auth migrations have created the
+  // organization table; a late machine reservation or module blocker aborts
+  // that whole Better Auth transaction, including member deletion.
+  ensureOrganizationDeletionSafety(): void {
+    this.db.exec(`
+      CREATE TRIGGER IF NOT EXISTS core_safe_organization_delete
+      BEFORE DELETE ON organization
+      WHEN EXISTS (SELECT 1 FROM core_machines WHERE org_id = OLD.id)
+        OR EXISTS (SELECT 1 FROM core_machine_creates WHERE org_id = OLD.id)
+        OR EXISTS (SELECT 1 FROM core_team_deletion_policy_blockers WHERE org_id = OLD.id)
+      BEGIN
+        SELECT RAISE(ABORT, 'BOXHAVEN_TEAM_DELETION_BLOCKED');
+      END;
+    `);
   }
 
   async putMachine(machine: RemoteMachine, policyEvent?: MachineLifecycleEvent): Promise<void> {
@@ -195,6 +379,19 @@ export class StateStore {
   private writeMachine(machine: RemoteMachine): void {
     const userID = machine.user_id;
     if (!userID) throw new Error("machine user_id is required");
+    if (machine.org_id) {
+      const deletion = this.db.prepare(
+        "SELECT state FROM core_team_deletions WHERE org_id = ?",
+      ).get(machine.org_id) as { state: "deleting" | "deleted" } | undefined;
+      if (deletion) {
+        throw new DeletionGuardError(
+          "team_deleting",
+          deletion.state === "deleted"
+            ? "This team has been deleted."
+            : "This team is being deleted.",
+        );
+      }
+    }
     this.db.prepare(`
       INSERT INTO core_machines (user_id, name, org_id, provider, payload_json)
       VALUES (?, ?, ?, ?, ?)
@@ -271,6 +468,28 @@ export class StateStore {
     return this.payloads<RemoteMachine>("SELECT payload_json FROM core_machines ORDER BY rowid");
   }
 
+  private teamDeletionBlockersSync(orgID: string): TeamDeletionBlockers {
+    const machines = (this.db.prepare(
+      "SELECT COUNT(*) AS count FROM core_machines WHERE org_id = ?",
+    ).get(orgID) as { count: number }).count;
+    const provisioning = (this.db.prepare(
+      "SELECT COUNT(*) AS count FROM core_machine_creates WHERE org_id = ?",
+    ).get(orgID) as { count: number }).count;
+    const policies = this.db.prepare(`
+      SELECT policy, message FROM core_team_deletion_policy_blockers
+      WHERE org_id = ? ORDER BY policy
+    `).all(orgID) as Array<{ policy: string; message: string }>;
+    const deletion = this.db.prepare(
+      "SELECT state FROM core_team_deletions WHERE org_id = ?",
+    ).get(orgID) as { state: "deleting" | "deleted" } | undefined;
+    return {
+      machines,
+      provisioning,
+      policies,
+      ...(deletion ? { deletionState: deletion.state } : {}),
+    };
+  }
+
   private snapshot(): BackendState {
     return {
       version: stateVersion,
@@ -341,6 +560,59 @@ const coreMigrations: BackendDatabaseMigration[] = [{
         PRIMARY KEY(org_id, name)
       );
       CREATE INDEX core_size_shortcuts_provider ON core_size_shortcuts(provider, plan);
+    `);
+  },
+}, {
+  version: 3,
+  migrate(database) {
+    database.exec(`
+      CREATE TABLE core_machine_creates (
+        operation_id TEXT PRIMARY KEY,
+        org_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        UNIQUE(user_id, name)
+      );
+      CREATE INDEX core_machine_creates_org ON core_machine_creates(org_id);
+      CREATE INDEX core_machine_creates_user ON core_machine_creates(user_id);
+      CREATE TABLE core_team_deletions (
+        org_id TEXT PRIMARY KEY,
+        operation_id TEXT NOT NULL UNIQUE,
+        state TEXT NOT NULL CHECK(state IN ('deleting', 'deleted')),
+        actor_user_id TEXT NOT NULL,
+        actor_email TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE core_user_deletions (
+        user_id TEXT PRIMARY KEY,
+        operation_id TEXT NOT NULL UNIQUE,
+        state TEXT NOT NULL CHECK(state IN ('deleting', 'deleted')),
+        actor_user_id TEXT NOT NULL,
+        actor_email TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE core_team_deletion_policy_blockers (
+        org_id TEXT NOT NULL,
+        policy TEXT NOT NULL,
+        message TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(org_id, policy)
+      );
+      CREATE TABLE core_deletion_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        occurred_at TEXT NOT NULL,
+        action TEXT NOT NULL CHECK(action IN ('team.delete')),
+        actor_user_id TEXT NOT NULL,
+        actor_email TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        target_name TEXT NOT NULL,
+        outcome TEXT NOT NULL CHECK(outcome IN ('succeeded', 'denied', 'failed')),
+        detail TEXT NOT NULL
+      );
+      CREATE INDEX core_deletion_audit_target ON core_deletion_audit(target_id, occurred_at DESC);
     `);
   },
 }];
