@@ -346,6 +346,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
         actor: {
           id: auth.userID,
           email: auth.email,
+          email_verified: auth.emailVerified,
           can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
         },
       });
@@ -366,6 +367,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const actor = {
       id: auth.userID,
       email: auth.email,
+      email_verified: auth.emailVerified,
       can_manage: orgRoleCanManage(await orgRoleForUser(options, request.headers, team.id, auth.userID)),
     };
     if (!actor.can_manage) {
@@ -446,6 +448,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
           actor: {
             id: auth.userID,
             email: auth.email,
+            email_verified: auth.emailVerified,
             can_manage: false,
           },
           machine: policyMachineIdentity({
