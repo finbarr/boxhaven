@@ -32,11 +32,22 @@ export type RemoteMachine = {
   agent_token_hash?: string;
   agent_last_seen_at?: string;
   ssh_principal?: string;
-  /** Internal durable marker for a create whose provider outcome needs recovery. */
+  /** Durable non-ready state exposed so interrupted creates can be destroyed safely. */
   create_state?: "provisioning" | "recovery_required";
   /** Internal process-owned reservation paired with a provisioning record. */
   create_operation_id?: string;
 };
+
+export class MachineCreateError extends Error {
+  constructor(
+    message: string,
+    readonly outcome: "not_created" | "unknown",
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "MachineCreateError";
+  }
+}
 
 export type CreateMachineRequest = {
   name: string;

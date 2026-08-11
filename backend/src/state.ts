@@ -192,6 +192,28 @@ export class StateStore {
     });
   }
 
+  async cancelMachineCreate(operationID: string): Promise<void> {
+    await this.mutate(() => {
+      const reservation = this.db.prepare(`
+        SELECT operation_id, org_id, user_id, name, provider, provider_name, started_at
+        FROM core_machine_creates WHERE operation_id = ?
+      `).get(operationID) as MachineCreateReservationRow | undefined;
+      if (reservation) {
+        const row = this.db.prepare(`
+          SELECT payload_json FROM core_machines WHERE user_id = ? AND name = ?
+        `).get(reservation.user_id, reservation.name) as PayloadRow | undefined;
+        if (row) {
+          const machine = parsePayload<RemoteMachine>(row.payload_json, "machine");
+          if (machine.create_operation_id === operationID) {
+            this.db.prepare("DELETE FROM core_machines WHERE user_id = ? AND name = ?")
+              .run(reservation.user_id, reservation.name);
+          }
+        }
+      }
+      this.db.prepare("DELETE FROM core_machine_creates WHERE operation_id = ?").run(operationID);
+    });
+  }
+
   async beginTeamDeletion(input: {
     operationID: string;
     orgID: string;

@@ -71,6 +71,7 @@ type remoteMachine struct {
 	LastSyncedAt       time.Time `json:"last_synced_at,omitempty"`
 	AgentLastSeenAt    time.Time `json:"agent_last_seen_at,omitempty"`
 	BootstrapComplete  bool      `json:"bootstrap_complete,omitempty"`
+	CreateState        string    `json:"create_state,omitempty"`
 	SSHKeyPath         string    `json:"-"`
 	SSHCertificatePath string    `json:"-"`
 	SSHHost            string    `json:"-"`
@@ -459,6 +460,9 @@ func remoteMachineTeamLabel(machine remoteMachine) string {
 // remoteMachineStatusLabel reports box liveness from the machine agent's
 // last heartbeat; the agent pings continuously while the box is up.
 func remoteMachineStatusLabel(machine remoteMachine, now time.Time) string {
+	if machine.CreateState == "recovery_required" {
+		return "recovery required"
+	}
 	if !machine.BootstrapComplete {
 		return "creating"
 	}

@@ -9,6 +9,7 @@ import {
   CreateMachineRequest,
   ListProviderMachinesRequest,
   MachineImage,
+  MachineCreateError,
   MachinePlan,
   MachineProvider,
   MachineProviderInfo,
@@ -92,7 +93,12 @@ export class HetznerProvider implements MachineProvider {
 
   async createMachine(request: CreateMachineRequest): Promise<{ machine: RemoteMachine; status?: string }> {
     const providerName = request.provider_name || request.name;
-    const existing = await this.findServer(providerName);
+    let existing: HetznerServer | undefined;
+    try {
+      existing = await this.findServer(providerName);
+    } catch (error) {
+      throw definitelyNotCreated(error);
+    }
     if (existing) {
       throw new Error(`Hetzner server for ${request.name} already exists`);
     }
@@ -101,7 +107,11 @@ export class HetznerProvider implements MachineProvider {
     const image = (request.image?.trim() || this.config.image).trim();
     let throwawaySSHKeyID = 0;
     try {
-      throwawaySSHKeyID = await this.createThrowawaySSHKey(providerName);
+      try {
+        throwawaySSHKeyID = await this.createThrowawaySSHKey(providerName);
+      } catch (error) {
+        throw definitelyNotCreated(error);
+      }
       const created = await this.request<{ server: HetznerServer }>("/servers", {
         method: "POST",
         body: {
@@ -310,6 +320,12 @@ export class HetznerProvider implements MachineProvider {
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
   }
+}
+
+function definitelyNotCreated(error: unknown): MachineCreateError {
+  if (error instanceof MachineCreateError) return error;
+  const message = error instanceof Error ? error.message : String(error);
+  return new MachineCreateError(message, "not_created", { cause: error });
 }
 
 export function hetznerProviderFromEnv(env = process.env): HetznerProvider {

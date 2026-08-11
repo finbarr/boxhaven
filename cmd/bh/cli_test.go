@@ -727,6 +727,7 @@ func TestRemoteMachineStatusLabel(t *testing.T) {
 		machine remoteMachine
 		want    string
 	}{
+		{remoteMachine{CreateState: "recovery_required", BootstrapComplete: true}, "recovery required"},
 		{remoteMachine{BootstrapComplete: false}, "creating"},
 		{remoteMachine{BootstrapComplete: true}, "-"},
 		{remoteMachine{BootstrapComplete: true, AgentLastSeenAt: now.Add(-time.Minute)}, "online"},

@@ -16,7 +16,7 @@ import type { BackendModule } from "./module.js";
 import { DeletionGuardError, StateStore } from "./state.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
-import { CreateMachineRequest, MachineImage, MachinePlan, MachineProvider, RemoteMachine, defaultSSHUser } from "./types.js";
+import { CreateMachineRequest, MachineCreateError, MachineImage, MachinePlan, MachineProvider, RemoteMachine, defaultSSHUser } from "./types.js";
 
 const testSSHUserPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBxsqJzPGdcbwFthXVe2lyIImV6BwTw4Ee5WcoeczwJf test";
 
@@ -1184,6 +1184,118 @@ test("restart clears crashed create reservations but keeps a durable recovery ma
   restarted.close();
 });
 
+test("a crash after provider create stays visibly recovery-required and safely destroyable", async () => {
+  const {
+    app,
+    provider,
+    providers,
+    store,
+    token,
+    databasePath,
+    authOptions,
+    sshCA,
+  } = await createTestBackend("provider-crash@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  const putMachine = store.putMachine.bind(store);
+  let failFinalMachineCommit = true;
+  store.putMachine = async (machine, event) => {
+    if (failFinalMachineCommit && machine.name === "crash-box" && !machine.create_state && machine.provider_id) {
+      failFinalMachineCommit = false;
+      throw new Error("injected crash before final machine commit");
+    }
+    return putMachine(machine, event);
+  };
+  // A dead process cannot run its finally cleanup. Leave the reservation and
+  // provisioning marker for the next StateStore startup to recover.
+  store.releaseMachineCreate = async () => {};
+
+  const failedCreate = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "crash-box" },
+  });
+  assert.equal(failedCreate.statusCode, 500, failedCreate.body);
+  assert.equal(provider.created.length, 1, "the provider create must have succeeded before persistence failed");
+  const agentToken = provider.created[0].agent_token || "";
+  const providerName = provider.created[0].provider_name || "";
+  assert.match(agentToken, /^[A-Za-z0-9_-]{64}$/);
+  assert.equal((await store.getMachine((await app.inject({
+    method: "GET", url: "/v1/auth/whoami", headers,
+  })).json().user.id, "crash-box"))?.create_state, "provisioning");
+  assert.equal((store.db.prepare(
+    "SELECT COUNT(*) AS count FROM core_machine_creates WHERE name = 'crash-box'",
+  ).get() as { count: number }).count, 1);
+
+  provider.discovered = [{
+    name: "crash-box",
+    provider: "fake",
+    provider_name: providerName,
+    provider_id: "fake-crash-box",
+    public_ipv4: "203.0.113.44",
+    bootstrap_complete: true,
+  }];
+  await app.close();
+  store.close();
+
+  const restartedStore = new StateStore(databasePath, provider.name);
+  const restartedApp = createBackend({
+    auth: createBackendAuth(authOptions),
+    providers,
+    store: restartedStore,
+    sshCA,
+    apiPublicURL: "https://api.hosted.test",
+    appPublicURL: "https://app.hosted.test",
+    previewBaseDomain: "hosted.test",
+    machineReadyTimeoutMs: 0,
+  });
+  const listed = await restartedApp.inject({ method: "GET", url: "/v1/machines", headers });
+  assert.equal(listed.statusCode, 200, listed.body);
+  assert.equal(listed.json().machines[0].create_state, "recovery_required");
+  assert.equal(listed.json().machines[0].provider_id, "fake-crash-box");
+  assert.equal(listed.json().machines[0].public_ipv4, "203.0.113.44");
+  const connect = await restartedApp.inject({ method: "GET", url: "/v1/machines/crash-box/connect", headers });
+  assert.equal(connect.statusCode, 409, connect.body);
+  assert.equal(connect.json().id, "machine_recovery_required");
+  assert.match(connect.json().message, /Destroy it, then create it again/);
+  const unauthenticatedAgent = await restartedApp.inject({
+    method: "POST",
+    url: "/v1/agent/heartbeat",
+    headers: { authorization: `Bearer ${agentToken}` },
+  });
+  assert.equal(unauthenticatedAgent.statusCode, 401, unauthenticatedAgent.body);
+  const destroyed = await restartedApp.inject({ method: "DELETE", url: "/v1/machines/crash-box", headers });
+  assert.equal(destroyed.statusCode, 204, destroyed.body);
+  assert.deepEqual(provider.released, ["crash-box"]);
+  assert.equal(await restartedStore.getMachine(listed.json().machines[0].user_id, "crash-box"), undefined);
+  await restartedApp.close();
+  restartedStore.close();
+});
+
+test("a definitive provider create failure removes its provisioning placeholder", async () => {
+  const { app, provider, store, token } = await createTestBackend("definitive-failure@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  const whoami = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers });
+  provider.createMachine = async () => {
+    throw new MachineCreateError("provider rejected the request before creating a VM", "not_created");
+  };
+
+  const failed = await app.inject({
+    method: "POST",
+    url: "/v1/machines",
+    headers,
+    payload: { name: "never-created" },
+  });
+  assert.equal(failed.statusCode, 500, failed.body);
+  assert.equal(await store.getMachine(whoami.json().user.id, "never-created"), undefined);
+  assert.deepEqual(await store.teamDeletionBlockers(whoami.json().team.id), {
+    machines: 0,
+    provisioning: 0,
+    policies: [],
+  });
+  await app.close();
+});
+
 test("team deletion repairs its tombstone when auth commits before completion fails", async () => {
   const { app, store, token } = await createTestBackend("delete-repair@example.com");
   const headers = { authorization: `Bearer ${token}` };
@@ -1781,7 +1893,7 @@ async function createTestBackend(
     corsOrigins: options.corsOrigins,
   });
   const token = await signUp(app, email, password);
-  return { app, provider, store, token };
+  return { app, provider, providers, store, token, databasePath, authOptions, sshCA };
 }
 
 async function signUp(app: ReturnType<typeof createBackend>, email: string, password = "password123"): Promise<string> {

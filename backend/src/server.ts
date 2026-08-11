@@ -16,7 +16,7 @@ import { ProviderRegistry, providerInfo } from "./providers.js";
 import { GitHubReleaseChecker, ReleaseUpdateChecker } from "./releases.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { DeletionGuardError, StateStore, TeamDeletionBlockers } from "./state.js";
-import { CreateMachineRequest, MachineImage, MachinePlan, MachineProvider, MachineSizeOption, MachineSizeShortcut, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
+import { CreateMachineRequest, MachineCreateError, MachineImage, MachinePlan, MachineProvider, MachineSizeOption, MachineSizeShortcut, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
 
 export type BackendOptions = {
   auth: BackendAuth;
@@ -509,6 +509,11 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     }
     try {
       return await createMachine(options, agents, auth, provider, body, createOperationID, orgID, auth.teams, commercialPolicy, policyDelivery, reply);
+    } catch (error) {
+      if (error instanceof MachineCreateError && error.outcome === "not_created") {
+        await options.store.cancelMachineCreate(createOperationID);
+      }
+      throw error;
     } finally {
       await options.store.releaseMachineCreate(createOperationID);
     }
@@ -538,6 +543,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       existing = await options.store.getMachine(auth.userID, name);
     }
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+    if (existing.create_state) return machineCreateRecoveryReply(existing, reply);
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
     const refreshed = await provider.getMachine(existing);
@@ -559,6 +565,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       existing = await options.store.getMachine(auth.userID, name);
     }
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+    if (existing.create_state) return machineCreateRecoveryReply(existing, reply);
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
     const refreshed = await provider.getMachine(existing);
@@ -624,6 +631,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
     const machine = await options.store.getMachine(auth.userID, name);
     if (!machine) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+    if (machine.create_state) return machineCreateRecoveryReply(machine, reply);
     if (!machine.bootstrap_complete) {
       return reply.code(409).send({ id: "not_bootstrapped", message: "remote machine is not bootstrapped" });
     }
@@ -1271,10 +1279,13 @@ async function syncProviderMachines(options: BackendOptions, auth: AuthContext):
         org_name: existing?.org_name || auth.teams.find((team) => team.id === (existing?.org_id || auth.orgID))?.name,
         org_slug: existing?.org_slug || auth.teams.find((team) => team.id === (existing?.org_id || auth.orgID))?.slug,
       };
-      // Provider discovery proves the durable placeholder represents a real
-      // machine; it no longer belongs to a process-local create reservation.
-      delete machineInput.create_operation_id;
-      delete machineInput.create_state;
+      if (existing?.create_state) {
+        // Discovery supplies provider identity for explicit cleanup, but it
+        // cannot prove an interrupted VM received credentials that match core.
+        // Never promote it into a normal or billable machine automatically.
+        delete machineInput.create_operation_id;
+        machineInput.create_state = "recovery_required";
+      }
       const machine = normalizeMachine(options, machineInput);
       await options.store.putMachine(machine);
       const index = known.findIndex((knownMachine) => knownMachine.name === machine.name);
@@ -1364,11 +1375,23 @@ function publicMachine(machine: RemoteMachine): RemoteMachine {
   delete safe.org_name;
   delete safe.org_slug;
   delete safe.create_operation_id;
-  delete safe.create_state;
   for (const key of Object.keys(safe)) {
     if (key.startsWith("ssh_") && key.endsWith("_key")) delete safe[key];
   }
   return safe as RemoteMachine;
+}
+
+function machineCreateRecoveryReply(
+  machine: RemoteMachine,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+): unknown {
+  const recovery = machine.create_state === "recovery_required";
+  return reply.code(409).send({
+    id: recovery ? "machine_recovery_required" : "machine_provisioning",
+    message: recovery
+      ? `Box ${machine.name} has an uncertain provisioning outcome. Destroy it, then create it again.`
+      : `Box ${machine.name} is still provisioning. Wait for creation to finish.`,
+  });
 }
 
 async function warmMachinePreviewTLS(options: BackendOptions, machine: RemoteMachine): Promise<void> {

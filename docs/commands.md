@@ -143,7 +143,9 @@ bh list
 Lists your boxes with name, status, team, provider, size, and preview URL.
 Status is reported from the machine agent's last heartbeat: `creating` until
 bootstrap completes, then `online` when the agent has been seen within the
-last five minutes, otherwise `offline`.
+last five minutes, otherwise `offline`. An interrupted create with an uncertain
+provider outcome reports `recovery required`; destroy that box and create it
+again instead of attempting to connect.
 
 ## bh status
 

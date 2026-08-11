@@ -290,8 +290,10 @@ team has been destroyed and every in-progress create has finished. Failed
 boxes still require explicit destruction because BoxHaven does not assume
 provider cleanup succeeded. If the backend restarts during creation, its stale
 reservation is cleared and the durable recovery box remains for that explicit
-cleanup. A deployment-specific module can add another fail-closed check for
-external account state.
+cleanup. Provider discovery updates the record for cleanup but never makes it
+ready; `bh list` reports `recovery required`, and the box must be destroyed and
+created again. A deployment-specific module can add another fail-closed check
+for external account state.
 
 Moving or sharing never copies a box. To hand a teammate a box like yours,
 snapshot it into a team image and create a new box from the resulting image:

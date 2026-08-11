@@ -57,6 +57,11 @@ marks that record as requiring recovery; the record continues to block team and
 account deletion until the box is explicitly destroyed. Recovery records are
 not provider-confirmed lifecycle facts and are excluded from commercial-policy
 reconciliation, so a crash cannot activate billing by itself.
+Provider discovery can fill in VM identity and address details for cleanup, but
+it never promotes a recovery record into a usable or billable machine. The box
+must be destroyed and created again. A provider may classify an error as
+definitively not created; only then does core remove the placeholder
+automatically. Unknown outcomes keep the recovery record.
 
 Modules whose external state can change concurrently also maintain a row in the
 generic `core_team_deletion_policy_blockers` table in the same transaction as
