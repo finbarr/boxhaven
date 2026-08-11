@@ -96,7 +96,7 @@ need to duplicate the core API, auth, provider, SSH, or CLI implementations.
 - `BETTER_AUTH_SECRET`: required signing secret for Better Auth sessions.
 - `BETTER_AUTH_URL`: public auth base URL, default `http://<listen>/v1/auth`.
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated trusted browser origins.
-- `RESEND_API_KEY`: required Resend API key. Password signups must follow an emailed verification link before signing in.
+- `RESEND_API_KEY`: required Resend API key. Password signups must follow an emailed verification link before signing in; this requirement has no feature flag or legacy delivery fallback.
 - `BOXHAVEN_EMAIL_FROM`: transactional From address, default `BoxHaven <noreply@boxhaven.dev>`.
 - `BOXHAVEN_EMAIL_VERIFICATION_EXPIRES_SECONDS`: positive verification-link lifetime, default `3600`.
 - `BOXHAVEN_APP_URL`: public console/auth app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
@@ -160,7 +160,9 @@ cp deploy/digitalocean/env.production.example deploy/digitalocean/.env.productio
 ```
 
 `BETTER_AUTH_SECRET` must be a long random value and `RESEND_API_KEY` is
-required for password-account verification. The backend also needs
+required for password-account verification in every self-hosted deployment.
+There is intentionally no mode that permits unverified password accounts, so
+configure a Resend-verified `BOXHAVEN_EMAIL_FROM` before startup. The backend also needs
 `DIGITALOCEAN_ACCESS_TOKEN` so it can create remote VMs for users. The
 backend SSH user CA is stored at `/opt/boxhaven/data/backend/ssh_ca_ed25519`
 and is included in the backend data backups. Set

@@ -286,7 +286,8 @@ Transactional email sends required password-account verification links,
 password reset links, and team invitation links
 (`<app_url>/invite?id=<invitation-id>`) through Resend from
 `BOXHAVEN_EMAIL_FROM`. Verification delivery is required and startup fails
-without `RESEND_API_KEY`; invitation delivery remains best-effort because the
+without `RESEND_API_KEY`; there is no disable flag, console-only sender, or
+legacy unverified-password fallback. Invitation delivery remains best-effort because the
 team console exposes a copyable link. GitHub accounts whose provider email is
 verified do not receive a redundant BoxHaven verification email.
 

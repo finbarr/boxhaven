@@ -1,6 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { betterAuth, type Auth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { getMigrations } from "better-auth/db/migration";
 import { bearer, deviceAuthorization, organization } from "better-auth/plugins";
 import Database from "better-sqlite3";
@@ -22,8 +24,26 @@ export type BackendAuthOptions = {
   github?: { clientId: string; clientSecret: string };
 };
 
+const verificationDelivery = new AsyncLocalStorage<{ error?: InstanceType<typeof APIError> }>();
+
 export function createBackendAuth(options: BackendAuthOptions): Auth {
-  return betterAuth(authConfig(options, openAuthDatabase(options.databasePath))) as Auth;
+  const auth = betterAuth(authConfig(options, openAuthDatabase(options.databasePath))) as Auth;
+  const handler = auth.handler.bind(auth);
+  Object.defineProperty(auth, "handler", {
+    configurable: true,
+    value: (request: Request) => {
+      const delivery = {} as { error?: InstanceType<typeof APIError> };
+      return verificationDelivery.run(delivery, async () => {
+        const response = await handler(request);
+        if (!delivery.error || !new URL(request.url).pathname.endsWith("/sign-up/email")) return response;
+        return Response.json(delivery.error.body || { message: delivery.error.message }, {
+          status: delivery.error.statusCode,
+          headers: delivery.error.headers,
+        });
+      });
+    },
+  });
+  return auth;
 }
 
 export type BackendAuth = Auth;
@@ -154,12 +174,31 @@ async function sendEmailOrLog(email: EmailSender | undefined, message: { to: str
 }
 
 async function sendRequiredEmail(email: EmailSender | undefined, message: { to: string; subject: string; text: string }, context: string): Promise<void> {
-  if (!email) throw new Error(`email is not configured; cannot send ${context}`);
+  if (!email) {
+    const deliveryError = verificationDeliveryError();
+    recordVerificationDeliveryError(deliveryError);
+    throw deliveryError;
+  }
   try {
     await email.send(message);
   } catch (error) {
-    throw new Error(`email delivery failed for ${context}: ${(error as Error).message}`);
+    console.error(`email delivery failed for ${context}: ${(error as Error).message}`);
+    const deliveryError = verificationDeliveryError();
+    recordVerificationDeliveryError(deliveryError);
+    throw deliveryError;
   }
+}
+
+function verificationDeliveryError(): InstanceType<typeof APIError> {
+  return new APIError("SERVICE_UNAVAILABLE", {
+    code: "VERIFICATION_EMAIL_DELIVERY_FAILED",
+    message: "Your account was created, but the verification email could not be delivered. Resend it to continue.",
+  });
+}
+
+function recordVerificationDeliveryError(error: InstanceType<typeof APIError>): void {
+  const delivery = verificationDelivery.getStore();
+  if (delivery) delivery.error = error;
 }
 
 function formatDuration(seconds: number): string {

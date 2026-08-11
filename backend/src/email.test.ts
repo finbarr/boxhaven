@@ -232,6 +232,59 @@ test("password signup requires verification, supports resend, and rejects expire
   }
 });
 
+test("failed signup verification delivery leaves the created account recoverable by resend", async () => {
+  const resend = new FakeResend();
+  const resendURL = await resend.start();
+  let app: Awaited<ReturnType<typeof createEmailTestBackend>> | undefined;
+  try {
+    app = await createEmailTestBackend(new EmailService({
+      apiKey: "re_test_key",
+      from: "BoxHaven <noreply@hosted.test>",
+      apiURL: resendURL,
+    }));
+    resend.failNext = true;
+    const signup = await app.inject({
+      method: "POST",
+      url: "/v1/auth/sign-up/email",
+      payload: { email: "recoverable@example.com", password: "password123", name: "Recoverable" },
+    });
+    assert.equal(signup.statusCode, 503, signup.body);
+    assert.equal(signup.json().code, "VERIFICATION_EMAIL_DELIVERY_FAILED");
+
+    const existingButUnverified = await app.inject({
+      method: "POST",
+      url: "/v1/auth/sign-in/email",
+      payload: { email: "recoverable@example.com", password: "password123" },
+    });
+    assert.equal(existingButUnverified.statusCode, 403, existingButUnverified.body);
+    assert.equal(existingButUnverified.json().code, "EMAIL_NOT_VERIFIED");
+
+    const resent = await app.inject({
+      method: "POST",
+      url: "/v1/auth/send-verification-email",
+      payload: { email: "recoverable@example.com", callbackURL: "https://app.hosted.test/signup?verified=true" },
+    });
+    assert.equal(resent.statusCode, 200, resent.body);
+    assert.equal(resend.sent.length, 2, "the failed initial attempt is followed by a successful resend");
+    const freshURL = verificationURL(resend.sent[1]);
+    const verified = await app.inject({
+      method: "GET",
+      url: `${freshURL.pathname}?token=${encodeURIComponent(freshURL.searchParams.get("token") || "")}`,
+    });
+    assert.equal(verified.statusCode, 200, verified.body);
+    const signedIn = await app.inject({
+      method: "POST",
+      url: "/v1/auth/sign-in/email",
+      payload: { email: "recoverable@example.com", password: "password123" },
+    });
+    assert.equal(signedIn.statusCode, 200, signedIn.body);
+    assert.equal(typeof signedIn.json().token, "string");
+  } finally {
+    if (app) await app.close();
+    await resend.stop();
+  }
+});
+
 async function createEmailTestBackend(email: EmailService | undefined, verificationExpiresInSeconds?: number) {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-email-"));
   const provider = new IdleProvider();

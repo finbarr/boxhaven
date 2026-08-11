@@ -43,6 +43,7 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [verificationEmail, setVerificationEmail] = useState("");
+  const [verificationDeliveryFailed, setVerificationDeliveryFailed] = useState(false);
   const resend = useMutation({
     mutationFn: () => apiFetch<{ status: boolean }>("/v1/auth/send-verification-email", "", {
       method: "POST",
@@ -63,10 +64,18 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
     },
     onSuccess: (data) => {
       if (data.token) onToken(data.token);
-      else setVerificationEmail(email);
+      else {
+        setVerificationDeliveryFailed(false);
+        setVerificationEmail(email);
+      }
     },
     onError: (error) => {
       if (error instanceof BoxHavenAPIError && error.code === "EMAIL_NOT_VERIFIED") {
+        setVerificationDeliveryFailed(false);
+        setVerificationEmail(email);
+      } else if (mode === "signup" && error instanceof BoxHavenAPIError
+        && error.code === "VERIFICATION_EMAIL_DELIVERY_FAILED") {
+        setVerificationDeliveryFailed(true);
         setVerificationEmail(email);
       }
     },
@@ -84,8 +93,10 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
         <VerificationPending
           email={verificationEmail}
           resend={resend}
+          deliveryFailed={verificationDeliveryFailed}
           onUseAnother={() => {
             setVerificationEmail("");
+            setVerificationDeliveryFailed(false);
             setMode("signin");
             mutation.reset();
             resend.reset();
@@ -155,9 +166,10 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
   );
 }
 
-function VerificationPending({ email, resend, onUseAnother }: {
+function VerificationPending({ email, resend, deliveryFailed, onUseAnother }: {
   email: string;
   resend: UseMutationResult<{ status: boolean }, Error, void>;
+  deliveryFailed: boolean;
   onUseAnother: () => void;
 }) {
   return (
@@ -165,8 +177,12 @@ function VerificationPending({ email, resend, onUseAnother }: {
       <MailCheck size={30} />
       <div className="panel-heading">
         <span>verify your email</span>
-        <h1>Check your inbox</h1>
-        <p>We sent a verification link to <strong>{email}</strong>. Open it within one hour, then sign in.</p>
+        <h1>{deliveryFailed && !resend.isSuccess ? "Verification email not sent" : "Check your inbox"}</h1>
+        {deliveryFailed && !resend.isSuccess ? (
+          <p>Your account for <strong>{email}</strong> exists, but the first email could not be delivered. Resend it to continue.</p>
+        ) : (
+          <p>We sent a verification link to <strong>{email}</strong>. Open it within one hour, then sign in.</p>
+        )}
       </div>
       {resend.isSuccess ? <p className="success-text">A fresh verification link is on its way.</p> : null}
       {resend.error ? <p className="error" role="alert">{resend.error.message}</p> : null}
