@@ -25,7 +25,7 @@ where `<tag>` is the full Git tag including the leading `v` (e.g.
 *without* the leading `v`; the formula re-adds it when building download
 URLs (`releases/download/v#{version}/bh_v#{version}_<os>_<arch>.tar.gz`).
 
-For a release tag `$TAG` (e.g. `v0.3.0`), the orchestrator:
+For a release tag `$TAG` (e.g. `v0.3.0`), the release operator:
 
 1. Downloads `SHA256SUMS` from the release:
 
@@ -34,25 +34,25 @@ For a release tag `$TAG` (e.g. `v0.3.0`), the orchestrator:
      "https://github.com/finbarr/boxhaven/releases/download/${TAG}/SHA256SUMS"
    ```
 
-2. Extracts one checksum per platform and substitutes the placeholders:
+2. Generates the formula with the checked-in renderer, which requires exactly
+   one valid checksum for each expected archive and rejects leftover
+   placeholders:
 
    ```bash
-   sum() { awk -v f="bh_${TAG}_$1.tar.gz" '$2 == f {print $1}' SHA256SUMS; }
-
-   sed -e "s/__VERSION__/${TAG#v}/g" \
-       -e "s/__SHA256_DARWIN_AMD64__/$(sum darwin_amd64)/" \
-       -e "s/__SHA256_DARWIN_ARM64__/$(sum darwin_arm64)/" \
-       -e "s/__SHA256_LINUX_AMD64__/$(sum linux_amd64)/" \
-       -e "s/__SHA256_LINUX_ARM64__/$(sum linux_arm64)/" \
-       packaging/homebrew/boxhaven.rb > boxhaven.rb
+   scripts/render-homebrew-formula.sh \
+     "$TAG" SHA256SUMS /path/to/homebrew-tap/Formula/boxhaven.rb
    ```
 
-3. Verifies no `__` placeholders survived, then commits the result to the
-   tap repository as `Formula/boxhaven.rb`:
+3. Audits, fetches, installs, and tests the generated formula from a local tap
+   checkout before committing it:
 
    ```bash
-   ! grep -q '__' boxhaven.rb
+   HOMEBREW_NO_AUTO_UPDATE=1 brew audit --strict --online finbarr/tap/boxhaven
+   HOMEBREW_NO_AUTO_UPDATE=1 brew fetch --force finbarr/tap/boxhaven
+   HOMEBREW_NO_AUTO_UPDATE=1 brew install finbarr/tap/boxhaven
+   HOMEBREW_NO_AUTO_UPDATE=1 brew test finbarr/tap/boxhaven
    ```
 
-`brew audit --strict boxhaven` and `brew test boxhaven` (which runs
-`bh version`) are the recommended checks before pushing the tap commit.
+Never update the live tap before the matching GitHub release exists and passes
+`scripts/verify-published-release.sh`. See [RELEASING.md](../../RELEASING.md)
+for the exact release, tap update, clean install, and production smoke runbook.
