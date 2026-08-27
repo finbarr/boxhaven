@@ -165,7 +165,7 @@ if [ "$mode_arg" = "--deploy" ]; then
     exit 1
   fi
 
-  git fetch --prune origin
+  git fetch --prune --tags origin
   git merge --ff-only "origin/${deploy_branch}"
 fi
 
@@ -256,6 +256,12 @@ fi
 
 echo "Checking production containers"
 docker compose "${compose_args[@]}" ps
+
+running_version="$(docker compose "${compose_args[@]}" exec -T backend node -e \
+  'process.stdout.write(process.env.BOXHAVEN_VERSION || "")')"
+[ "$running_version" = "$BOXHAVEN_VERSION" ] \
+  || die "backend version '${running_version:-<empty>}' does not match deployed version '${BOXHAVEN_VERSION}'"
+echo "Backend version ${running_version}"
 
 check_health "$api_health_url"
 check_health "$app_health_url"
