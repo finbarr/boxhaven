@@ -4,20 +4,26 @@ This runbook is for the release operator. It intentionally separates publishing
 the GitHub release from updating `finbarr/homebrew-tap`: the tap must never
 point at an artifact that does not exist yet.
 
-The current public release is `v0.1.0`. As audited on 2026-08-11, its release
-assets and `SHA256SUMS` agree with each other, but the live Homebrew formula
-contains older checksums and `brew fetch` fails. Do not replace the v0.1.0
-assets again. Publishing v0.2.0 and then updating the tap from the verified
-v0.2.0 `SHA256SUMS` is the recovery path.
+Set the release tag once in the shell that will run the commands below:
+
+```bash
+printf 'Release tag (vX.Y.Z): '
+read -r TAG
+case "$TAG" in
+  v[0-9]*.[0-9]*.[0-9]*) export TAG ;;
+  *) echo "invalid release tag: $TAG" >&2; exit 1 ;;
+esac
+```
 
 ## 1. Prepare the exact release commit
 
-Do this only after every change intended for v0.2.0 has merged to `master`.
+Do this only after every change intended for the release has merged to
+`master`.
 Start in a clean public checkout:
 
 ```bash
 set -euo pipefail
-TAG=v0.2.0
+: "${TAG:?run the release-tag setup first}"
 git switch master
 git pull --ff-only origin master
 test -z "$(git status --porcelain)"
@@ -88,8 +94,8 @@ done
 gh run watch "$CI_RUN_ID" --exit-status
 ```
 
-Do not tag if any local or GitHub check fails, if `CHANGELOG.md` still contains
-`v0.2.0 - TBD`, or if the release commit is not on `origin/master`.
+Do not tag if any local or GitHub check fails, if the release changelog still
+contains `${TAG} - TBD`, or if the release commit is not on `origin/master`.
 
 ## 2. Tag and watch the gated release
 
@@ -135,7 +141,7 @@ same release commit. Do not begin until `verify-published-release.sh` passes.
 
 ```bash
 set -euo pipefail
-TAG=v0.2.0
+: "${TAG:?run the release-tag setup first}"
 brew tap finbarr/tap
 TAP_REPO="$(brew --repo finbarr/tap)"
 git -C "$TAP_REPO" fetch origin main
@@ -192,7 +198,7 @@ result:
 
 ```bash
 set -euo pipefail
-TAG=v0.2.0
+: "${TAG:?run the release-tag setup first}"
 CLEAN_ROOT="$(mktemp -d)"
 curl -fsSL -o "${CLEAN_ROOT}/install.sh" \
   "https://raw.githubusercontent.com/finbarr/boxhaven/${TAG}/install.sh"
