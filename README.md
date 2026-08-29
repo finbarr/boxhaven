@@ -11,26 +11,15 @@ remote dev boxes for individual developers, persistent agent sessions, direct
 SSH access, project sync, GitHub pushes from the box, and a self-hostable
 control plane.
 
-The hosted product has four separate surfaces: `boxhaven.dev` for the paid
-service website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for
-login/device approval/the authenticated console, and `api.boxhaven.dev` for the
-API. Self-hosted BoxHaven servers run only the console/auth app and API; they
-do not ship the paid-service marketing website. Marketing website source is
-maintained separately and is not part of this repository. The documentation
-site lives in [docs](docs) and can be hosted separately when teams want internal docs. Set
-`BOXHAVEN_DOCS_URL` when building the console app if its footer should link to
-an internal documentation site instead of the hosted docs.
-
-The hosted distribution composes this open core at build time. It uses the
-same CLI and backend API, adds private backend modules and tables through the
-published `@boxhaven/backend` module contract, and supplies its own console UI.
-Core and hosted migrations share one SQLite database and one backend process;
-the hosted modules and UI are not present in this repository.
+The web console, API, and documentation are separate surfaces. The backend
+serves the console and API, while [docs](docs) builds as a static site. Set
+`BOXHAVEN_DOCS_URL` when building the console if its footer should link to a
+different documentation site. Backend distributions can add in-process
+modules through the published `@boxhaven/backend` contract.
 
 The self-hosted console checks the public BoxHaven GitHub release through its
-open-source backend and shows a compact release banner when the installation
-is behind. Release checks are cached and disappear silently when GitHub is
-unreachable; the hosted/private UI is separate and is not part of this flow.
+backend and shows a compact release banner when the installation is behind.
+Release checks are cached and disappear silently when GitHub is unreachable.
 
 The CLI is intentionally small, and the workflow is agent-first: copy your
 project to a box once, start Claude or Codex inside the box's tmux session —
@@ -115,9 +104,10 @@ device key stored under `~/.boxhaven/ssh`. Remove the managed include with
 
 ## Docs
 
-- [Overview](docs/overview.md)
+- [Documentation](docs/index.md)
 - [Getting Started](docs/getting-started.md)
-- [Operations](docs/operations.md)
+- [CLI Reference](docs/commands.md)
+- [Self-Hosting](docs/self-hosting.md)
 
 ## License
 

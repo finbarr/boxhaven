@@ -6,12 +6,9 @@ that powers the hosted `app.boxhaven.dev` self-hosts with your own provider
 credentials and no built-in limits.
 
 The browser app is built with TanStack Router and TanStack Query. It is the
-console/auth surface only: login, signup, CLI device approval, invitations,
-and authenticated box/team/image views. The paid-service website lives
-outside this repository, and documentation lives in `docs/`, so a self-hosted
-server can run with only the login and console UI. Teams that want
-internal documentation can host the `docs/` static build without hosting the
-marketing website.
+console/auth surface: login, signup, CLI device approval, invitations, and
+authenticated box/team/image views. The API serves the built console from
+`dist-app`, and teams can host the static `docs/` build alongside it.
 
 In production the intended split is `boxhaven.dev` for the paid-service
 website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for the
@@ -161,8 +158,7 @@ cp deploy/digitalocean/env.production.example deploy/digitalocean/.env.productio
 
 `BETTER_AUTH_SECRET` must be a long random value and `RESEND_API_KEY` is
 required for password-account verification in every self-hosted deployment.
-There is intentionally no mode that permits unverified password accounts, so
-configure a Resend-verified `BOXHAVEN_EMAIL_FROM` before startup. The backend also needs
+Configure a Resend-verified `BOXHAVEN_EMAIL_FROM` before startup. The backend also needs
 `DIGITALOCEAN_ACCESS_TOKEN` so it can create remote VMs for users. The
 backend SSH user CA is stored at `/opt/boxhaven/data/backend/ssh_ca_ed25519`
 and is included in the backend data backups. Set

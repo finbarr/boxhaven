@@ -8,12 +8,6 @@ docs hostname serves the static `docs/.vitepress/dist` artifact. Backend state
 is stored on the host under `/opt/boxhaven/data/backend` so it can be backed up
 outside Docker.
 
-The backend-served app is intentionally not the public website. It contains
-only login/signup, CLI device approval, invitations, and the authenticated
-console. The paid-service website is maintained outside this repository and
-published to `boxhaven.dev`; documentation is a separate `docs/` artifact that
-can be hosted internally or served by this Caddy bundle.
-
 The self-hosted console also shows a compact banner when `/v1/version` reports
 a newer public BoxHaven GitHub release. Release discovery is cached by the
 backend and fails silently when GitHub is unavailable.

@@ -5,10 +5,9 @@ it does not provision cloud machines locally. Self-hosters can run this package
 with their own provider credentials and no external commercial service.
 
 The browser app is built with TanStack Router and TanStack Query. It is the
-console/auth surface only: login, signup, CLI device approval, invitations,
-and authenticated box/team/image views. The paid-service website lives
-outside this repository, and documentation lives in `docs/`, so a self-hosted
-backend does not serve the marketing site.
+console/auth surface: login, signup, CLI device approval, invitations, and
+authenticated box/team/image views. The API serves the built console from
+`dist-app`, and the static documentation build lives in `docs/`.
 
 In production the intended split is `boxhaven.dev` for the paid-service
 website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for the
@@ -293,8 +292,7 @@ Transactional email sends required password-account verification links,
 password reset links, and team invitation links
 (`<app_url>/invite?id=<invitation-id>`) through Resend from
 `BOXHAVEN_EMAIL_FROM`. Verification delivery is required and startup fails
-without `RESEND_API_KEY`; there is no disable flag, console-only sender, or
-legacy unverified-password fallback. Invitation delivery remains best-effort because the
+without `RESEND_API_KEY`. Invitation delivery remains best-effort because the
 team console exposes a copyable link. GitHub accounts whose provider email is
 verified do not receive a redundant BoxHaven verification email.
 

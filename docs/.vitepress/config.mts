@@ -43,16 +43,6 @@ const pageSeo: Record<string, { title: string, description: string, noindex?: bo
     title: 'Security Model',
     description: 'How BoxHaven access works: short-lived SSH user certificates, the backend user CA, and exactly which credentials are forwarded to a box.',
   },
-  '/overview': {
-    title: 'Overview (Moved)',
-    description: 'The BoxHaven overview moved to the documentation home page.',
-    noindex: true,
-  },
-  '/operations': {
-    title: 'Operations (Moved)',
-    description: 'The BoxHaven operations guide moved into the self-hosting and images pages.',
-    noindex: true,
-  },
   '/404': {
     title: 'Page Not Found',
     description: 'The requested BoxHaven documentation page could not be found.',
