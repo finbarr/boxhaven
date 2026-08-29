@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  npm run deploy:production
+  npm run deploy:app
   deploy/digitalocean/deploy-production.sh [options]
 
 Options:

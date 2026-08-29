@@ -174,8 +174,7 @@ Deploy the hosted production stack from the repository root:
 npm run deploy:app
 ```
 
-`npm run deploy:production` is a compatibility alias for the same fast
-app/API/docs deploy. By default the command SSHes to `root@app.boxhaven.dev`,
+By default the command SSHes to `root@app.boxhaven.dev`,
 fast-forwards `/opt/boxhaven/app` on `master`, builds the docs site, runs the
 Compose deploy on the Droplet, and checks the public app, API, and docs health
 endpoints. It forwards your SSH agent so the Droplet can fetch the private

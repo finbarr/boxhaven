@@ -59,7 +59,6 @@ make smoke-remote-two-box  # Run two-box production/prod-equivalent coverage
 npm --prefix backend run smoke:console  # Run seeded console screenshots and DOM checks
 npm run deploy:app  # Fast app/API deploy and health checks
 npm run deploy:runtime  # Slow remote VM image rebuild, activation, and backend restart
-npm run deploy:production  # Compatibility alias for deploy:app
 make install        # Install bh to ~/.local/bin
 make clean          # Remove built binary
 ```

@@ -74,10 +74,9 @@ From the repository root on your workstation:
 npm run deploy:app
 ```
 
-`npm run deploy:production` is kept as a compatibility alias for the same fast
-app/API/docs deploy. These commands SSH to `root@app.boxhaven.dev`,
-fast-forward `/opt/boxhaven/app` on `master`, fetch release tags, build the docs site, run the
-Docker Compose deploy on the Droplet, and check
+This command SSHes to `root@app.boxhaven.dev`,
+fast-forwards `/opt/boxhaven/app` on `master`, fetches release tags, builds the docs site, runs the
+Docker Compose deploy on the Droplet, and checks
 `https://api.boxhaven.dev/healthz`, `https://app.boxhaven.dev/healthz`, and
 `https://docs.boxhaven.dev/`. They do not rebuild the remote VM image.
 The deploy derives `BOXHAVEN_VERSION` from the checked-out Git ref so the
@@ -123,7 +122,7 @@ BOXHAVEN_DEPLOY_DIR=/opt/boxhaven/app \
 BOXHAVEN_PRODUCTION_API_HEALTH_URL=https://api.example.com/healthz \
 BOXHAVEN_PRODUCTION_APP_HEALTH_URL=https://app.example.com/healthz \
 BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL=https://docs.example.com/ \
-npm run deploy:production
+npm run deploy:app
 ```
 
 From the repository root on the Droplet, run the local variant:

@@ -402,10 +402,9 @@ from the repository root with:
 npm run deploy:app
 ```
 
-`npm run deploy:production` is kept as a compatibility alias for the same fast
-app/API/docs deploy. These commands SSH to `root@app.boxhaven.dev`,
-fast-forward `/opt/boxhaven/app` on `master`, build the docs site, run the
-DigitalOcean Compose deploy, and check the production app, API, and docs health
+This command SSHes to `root@app.boxhaven.dev`,
+fast-forwards `/opt/boxhaven/app` on `master`, builds the docs site, runs the
+DigitalOcean Compose deploy, and checks the production app, API, and docs health
 endpoints. They do not rebuild the remote VM snapshot.
 
 The deploy script supports distribution-specific build and service wiring through
