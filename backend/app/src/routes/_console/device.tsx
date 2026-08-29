@@ -9,15 +9,12 @@ type DeviceStatusResponse = {
   status: "pending" | "approved" | "denied";
 };
 
-// CLI device-grant approval. The CLI sends the user here as
-// /device?user_code=XXXX (legacy links also used ?code=).
+// CLI device-grant approval at /device?user_code=XXXX.
 export const Route = createFileRoute("/_console/device")({
   validateSearch: (search: Record<string, unknown>) => ({
     user_code: typeof search.user_code === "string" && search.user_code.trim()
       ? search.user_code.trim()
-      : typeof search.code === "string"
-        ? search.code.trim()
-        : "",
+      : "",
   }),
   head: () => ({ meta: [{ title: "Approve CLI | BoxHaven" }] }),
   component: DeviceRoute,
