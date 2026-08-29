@@ -30,7 +30,7 @@ project-wide default with the `provider` key under `[remote]` in
 | `DIGITALOCEAN_IMAGE` | Base image fallback, default `ubuntu-24-04-x64` |
 | `DIGITALOCEAN_TAGS` | Comma-separated tags, default `boxhaven` |
 | `DIGITALOCEAN_VPC_UUID` | Optional VPC UUID |
-| `BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` (or legacy `BOXHAVEN_REMOTE_IMAGE`) | Golden snapshot id for new boxes |
+| `BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` or `BOXHAVEN_REMOTE_IMAGE` | Golden snapshot id for new boxes |
 
 Built-in sizes map to DigitalOcean standard plans: `small` is 2 vCPU / 4 GB,
 `medium` is 4 vCPU / 8 GB, and `large` is 8 vCPU / 16 GB. `bh size plans`

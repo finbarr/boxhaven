@@ -93,7 +93,7 @@ need to duplicate the core API, auth, provider, SSH, or CLI implementations.
 - `BETTER_AUTH_SECRET`: required signing secret for Better Auth sessions.
 - `BETTER_AUTH_URL`: public auth base URL, default `http://<listen>/v1/auth`.
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated trusted browser origins.
-- `RESEND_API_KEY`: required Resend API key. Password signups must follow an emailed verification link before signing in; this requirement has no feature flag or legacy delivery fallback.
+- `RESEND_API_KEY`: required Resend API key. Password signups must follow an emailed verification link before signing in.
 - `BOXHAVEN_EMAIL_FROM`: transactional From address, default `BoxHaven <noreply@boxhaven.dev>`.
 - `BOXHAVEN_EMAIL_VERIFICATION_EXPIRES_SECONDS`: positive verification-link lifetime, default `3600`.
 - `BOXHAVEN_APP_URL`: public console/auth app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.

@@ -6,7 +6,7 @@ machine agent are already installed. Plain Ubuntu fallback images are not
 considered fully bootstrapped for normal CLI use.
 
 Providers create boxes from the backend's configured default snapshot:
-`BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` (or legacy `BOXHAVEN_REMOTE_IMAGE`) for
+`BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN` or `BOXHAVEN_REMOTE_IMAGE` for
 DigitalOcean, and `BOXHAVEN_REMOTE_IMAGE_HETZNER` for Hetzner. Team images are
 optional overrides selected when creating a box.
 
