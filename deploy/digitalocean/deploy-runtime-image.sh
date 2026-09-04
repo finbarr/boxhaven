@@ -141,7 +141,8 @@ fi
 git fetch --prune origin
 git merge --ff-only "origin/${deploy_branch}"
 
-./deploy/digitalocean/build-remote-image.sh --env-file "$env_file" --set-active "$@"
+# Nested builder SSH must not consume the remaining bash -s program on stdin.
+./deploy/digitalocean/build-remote-image.sh --env-file "$env_file" --set-active "$@" </dev/null
 ./deploy/digitalocean/deploy-production.sh --local
 REMOTE
   exit 0
@@ -150,7 +151,7 @@ fi
 cd "$repo_root"
 
 [ -f "$env_file" ] || die "missing ${env_file}; copy deploy/digitalocean/env.production.example and fill in production secrets"
-./deploy/digitalocean/build-remote-image.sh --env-file "$env_file" --set-active "${build_args[@]}"
+./deploy/digitalocean/build-remote-image.sh --env-file "$env_file" --set-active "${build_args[@]}" </dev/null
 BOXHAVEN_PRODUCTION_ENV_FILE="$env_file" \
 BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE="$compose_overlay_file" \
 BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE="$compose_overlay_env_file" \
