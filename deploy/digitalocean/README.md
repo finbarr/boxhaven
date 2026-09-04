@@ -155,8 +155,9 @@ runtime that sources `/run/boxhaven/session.env` for setup commands, direct
 commands, and tmux sessions. Rebuild and publish a new snapshot after changing
 `cmd/bh/assets/remote-vm-install.sh`; otherwise newly created boxes will keep
 the previous runtime behavior.
-The installer pins Codex CLI `0.144.3` so the golden image supports the
-configured `gpt-5.6-sol` model deterministically.
+The installer pins Codex CLI `0.153.3` so the golden image supports
+`gpt-6-astra`. After rotating the snapshot, create new boxes to use the updated
+CLI; existing boxes keep their installed version.
 It also installs a checksummed Chrome for Testing headless shell and its shared
 libraries so browser-based agents and reusable Playwright console smoke tests
 run on a fresh box without a separate privileged dependency-install step. The

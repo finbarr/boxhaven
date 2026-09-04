@@ -214,8 +214,9 @@ deploy/digitalocean/build-remote-image.sh \
   --set-active
 ```
 
-The installer pins Codex CLI `0.144.3`; changing that pin has no effect on
-existing boxes until this snapshot rotation is completed.
+The installer pins Codex CLI `0.153.3` for `gpt-6-astra` support. After
+rotating the snapshot, create new boxes to use the updated CLI; existing boxes
+keep their installed version.
 
 Or use the checked-in npm entrypoint:
 
