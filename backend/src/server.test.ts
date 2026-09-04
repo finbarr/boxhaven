@@ -1150,6 +1150,47 @@ test("team deletion and box creation serialize through durable provisioning rese
   await app.close();
 });
 
+test("provider discovery leaves concurrent live creates provisioning until their creators finish", async () => {
+  const { app, provider, store, token } = await createTestBackend("live-creates@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  let release!: () => void;
+  provider.createBarrier = new Promise<void>((resolve) => { release = resolve; });
+  const names = ["live-one", "live-two"];
+  const creating = names.map((name) => app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name } }));
+  try {
+    await waitFor(() => provider.created.length === 2);
+    provider.discovered = provider.created.map((request) => ({
+      name: request.name,
+      provider: provider.name,
+      provider_name: request.provider_name,
+      provider_id: `fake-${request.provider_name}`,
+      public_ipv4: provider.publicIPv4,
+      bootstrap_complete: true,
+    }));
+    // The cloud lists a VM before its create request has installed and persisted
+    // matching credentials. Polling the dashboard must not recover that VM.
+    const listed = await app.inject({ method: "GET", url: "/v1/machines", headers });
+    assert.equal(listed.statusCode, 200, listed.body);
+    assert.deepEqual(listed.json().machines.map((machine: RemoteMachine) => machine.create_state), ["provisioning", "provisioning"]);
+    for (const name of names) {
+      const status = await app.inject({ method: "GET", url: `/v1/machines/${name}`, headers });
+      assert.equal(status.statusCode, 409, status.body);
+      assert.equal(status.json().id, "machine_provisioning");
+    }
+    assert.equal((await store.listMachines()).every((machine) => Boolean(machine.create_operation_id)), true);
+  } finally {
+    release();
+    const results = await Promise.all(creating);
+    for (const result of results) assert.equal(result.statusCode, 201, result.body);
+    for (const name of names) {
+      const status = await app.inject({ method: "GET", url: `/v1/machines/${name}`, headers });
+      assert.equal(status.statusCode, 200, status.body);
+      assert.equal(status.json().machine.create_state, undefined);
+    }
+    await app.close();
+  }
+});
+
 test("restart clears crashed create reservations but keeps a durable recovery machine", async () => {
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-create-recovery-"));
   const databasePath = join(dir, "boxhaven.sqlite");

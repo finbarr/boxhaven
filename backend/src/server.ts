@@ -1206,7 +1206,7 @@ async function createMachine(
   body.ssh_authorized_principal = sshPrincipal;
 
   phaseStarted = Date.now();
-  await syncProviderMachines(options, auth);
+  await syncProviderMachines(options, auth, createOperationID);
   recordMachineCreateTiming(timings, "provider_sync_ms", phaseStarted);
   const existing = await options.store.getMachine(auth.userID, body.name);
   if (existing && existing.create_operation_id !== createOperationID) {
@@ -1300,7 +1300,7 @@ function formatMachineCreateTimings(timings: MachineCreateTimings): string {
     .join(" ");
 }
 
-async function syncProviderMachines(options: BackendOptions, auth: AuthContext): Promise<void> {
+async function syncProviderMachines(options: BackendOptions, auth: AuthContext, preflightCreateOperationID?: string): Promise<void> {
   const known = await options.store.listMachinesForUser(auth.userID);
   for (const provider of options.providers.list()) {
     let discovered: Array<{ machine: RemoteMachine; status?: string }>;
@@ -1324,6 +1324,12 @@ async function syncProviderMachines(options: BackendOptions, auth: AuthContext):
         // record of a same-named machine that lives elsewhere.
         continue;
       }
+      // The active creator owns this record and its credentials. Cloud discovery
+      // can see the VM before create finishes; leave the placeholder untouched.
+      // The exception is this creator's own preflight: it has not called the
+      // provider yet, so a discovered VM is a pre-existing name collision.
+      // Failed requests/startup mark interrupted creates recovery-required.
+      if (existing?.create_state === "provisioning" && existing.create_operation_id !== preflightCreateOperationID) continue;
       const name = existing?.name || item.machine.name;
       const machineInput: RemoteMachine = {
         ...existing,

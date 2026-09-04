@@ -117,11 +117,45 @@ preview_url_for() {
 }
 
 create_boxes() {
+  local pids=() pid running failed=0 listing
+  listing="$(bh list)"
+  for name in "${boxes[@]}"; do
+    if printf '%s\n' "$listing" | awk -v name="$name" '$1 == name { found=1 } END { exit(found ? 0 : 1) }'; then
+      log "refusing to reuse existing box ${name}"
+      return 1
+    fi
+  done
   for name in "${boxes[@]}"; do
     log "creating ${name}"
-    bh create "$name" --size "$size"
+    # Record attempted creates too: an interrupted create can leave a VM.
     created+=("$name")
+    if [ "$mode" = "two-box" ]; then
+      bh create "$name" --size "$size" > "${project_dir}/${name}.create.log" 2>&1 &
+      pids+=("$!")
+    else
+      bh create "$name" --size "$size"
+    fi
   done
+  if [ "$mode" = "two-box" ]; then
+    while :; do
+      running=0
+      for pid in "${pids[@]}"; do
+        if kill -0 "$pid" 2>/dev/null; then running=1; fi
+      done
+      [ "$running" = "1" ] || break
+      listing="$(bh list)" || failed=1
+      for name in "${boxes[@]}"; do
+        if printf '%s\n' "$listing" | awk -v name="$name" '$1 == name && /recovery/ { found=1 } END { exit(found ? 0 : 1) }'; then
+          log "live create incorrectly became recovery-required: ${name}"
+          failed=1
+        fi
+      done
+      sleep 2
+    done
+    for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
+    for name in "${boxes[@]}"; do cat "${project_dir}/${name}.create.log"; done
+    [ "$failed" = "0" ] || return 1
+  fi
   for name in "${boxes[@]}"; do
     bh list | awk -v name="$name" '$1 == name { found=1 } END { exit(found ? 0 : 1) }'
   done
