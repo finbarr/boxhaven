@@ -19,6 +19,10 @@ const pageSeo: Record<string, { title: string, description: string, noindex?: bo
     title: 'CLI Reference',
     description: 'Reference for every bh command: create, run, connect, sync, list, status, rename, move, destroy, image, team, login, logout, config, and version.',
   },
+  '/agent-skill': {
+    title: 'BoxHaven Agent Skill',
+    description: 'Install the public BoxHaven skill for Codex or Claude and launch persistent remote agent tasks in parallel.',
+  },
   '/teams': {
     title: 'Teams',
     description: 'Share boxes with teammates using team-owned boxes, owner/admin/member roles, shareable invite links, and per-team visibility.',
@@ -175,6 +179,7 @@ export default defineConfig({
         items: [
           { text: 'Overview', link: '/' },
           { text: 'Getting Started', link: '/getting-started' },
+          { text: 'Agent Skill', link: '/agent-skill' },
           { text: 'CLI Reference', link: '/commands' },
         ]
       },

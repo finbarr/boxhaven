@@ -44,12 +44,23 @@ or use "Continue with GitHub" when the operator configures a GitHub OAuth app
 does not need a second verification step; `bh login` then works the same either
 way.
 
-Run agents in parallel, each on its own box:
+Run agents in parallel, each on its own box. Redirecting input and output makes
+these launches detached even when you run this example in a terminal:
 
 ```bash
-bh create work-2 && bh run work-2 codex
-bh create work-3 && bh run work-3 claude
+launch_logs=$(mktemp -d)
+(bh create work-2 && bh run work-2 codex 'Review the project and report improvements.') </dev/null >"$launch_logs/work-2.log" 2>&1 &
+codex_pid=$!
+(bh create work-3 && bh run work-3 claude 'Run the project checks and report failures.') </dev/null >"$launch_logs/work-3.log" 2>&1 &
+claude_pid=$!
+wait "$codex_pid" || cat "$launch_logs/work-2.log"
+wait "$claude_pid" || cat "$launch_logs/work-3.log"
+bh connect work-2
 ```
+
+For repeatable batches with separate task directories and per-box results, use
+the public [BoxHaven agent skill](skills/boxhaven/SKILL.md) and its parallel
+launcher. [Install it in Codex or Claude](https://docs.boxhaven.dev/agent-skill).
 
 `bh create` asks the backend for a machine, waits for it to be reachable, and
 syncs the current project into `/opt/boxhaven/project`. After that the box
@@ -63,9 +74,10 @@ completion reports elapsed time, network bytes, changed bytes, and file counts.
 
 When you start `claude` or `codex` with `bh run`, bh forwards your newest
 local sessions for the project, so `claude --continue` on the box picks up
-the conversation exactly where your laptop left it. Interactive commands
-attach to the machine's managed tmux session; noninteractive commands run
-over direct SSH.
+the conversation exactly where your laptop left it. Agent commands use the
+machine's managed tmux session: they attach with a terminal and start detached
+without one. Other commands run over direct SSH. Inspect session output before
+calling an agent working; a successful detached launch is not task completion.
 
 ## Direct SSH
 

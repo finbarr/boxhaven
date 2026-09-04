@@ -1,0 +1,4 @@
+interface:
+  display_name: "BoxHaven"
+  short_description: "Run and manage persistent agents on remote boxes"
+  default_prompt: "Use $boxhaven to launch and manage remote agent tasks with the bh CLI."

@@ -208,8 +208,12 @@ bh run work claude --continue
 ```
 
 Disconnect whenever you like — the agent keeps running in the box's tmux
-session. `bh connect work` reattaches, and `bh list` shows which boxes are
-online.
+session. Press **Ctrl-b**, then **d** to detach. `bh connect work` reattaches,
+and `bh list` shows which boxes are online.
+
+For multiple independent tasks, install the [BoxHaven agent skill](/agent-skill).
+It includes a parallel launcher, progress inspection, preview verification, and
+safe retrieval into separate local task directories.
 
 ## Open A Web Preview
 

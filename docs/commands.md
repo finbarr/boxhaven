@@ -78,6 +78,13 @@ SSH.
 is never overwritten by a routine command. Pass `--sync` to mirror the local
 project first (this overwrites box-side edits).
 
+Without a terminal (for example, when launched by another agent with captured
+output), managed agent commands start detached and return. With a terminal,
+they attach; press **Ctrl-b**, then **d** to disconnect and use `bh connect` to
+reattach. If the managed session already exists, another `bh run` attaches to
+that session instead of submitting a new task. Inspect the session output to
+confirm that the model is working; a successful launch is not task completion.
+
 Starting `claude` or `codex` forwards your newest local sessions for the
 current project, so `claude --continue` on the box resumes the conversation
 your laptop was having:

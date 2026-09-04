@@ -49,7 +49,7 @@ fix independent from the feature or bugfix that uncovered it.
 
 ```bash
 make build          # Build the bh binary
-make test           # Run Go, backend, and backup tests
+make test           # Run Go, backend, backup, and skill launcher tests
 make backup-test    # Run the application-backup integrity tests
 make lint           # Run go vet and golangci-lint when available
 make backend-build  # Build the TypeScript backend and web app

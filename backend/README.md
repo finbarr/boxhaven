@@ -355,6 +355,10 @@ agent sessions through `BOXHAVEN_PREVIEW_URL`, `BOXHAVEN_PREVIEW_HOSTNAME`,
 `boxhaven-web-preview` that describes how web apps should bind and report their
 public URL.
 
+For the CLI workflow on the user's computer, the public
+[`skills/boxhaven`](../skills/boxhaven/SKILL.md) package supports Codex and Claude
+with parallel launch, progress inspection, preview verification, and retrieval.
+
 The console links directly to each configured public preview from the Boxes
 table and the box's details drawer. Provisioning and recovery records do not
 offer preview links. Box characters derive from provider identity, so renaming
