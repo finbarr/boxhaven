@@ -340,6 +340,10 @@ global Git config. BoxHaven does not copy the full local Git config.
 
 ## Web Preview
 
+Open a box's **Public preview** link in the console, or use **Open preview** in
+its details drawer. Previews open in a new tab. Each box has a small character
+inspired by the logo; its appearance stays the same across renames and team moves.
+
 Each hosted box receives a public preview URL when the backend is configured
 with a preview base domain. The backend warms the preview URL during machine
 create so Caddy has already completed on-demand certificate issuance before the

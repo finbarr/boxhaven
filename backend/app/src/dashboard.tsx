@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import { ArrowRightLeft, ChevronRight, MonitorDot, Plus, Settings2, Server, Trash2, TriangleAlert } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ArrowRightLeft, ExternalLink, Plus, Settings2, Server, Trash2, TriangleAlert } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CommandBlock, installCommand } from "./access";
 import {
@@ -19,6 +19,7 @@ import {
   TeamInfo,
 } from "./api";
 import { useConsole } from "./console-context";
+import { BoxAvatar } from "./box-avatar";
 import { CostEstimate } from "./cost-estimate";
 import { Drawer } from "./drawer";
 import { WorkspaceHead } from "./shell";
@@ -181,14 +182,12 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
       <div className="workspace-body">
         {machineList.length ? (
           <div className="panel table-panel">
-            <table className="data-table rows-clickable">
+            <table className="data-table boxes-table rows-clickable">
               <thead>
                 <tr>
-                  <th aria-label="Status" />
-                  <th>Name</th>
+                  <th>Box</th>
                   <th>Location</th>
-                  <th>Endpoint</th>
-                  <th aria-label="Open" />
+                  <th>Public preview</th>
                 </tr>
               </thead>
               <tbody>
@@ -198,17 +197,22 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
                     className={machine.name === selectedName ? "selected" : undefined}
                     onClick={() => void navigate({ to: "/boxes/$name", params: { name: machine.name } })}
                   >
-                    <td className={`cell-status${machine.create_state === "recovery_required" ? " recovery" : ""}`} title={machine.create_state === "recovery_required" ? "Recovery required" : "Box"}>
-                      {machine.create_state === "recovery_required" ? <TriangleAlert size={16} /> : <MonitorDot size={16} />}
-                    </td>
-                    <td><strong>{machine.name}</strong></td>
-                    <td>{machine.provider_label || machine.provider || "-"} / {machine.region || "-"}</td>
                     <td>
-                      {machine.create_state === "recovery_required"
-                        ? <span className="recovery-label">destroy and recreate</span>
-                        : <code title={machine.preview_hostname || machine.public_ipv4 || ""}>{machine.preview_hostname || machine.public_ipv4 || "pending"}</code>}
+                      <Link className="box-name" to="/boxes/$name" params={{ name: machine.name }} onClick={(event) => event.stopPropagation()}>
+                        <BoxAvatar machine={machine} />
+                        <strong>{machine.name}</strong>
+                      </Link>
                     </td>
-                    <td className="cell-chevron"><ChevronRight size={16} /></td>
+                    <td className="box-location">{machine.provider_label || machine.provider || "-"} / {machine.region || "-"}</td>
+                    <td className="box-preview">
+                      {machine.create_state === "recovery_required"
+                        ? <span className="recovery-label"><TriangleAlert size={14} /> destroy and recreate</span>
+                        : machine.create_state === "provisioning"
+                          ? <span className="hint">Creating…</span>
+                          : machine.preview_url
+                            ? <PreviewLink machine={machine} />
+                            : <span className="hint">Not configured</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -369,7 +373,7 @@ function GettingStarted({ onCreate }: { onCreate: () => void }) {
           </div>
         </li>
       </ol>
-      <p className="hint">Disconnect whenever you like. <code>bh connect work</code> reattaches to the running session.</p>
+      <p className="hint">Press <kbd>Ctrl-b</kbd> then <kbd>d</kbd> to disconnect. <code>bh connect work</code> reattaches to the running session.</p>
       <p className="hint">
         Prefer clicking?{" "}
         <button className="link-button" type="button" onClick={onCreate}>Create a box from the console</button>.
@@ -410,6 +414,7 @@ function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClos
         onClose={onClose}
         eyebrow={connect?.status || "box"}
         title={machine.name}
+        headingIcon={<BoxAvatar machine={machine} />}
         footer={(
           <button
             className="danger-button"
@@ -440,8 +445,10 @@ function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClos
           <Metric label="Size" value={machine.size_shortcut ? `${machine.size_shortcut} (${machine.size || "-"})` : machine.size || "-"} />
           <Metric label="Image" value={machine.image || "-"} />
         </div>
-        {machine.create_state === "recovery_required" ? null : (
+        {machine.create_state === "provisioning" ? <p className="hint" role="status">Creating your box. Connection details will appear when provisioning finishes.</p> : null}
+        {machine.create_state ? null : (
           <>
+            {machine.preview_url ? <PreviewLink machine={machine} prominent /> : null}
             <CommandBlock label="Preview" value={machine.preview_url || ""} />
             <CommandBlock label="Connect" value={connect?.connect.cli || `bh connect ${machine.name}`} />
             <CommandBlock label="Run" value={connect?.connect.cli_run || `bh run ${machine.name}`} />
@@ -476,6 +483,22 @@ function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClos
         <div className="empty"><Server size={22} /><span>{loading ? "Loading box" : "Select a box"}</span></div>
       )}
     </Drawer>
+  );
+}
+
+function PreviewLink({ machine, prominent = false }: { machine: Machine; prominent?: boolean }) {
+  return (
+    <a
+      className={prominent ? "primary-button preview-link" : "preview-link"}
+      href={machine.preview_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Open public preview for ${machine.name} (new tab)`}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {prominent ? "Open preview" : <span>{machine.preview_hostname || machine.preview_url}</span>}
+      <ExternalLink size={14} aria-hidden="true" />
+    </a>
   );
 }
 

@@ -211,6 +211,20 @@ Disconnect whenever you like — the agent keeps running in the box's tmux
 session. `bh connect work` reattaches, and `bh list` shows which boxes are
 online.
 
+## Open A Web Preview
+
+In the console, click a box's **Public preview** link, or open its details and
+click **Open preview**. The app opens in a new tab. Each box gets its own small
+character inspired by the BoxHaven logo, which stays the same when you rename
+the box or move it to another team.
+
+`bh status work` also shows the public URL. Inside the box, use
+`BOXHAVEN_PREVIEW_URL` for the shareable address and serve HTTP on
+`$BOXHAVEN_WEB_BIND:$BOXHAVEN_WEB_PORT` (normally `0.0.0.0:80`). Keep the server
+running in its own tmux session. A preview URL is assigned before your app is
+running; open it and verify the app before calling it ready. Serve only the
+intended public directory, not a checkout containing credentials or private files.
+
 ## Sync Files
 
 Push local changes to the box:

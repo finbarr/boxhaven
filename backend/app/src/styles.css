@@ -1476,17 +1476,55 @@ a.secondary-button {
   background: rgba(47, 111, 92, 0.12);
 }
 
-.cell-status {
-  width: 22px;
-  color: #2f6f5c;
+.boxes-table {
+  table-layout: fixed;
 }
 
-.cell-status.recovery,
+.boxes-table th:first-child { width: 34%; }
+.boxes-table th:nth-child(2) { width: 24%; }
+
+.box-avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+}
+
+.box-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  max-width: 100%;
+  text-decoration: none;
+}
+
+.box-name strong { overflow-wrap: anywhere; }
+.box-name:hover strong { text-decoration: underline; }
+.box-location { font-size: 13px; overflow-wrap: anywhere; }
+
+.preview-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  font-size: 13px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.preview-link svg { flex: 0 0 auto; }
+.preview-link.primary-button { justify-self: start; text-decoration: none; }
+.box-name:focus-visible,
+.preview-link:focus-visible { outline: 2px solid #2f6f5c; outline-offset: 4px; border-radius: 4px; }
+.drawer-head > .box-avatar { width: 56px; height: 56px; }
+.drawer-head > .panel-heading { flex: 1; min-width: 0; }
+.drawer-head h2 { overflow-wrap: anywhere; }
+
 .recovery-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: #a24b2a;
-}
-
-.recovery-label {
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -1776,6 +1814,22 @@ a.secondary-button {
 }
 
 @media (max-width: 640px) {
+  .boxes-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .boxes-table tbody,
+  .boxes-table tr,
+  .boxes-table td { display: block; width: 100%; }
+  .boxes-table tr { padding: 14px 16px; border-bottom: 1px solid rgba(96, 75, 53, 0.12); }
+  .table-panel .boxes-table td { padding: 0; border: 0; }
+  .table-panel .boxes-table .box-location { padding: 2px 0 8px 56px; }
+  .table-panel .boxes-table .box-preview { padding-left: 56px; }
+
   .console {
     padding: 14px;
   }

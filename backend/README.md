@@ -355,6 +355,11 @@ agent sessions through `BOXHAVEN_PREVIEW_URL`, `BOXHAVEN_PREVIEW_HOSTNAME`,
 `boxhaven-web-preview` that describes how web apps should bind and report their
 public URL.
 
+The console links directly to each configured public preview from the Boxes
+table and the box's details drawer. Provisioning and recovery records do not
+offer preview links. Box characters derive from provider identity, so renaming
+or moving a VM does not change its appearance or require an image service.
+
 Machines are owned by the authenticated Better Auth user, belong to exactly one
 team, and are one-to-one with a remote VM. Every account automatically gets a
 default team on its first authenticated request, and machine JSON carries

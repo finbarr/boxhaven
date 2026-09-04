@@ -53,6 +53,7 @@ try {
   const deviceFacts = await checkDevicePage(page, deviceUserCode);
   const gettingStartedFacts = await checkGettingStarted(page);
   const recoveryFacts = await checkRecoveryBox(page, disabledAccountBackend.store, disabledAccountBackend.whoami);
+  const previewFacts = await checkBoxPreviews(page, disabledAccountBackend.store, disabledAccountBackend.whoami);
   const teamMenuFacts = await checkTeamMenu(page);
   const membersFacts = await checkMembersPage(page);
   const teamsFacts = await checkTeamsPage(page);
@@ -116,6 +117,7 @@ try {
     deviceFacts,
     gettingStartedFacts,
     recoveryFacts,
+    previewFacts,
     teamMenuFacts,
     membersFacts,
     teamsFacts,
@@ -488,6 +490,82 @@ async function checkRecoveryBox(page, store, whoami) {
   assert.ok((mobile.noticeWidth || 0) <= mobile.viewport, `recovery notice overflows: ${mobile.noticeWidth} > ${mobile.viewport}`);
   await store.deleteMachine(whoami.user.id, "recover-me");
   return { desktop, mobile };
+}
+
+async function checkBoxPreviews(page, store, whoami) {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const fixtures = [
+    { name: "porch", provider_id: "porch-12" },
+    { name: "moss", provider_id: "moss-67" },
+    { name: "work-with-an-especially-long-name-for-a-small-phone-screen", provider_id: "work-35", preview_hostname: "an-especially-long-preview-hostname-for-a-phone.local.test" },
+    { name: "still-creating", provider_id: "creating-8", create_state: "provisioning" },
+    { name: "without-preview", provider_id: "without-23" },
+  ].map((machine) => ({
+    user_id: whoami.user.id, org_id: whoami.team.id,
+    provider: "fake", provider_label: "Fake Cloud", region: "nyc3",
+    public_ipv4: "127.0.0.1", bootstrap_complete: true, ...machine,
+  }));
+  for (const machine of fixtures) await store.putMachine(machine);
+  // Exercise a backend without preview configuration alongside configured boxes.
+  await page.route(`${apiURL}/v1/machines`, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    for (const machine of body.machines) if (machine.name === "without-preview") {
+      delete machine.preview_url;
+      delete machine.preview_hostname;
+    }
+    await route.fulfill({ response, json: body });
+  });
+  await page.context().route(/https:\/\/[^/]+\.local\.test\//, (route) => route.fulfill({ contentType: "text/html", body: "<h1>Public preview</h1>" }));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(appURL, { waitUntil: "networkidle" });
+  const table = page.locator(".boxes-table");
+  await table.waitFor();
+  assert.equal(await table.locator("thead th").count(), 3, "no separate generic status icon column");
+  assert.equal(await table.locator(".box-avatar").count(), fixtures.length);
+  assert.equal(await table.locator(".preview-link").count(), 3, "only usable preview URLs become links");
+  assert.equal(await table.locator("tr").filter({ hasText: "still-creating" }).getByText("Creating…").count(), 1);
+  assert.equal(await table.getByText("Not configured").count(), 1);
+  const avatars = await table.locator(".box-avatar").evaluateAll((nodes) => nodes.map((node) => node.outerHTML));
+  assert.ok(new Set(avatars).size >= 3, "boxes have distinct identities");
+  await page.screenshot({ path: join(outDir, "box-previews-desktop.png"), fullPage: true });
+  const link = table.getByRole("link", { name: "Open public preview for porch (new tab)" });
+  const href = await link.getAttribute("href");
+  assert.match(href, /^https:\/\/.+\.local\.test$/);
+  assert.equal(await link.getAttribute("rel"), "noopener noreferrer");
+  const popupPromise = page.waitForEvent("popup");
+  await link.click();
+  const popup = await popupPromise;
+  await popup.getByRole("heading", { name: "Public preview" }).waitFor();
+  assert.equal(new URL(popup.url()).origin, href);
+  await popup.close();
+  assert.equal(new URL(page.url()).pathname, "/", "preview click must not open box details");
+  assert.equal(await page.getByRole("dialog").count(), 0);
+
+  const nameLink = table.getByRole("link", { name: "porch", exact: true });
+  const avatar = await nameLink.locator("svg").evaluate((node) => node.outerHTML);
+  await nameLink.focus();
+  await page.keyboard.press("Enter");
+  const drawer = page.getByRole("dialog");
+  await drawer.getByRole("link", { name: "Open public preview for porch (new tab)" }).waitFor();
+  assert.equal(await drawer.locator(".box-avatar").evaluate((node) => node.outerHTML), avatar);
+  assert.equal(await drawer.locator(".preview-link").getAttribute("href"), href);
+  await page.screenshot({ path: join(outDir, "box-preview-drawer.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.screenshot({ path: join(outDir, "box-preview-drawer-mobile.png"), fullPage: true });
+  await drawer.getByRole("button", { name: "Close", exact: true }).click();
+  await page.screenshot({ path: join(outDir, "box-previews-mobile.png"), fullPage: true });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  assert.equal(await table.evaluate((node) => node.scrollWidth > node.clientWidth), false);
+
+  // Provider identity, not the user-editable name or array position, determines appearance.
+  await store.deleteMachine(whoami.user.id, "porch");
+  await store.putMachine({ ...fixtures[0], name: "renamed-porch" });
+  await page.goto(appURL, { waitUntil: "networkidle" });
+  assert.equal(await page.getByRole("link", { name: "renamed-porch", exact: true }).locator("svg").evaluate((node) => node.outerHTML), avatar);
+  for (const name of [...fixtures.map((machine) => machine.name), "renamed-porch"]) await store.deleteMachine(whoami.user.id, name);
+  await page.unroute(`${apiURL}/v1/machines`);
+  return { previewURL: href, distinctAvatars: new Set(avatars).size, renameStable: true, opensNewTab: true };
 }
 
 async function checkTeamMenu(page) {
