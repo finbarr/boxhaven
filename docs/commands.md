@@ -141,6 +141,33 @@ common dependency/cache directories such as `node_modules/`, `.next/`, and
 receiver even when sync mirrors deletions. Sync completion reports elapsed time,
 network bytes, changed bytes, and file counts.
 
+### .boxhavenignore
+
+Both sync directions read `.boxhavenignore` from the **local** project root.
+The file adds one rsync exclude pattern per line; blank lines and `#` comments
+are ignored. `.gitignore` is not used as a sync filter, and `!` does not
+re-include files. Built-in exclusions cannot be reversed by this file.
+
+For example, to keep local credentials, private data, and generated output out
+of the box when they are not needed by the task:
+
+```text
+.env
+.env.local
+/private-data/
+/dist/
+*.log
+```
+
+A leading `/` anchors a pattern to the project root, and a trailing `/`
+matches directories. A name such as `.env` matches at any depth. Excluded
+files already on the receiver remain there; adding a pattern does not remove
+a previously uploaded copy. Sync down also mirrors deletions, so use the
+matching local task directory when retrieving work.
+
+The [BoxHaven agent skill](/agent-skill) bundles this sync guidance for Codex
+and Claude alongside the box creation, agent, and retrieval workflows.
+
 ## bh list
 
 ```bash

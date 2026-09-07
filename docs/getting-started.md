@@ -175,7 +175,7 @@ box.
 Run a noninteractive command:
 
 ```bash
-bh run work run bash -lc 'go test ./...'
+bh run work bash -lc 'go test ./...'
 ```
 
 Start or attach to the managed tmux session:
@@ -211,9 +211,27 @@ Disconnect whenever you like — the agent keeps running in the box's tmux
 session. Press **Ctrl-b**, then **d** to detach. `bh connect work` reattaches,
 and `bh list` shows which boxes are online.
 
-For multiple independent tasks, install the [BoxHaven agent skill](/agent-skill).
-It includes a parallel launcher, progress inspection, preview verification, and
-safe retrieval into separate local task directories.
+## Install The Agent Skill
+
+Let Codex or Claude on your laptop operate the CLI for you. With Node.js 22.20
+or later, use [Vercel's Skills CLI](https://github.com/vercel-labs/skills), the
+installer behind [skills.sh](https://skills.sh/):
+
+```bash
+npx skills add finbarr/boxhaven \
+  --skill boxhaven -g \
+  -a codex claude-code
+```
+
+Invoke `$boxhaven` in Codex or `/boxhaven` in Claude. The skill teaches box
+creation, persistent agents, `.boxhavenignore`, sync, previews, and retrieving
+results. It includes a launcher for independent tasks in parallel and links to
+current docs when your agent needs more detail.
+
+Update it with `npx skills update boxhaven -g`. See the
+[agent skill guide](/agent-skill) for project installation, version pins, and
+batch examples. The skill requires `bh` 0.2.0 or later and the login you set up
+above.
 
 ## Open A Web Preview
 

@@ -37,17 +37,28 @@ try {
     assert.match(await page.locator(".vp-doc").innerText(), /Public preview[\s\S]*Open preview[\s\S]*BOXHAVEN_PREVIEW_URL/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: join(out, `preview-${size}.png`) });
+    await page.goto(`${target}/getting-started#install-the-agent-skill`, { waitUntil: "networkidle" });
+    await page.locator("#install-the-agent-skill").scrollIntoViewIfNeeded();
+    assert.match(await page.locator(".vp-doc").innerText(), /npx skills add finbarr\/boxhaven/);
+    await page.screenshot({ path: join(out, `getting-started-skill-${size}.png`) });
     await page.goto(`${target}/agent-skill`, { waitUntil: "networkidle" });
-    assert.match(await page.locator(".vp-doc").innerText(), /\.agents\/skills[\s\S]*\.claude\/skills/);
+    assert.match(await page.locator(".vp-doc").innerText(), /npx skills add finbarr\/boxhaven[\s\S]*\.agents\/skills[\s\S]*\.claude\/skills/);
+    assert.equal(await page.locator('a[href="https://skills.sh/"]').count(), 1);
     assert.equal(await page.locator('.vp-doc a[href="https://github.com/finbarr/boxhaven/tree/master/skills/boxhaven"]').count(), 1);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: join(out, `agent-skill-${size}.png`) });
+    for (const section of ["updates-and-versions", "project-sync-and-documentation", "inside-a-remote-box"]) {
+      await page.locator(`#${section}`).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: join(out, `agent-${section}-${size}.png`) });
+    }
     await page.locator("#launch-a-batch").scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(out, `agent-batch-${size}.png`) });
     await page.goto(`${target}/commands#bh-run`, { waitUntil: "networkidle" });
     assert.match(await page.locator(".vp-doc").innerText(), /managed agent commands start detached and return/);
     await page.locator("#bh-run").scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(out, `commands-${size}.png`) });
+    await page.locator('h3').filter({ hasText: ".boxhavenignore" }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(out, `sync-ignore-${size}.png`) });
     await page.goto(`${target}/self-hosting#run-with-docker-compose`, { waitUntil: "networkidle" });
     await page.locator("#run-with-docker-compose").scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(out, `compose-version-${size}.png`) });

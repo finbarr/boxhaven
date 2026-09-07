@@ -368,7 +368,18 @@ public URL.
 
 For the CLI workflow on the user's computer, the public
 [`skills/boxhaven`](../skills/boxhaven/SKILL.md) package supports Codex and Claude
-with parallel launch, progress inspection, preview verification, and retrieval.
+with box creation, parallel launch, progress inspection, preview verification,
+`.boxhavenignore` guidance, and retrieval. Install it globally with Vercel's
+[Skills CLI](https://skills.sh/):
+
+```bash
+npx skills add finbarr/boxhaven --skill boxhaven -g -a codex claude-code
+```
+
+It requires `bh` 0.2.0 or later and an existing login. Update with
+`npx skills update boxhaven -g`; see the [skill guide](../docs/agent-skill.md)
+for version pins and project scope. This laptop skill is distributed through
+Git; the separate remote preview skill is updated through the VM image.
 
 The console links directly to each configured public preview from the Boxes
 table and the box's details drawer. Provisioning and recovery records do not

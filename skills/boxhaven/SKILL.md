@@ -1,6 +1,12 @@
 ---
 name: boxhaven
 description: Use the bh CLI to create and manage remote BoxHaven machines, run persistent Codex or Claude tasks on one or several boxes, inspect progress, share web previews, and retrieve work. Use when the user asks to work on BoxHaven boxes or launch parallel remote agents.
+license: AGPL-3.0-only
+compatibility: Requires bh 0.2.0 or later, an authenticated BoxHaven account, and network access to the backend. The optional parallel launcher requires Python 3.
+metadata:
+  author: finbarr
+  version: "1.0.0"
+  minimum-bh-version: "0.2.0"
 ---
 
 # BoxHaven
@@ -14,6 +20,9 @@ for ordinary machine operations; cloud-provider credentials are not needed.
 - Locate `bh` with `command -v bh`; in the BoxHaven source checkout, `./bh` may
   be the freshly built CLI. Check `bh version`, `bh help`, and `bh list`.
   If absent, follow [installation](https://docs.boxhaven.dev/getting-started).
+  Compare the CLI version with `metadata.minimum-bh-version` above. Resolve
+  an older CLI before using this workflow; current website docs may describe
+  commands that an older binary does not support.
 - If authentication is missing, use `bh login` (or `bh login --no-open` for a
   printed browser URL). Let the user finish browser authentication. Never
   print or embed the saved token in prompts, manifests, or logs.
@@ -22,8 +31,10 @@ for ordinary machine operations; cloud-provider credentials are not needed.
   Do not switch the user's active team merely to launch a task; use `--team`.
 - Start from the intended project directory. Create syncs that directory,
   including its Git metadata, into `/opt/boxhaven/project`. Use a separate
-  checkout/worktree or task directory for each independent agent. Review what
-  will be uploaded and use `.boxhavenignore` for additional exclusions.
+  checkout/worktree or task directory for each independent agent. Before the
+  first upload or changing sync exclusions, read [project sync](references/sync.md)
+  for `.boxhavenignore` syntax, defaults, and deletion behavior. `.gitignore`
+  does not control BoxHaven sync.
 - For a delegated build, write a concrete `TASK.md`: outcome, scope, checks,
   expected artifacts, and whether to keep a public app running. Respect the
   project's existing instructions. Do not invent a different task or model.
@@ -168,4 +179,31 @@ artifact location, and `bh connect NAME`. Leave demos running when requested.
 When cleanup is in scope, destroy only the task's recorded boxes using
 `bh destroy NAME --force`, then verify their absence in `bh list`.
 
-More commands: [CLI reference](https://docs.boxhaven.dev/commands).
+## Consult the documentation
+
+Use the bundled workflow for ordinary tasks. When a flag, configuration option,
+or behavior is unclear, fetch the relevant official page below and read the
+needed section. Do not load the whole site for every task. The Markdown URLs
+contain the same maintained source as the website.
+
+| When you need | Website | Markdown |
+| --- | --- | --- |
+| Installation, login, first box, and reconnect | [Getting started](https://docs.boxhaven.dev/getting-started) | [Source](https://docs.boxhaven.dev/getting-started.md) |
+| Exact commands, flags, sync, and configuration | [CLI reference](https://docs.boxhaven.dev/commands) | [Source](https://docs.boxhaven.dev/commands.md) |
+| SSH trust and forwarded credentials | [Security](https://docs.boxhaven.dev/security) | [Source](https://docs.boxhaven.dev/security.md) |
+| Team selection, permissions, and invitations | [Teams](https://docs.boxhaven.dev/teams) | [Source](https://docs.boxhaven.dev/teams.md) |
+| Golden images and runtime versions | [Images](https://docs.boxhaven.dev/images) | [Source](https://docs.boxhaven.dev/images.md) |
+| Cloud provider, region, or size configuration | [Providers](https://docs.boxhaven.dev/providers) | [Source](https://docs.boxhaven.dev/providers.md) |
+| Skill installation, updates, and version pins | [Agent skill](https://docs.boxhaven.dev/agent-skill) | [Source](https://docs.boxhaven.dev/agent-skill.md) |
+
+For other topics, discover pages through [llms.txt](https://docs.boxhaven.dev/llms.txt).
+In a BoxHaven checkout, the same sources are under `docs/`, with the project
+overview in `README.md`. If the website is unavailable, use those local files
+and the installed CLI's help; report any detail you cannot verify.
+
+Skill updates are explicit: `npx skills update boxhaven -g` refreshes a global
+installation from its recorded Git ref. A version-pinned installation stays on
+that ref. `metadata.version` identifies these instructions; it does not update
+the skill or `bh`. Update the skill when the user requests it, preserving any
+chosen version pin. In Skills CLI 1.5.24, `skills check` is an alias for update,
+so do not use it as a read-only version check.

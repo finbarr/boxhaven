@@ -12,7 +12,7 @@ agents inside persistent sessions, and operate the backend.
 ## Start here
 
 - [Getting started](/getting-started): install `bh`, log in, create a box, run an agent, disconnect, reattach, and use normal SSH clients.
-- [Agent skill](/agent-skill): give Codex or Claude the BoxHaven workflow and launch independent tasks in parallel.
+- [Agent skill](/agent-skill): install with Vercel's Skills CLI to teach Codex or Claude box creation, persistent agents, parallel tasks, project sync, and previews.
 - [CLI reference](/commands): every command and flag for boxes, direct SSH, sync, teams, images, auth, and config.
 - [Self-hosting](/self-hosting): run the Fastify/Better Auth control plane with your own provider credentials.
 
@@ -26,6 +26,13 @@ agents inside persistent sessions, and operate the backend.
 
 - [Security model](/security): short-lived SSH certificates, the backend user CA, and forwarded credentials.
 - [External policy service](/operator-policy): optional create policy and native account-page integration for operators.
+
+## Documentation for agents
+
+[`llms.txt`](https://docs.boxhaven.dev/llms.txt) lists the documentation pages
+and their Markdown URLs. For example,
+[`commands.md`](https://docs.boxhaven.dev/commands.md) is the source of the CLI
+reference. The website and these exports are built from the same files.
 
 ## Source and license
 

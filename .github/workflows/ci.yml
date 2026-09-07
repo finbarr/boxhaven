@@ -8,7 +8,7 @@ on:
 
 jobs:
   docs:
-    name: Documentation
+    name: Documentation and Skills
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -19,6 +19,8 @@ jobs:
           cache-dependency-path: docs/package-lock.json
       - run: npm --prefix docs ci
       - run: npm --prefix docs run docs:build
+      - run: make skill-test
+      - run: python3 scripts/smoke-skill-install.py
 
   test:
     name: Go Test

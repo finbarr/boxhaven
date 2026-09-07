@@ -58,9 +58,25 @@ wait "$claude_pid" || cat "$launch_logs/work-3.log"
 bh connect work-2
 ```
 
-For repeatable batches with separate task directories and per-box results, use
-the public [BoxHaven agent skill](skills/boxhaven/SKILL.md) and its parallel
-launcher. [Install it in Codex or Claude](https://docs.boxhaven.dev/agent-skill).
+Teach your local Codex or Claude agent to operate BoxHaven with the public
+[BoxHaven skill](skills/boxhaven/SKILL.md). Install it using
+[Vercel's Skills CLI](https://github.com/vercel-labs/skills), the installer behind
+[skills.sh](https://skills.sh/) (Node.js 22.20 or later):
+
+```bash
+npx skills add finbarr/boxhaven --skill boxhaven -g -a codex claude-code
+```
+
+Invoke `$boxhaven` in Codex or `/boxhaven` in Claude. The skill teaches box
+creation, persistent sessions, parallel launches, progress and preview checks,
+`.boxhavenignore`, and retrieving results. It bundles a parallel launcher and
+sync reference, and links to current docs for details. It requires `bh` 0.2.0
+or later and your existing login.
+
+Update it with `npx skills update boxhaven -g`.
+[Installation, project scope, and version pins](https://docs.boxhaven.dev/agent-skill)
+are documented on the site. Inside a remote box, a separate image-installed
+`boxhaven-web-preview` skill describes its web preview setup.
 
 `bh create` asks the backend for a machine, waits for it to be reachable, and
 syncs the current project into `/opt/boxhaven/project`. After that the box

@@ -45,6 +45,14 @@ platform-specific Node dependencies, missing runtime tools, or other box setup
 drift that would make future agents hit the same failure. Keep the environment
 fix independent from the feature or bugfix that uncovered it.
 
+The laptop agent skill is maintained in `skills/boxhaven`. When its contents
+change, update `metadata.version`, keep `metadata.minimum-bh-version` and
+`compatibility` accurate, and update the version pin in `docs/agent-skill.md`.
+Verify with `make skill-test` and `python3 scripts/smoke-skill-install.py`.
+After pushing the verified commit, publish the matching
+`boxhaven-skill-v<version>` Git tag; never move an existing skill release tag.
+CLI release tags also include the skill from the same source revision.
+
 ## Build Commands
 
 ```bash
