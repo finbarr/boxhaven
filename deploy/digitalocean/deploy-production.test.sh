@@ -71,7 +71,7 @@ run_deploy() {
 : > "$docker_log"
 : > "$curl_log"
 run_deploy "$public_env" --local --verify-only >/dev/null
-expected_version="$(git -C "$repo_root" describe --tags --always --dirty)"
+expected_version="$(git -C "$repo_root" describe --tags --match 'v[0-9]*' --always --dirty)"
 assert_contains "$(cat "$docker_log")" "${expected_version} | compose"
 assert_contains "$(cat "$docker_log")" "compose --env-file ${public_env} -f deploy/digitalocean/docker-compose.yml ps"
 assert_contains "$(cat "$docker_log")" "exec -T backend node -e"

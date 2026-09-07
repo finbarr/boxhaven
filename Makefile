@@ -2,7 +2,7 @@ BINARY ?= bh
 CMD_DIR := ./cmd/bh
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+VERSION ?= $(shell git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
 .PHONY: build test go-test backend-test backup-test skill-test backend-build lint release-test smoke-remote smoke-remote-fast smoke-remote-full smoke-remote-two-box install uninstall clean
@@ -34,6 +34,7 @@ lint:
 	@which golangci-lint > /dev/null && golangci-lint run || echo "golangci-lint not installed, skipping"
 
 release-test:
+	scripts/test-version-tags.sh
 	scripts/test-release-tooling.sh
 
 smoke-remote: smoke-remote-fast

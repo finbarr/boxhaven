@@ -12,6 +12,10 @@ The docs build also generates `llms.txt` and each public page's `.md` source
 alongside its HTML. Caddy serves these from the same artifact; no extra service
 or route configuration is needed.
 
+Product versions are derived from CLI release tags matching `v[0-9]*`;
+separate `boxhaven-skill-v<version>` tags do not change the reported CLI or
+backend version.
+
 The self-hosted console also shows a compact banner when `/v1/version` reports
 a newer public BoxHaven GitHub release. Release discovery is cached by the
 backend and fails silently when GitHub is unavailable.

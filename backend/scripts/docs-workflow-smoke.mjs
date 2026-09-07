@@ -48,6 +48,9 @@ try {
     assert.match(await page.locator(".vp-doc").innerText(), /managed agent commands start detached and return/);
     await page.locator("#bh-run").scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(out, `commands-${size}.png`) });
+    await page.goto(`${target}/self-hosting#run-with-docker-compose`, { waitUntil: "networkidle" });
+    await page.locator("#run-with-docker-compose").scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(out, `compose-version-${size}.png`) });
     await page.goto(`${target}/self-hosting#deploy`, { waitUntil: "networkidle" });
     await page.locator("#deploy").scrollIntoViewIfNeeded();
     assert.match(await page.locator(".vp-doc").innerText(), /public self-hosted stack[\s\S]*boxhaven-hosted[\s\S]*npm run deploy:production[\s\S]*authenticated usage request/);

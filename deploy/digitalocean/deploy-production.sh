@@ -180,7 +180,7 @@ fi
 
 cd "$repo_root"
 
-boxhaven_version="$(git describe --tags --always --dirty 2>/dev/null || true)"
+boxhaven_version="$(git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || true)"
 export BOXHAVEN_VERSION="${boxhaven_version:-dev}"
 
 compose_file="deploy/digitalocean/docker-compose.yml"
