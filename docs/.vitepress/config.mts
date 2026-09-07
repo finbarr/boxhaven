@@ -1,4 +1,6 @@
 import { defineConfig } from 'vitepress'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 
 const SITE_URL = 'https://docs.boxhaven.dev'
 const SITE_NAME = 'BoxHaven Docs'
@@ -86,6 +88,32 @@ function seoForPage(relativePath: string, fallbackTitle: string, fallbackDescrip
 export default defineConfig({
   title: SITE_NAME,
   description: SITE_DESCRIPTION,
+  async buildEnd({ srcDir, outDir, pages }) {
+    const entries = await Promise.all(pages.filter((page) =>
+      page.endsWith('.md') && !pageSeo[routeFromRelativePath(page)]?.noindex
+    ).sort().map(async (page) => {
+      const source = await readFile(join(srcDir, page), 'utf8')
+      const destination = join(outDir, page)
+      await mkdir(dirname(destination), { recursive: true })
+      await writeFile(destination, source)
+      const title = source.match(/^# (.+)$/m)?.[1] || page
+      const seo = seoForPage(page, title, SITE_DESCRIPTION)
+      return `- [${seo.title}](${SITE_URL}/${page}): ${seo.description}`
+    }))
+    await writeFile(join(outDir, 'llms.txt'), [
+      `# ${SITE_NAME}`,
+      '',
+      `> ${SITE_DESCRIPTION}`,
+      '',
+      'These Markdown pages are generated from the same source as the documentation website.',
+      'They describe current BoxHaven behavior. Check bh version and bh help against the installed CLI.',
+      '',
+      '## Documentation',
+      '',
+      ...entries,
+      '',
+    ].join('\n'))
+  },
   sitemap: {
     hostname: SITE_URL,
     transformItems(items) {
@@ -151,6 +179,7 @@ export default defineConfig({
     }
 
     head.unshift(['link', { rel: 'canonical', href: seo.canonicalUrl }])
+    head.push(['link', { rel: 'alternate', type: 'text/markdown', href: `${SITE_URL}/${pageData.relativePath}`, title: 'Markdown source' }])
     return head
   },
 

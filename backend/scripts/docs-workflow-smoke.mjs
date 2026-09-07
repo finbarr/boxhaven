@@ -14,6 +14,18 @@ assert.ok(executablePath, "set BOXHAVEN_PLAYWRIGHT_EXECUTABLE to a Chrome execut
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ executablePath, headless: true });
 try {
+  const indexResponse = await fetch(`${target}/llms.txt`);
+  assert.ok(indexResponse.ok, "llms.txt must be served");
+  const index = await indexResponse.text();
+  const markdownURLs = [...index.matchAll(/\]\((https:\/\/docs\.boxhaven\.dev\/[^)]+\.md)\)/g)].map((match) => new URL(match[1]));
+  assert.ok(markdownURLs.length >= 10, "llms.txt must list the public docs");
+  for (const url of markdownURLs) {
+    const response = await fetch(`${target}${url.pathname}`);
+    assert.ok(response.ok, `${url.pathname} must be served`);
+    const content = await response.text();
+    assert.match(content, /^# /m, `${url.pathname} must contain Markdown`);
+    assert.doesNotMatch(content, /<!doctype html>/i, `${url.pathname} must not return an HTML fallback`);
+  }
   for (const [size, viewport] of Object.entries({ desktop: { width: 1440, height: 1000 }, mobile: { width: 390, height: 844 } })) {
     const page = await browser.newPage({ viewport, reducedMotion: "reduce" });
     page.setDefaultTimeout(10_000);

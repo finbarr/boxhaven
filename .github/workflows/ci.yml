@@ -7,6 +7,19 @@ on:
     branches: [master]
 
 jobs:
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - run: npm --prefix docs ci
+      - run: npm --prefix docs run docs:build
+
   test:
     name: Go Test
     runs-on: ubuntu-latest

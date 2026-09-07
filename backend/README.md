@@ -125,6 +125,10 @@ self-hosted installation:
 - host-mounted backend and Caddy data under `/opt/boxhaven/data`
 - a systemd timer that writes daily archives to `/opt/boxhaven/backups`
 
+The docs artifact includes `llms.txt` and a `.md` source URL for every public
+documentation page. These are generated and verified by `npm run docs:build`
+in `docs/`, then served by the same Caddy file server as the HTML pages.
+
 Enable DigitalOcean Droplet backups for machine-level recovery, then install the
 repo backup timer for application state recovery. The backend data backup uses
 SQLite's online backup command and requires `boxhaven.sqlite` and the SSH CA

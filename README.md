@@ -121,6 +121,11 @@ device key stored under `~/.boxhaven/ssh`. Remove the managed include with
 - [CLI Reference](docs/commands.md)
 - [Self-Hosting](docs/self-hosting.md)
 
+Agents can discover the documentation through
+[`llms.txt`](https://docs.boxhaven.dev/llms.txt). Each page also has a Markdown
+URL, such as [`commands.md`](https://docs.boxhaven.dev/commands.md), generated
+from the same source on every docs build.
+
 ## License
 
 BoxHaven is open source under the GNU Affero General Public License v3.0 only

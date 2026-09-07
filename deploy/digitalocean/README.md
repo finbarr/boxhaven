@@ -8,6 +8,10 @@ docs hostname serves the static `docs/.vitepress/dist` artifact. Backend state
 is stored on the host under `/opt/boxhaven/data/backend` so it can be backed up
 outside Docker.
 
+The docs build also generates `llms.txt` and each public page's `.md` source
+alongside its HTML. Caddy serves these from the same artifact; no extra service
+or route configuration is needed.
+
 The self-hosted console also shows a compact banner when `/v1/version` reports
 a newer public BoxHaven GitHub release. Release discovery is cached by the
 backend and fails silently when GitHub is unavailable.
