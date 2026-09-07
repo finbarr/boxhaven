@@ -168,7 +168,7 @@ to the wildcard domain above.
 
 ### Deploy
 
-Deploy the hosted production stack from the repository root:
+Deploy the public self-hosted stack from the repository root:
 
 ```bash
 npm run deploy:app
@@ -183,10 +183,19 @@ GitHub repo without storing a GitHub token. Override the SSH target with
 for self-hosted installs. On the Droplet itself, use
 `npm run deploy:production:local`.
 
+BoxHaven operators deploy `app.boxhaven.dev` from the sibling private
+`boxhaven-hosted` repository using `npm run deploy:production`, followed by
+`npm run deploy:production:verify`. The combined deployment includes billing,
+account limits, and the hosted console. Verify account routes and an
+authenticated usage request too: public health endpoints do not establish that
+the hosted module is running.
+
 Distributions can add a build-time module or replace deployment wiring with
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and an optional
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE`. The corresponding flags are
-`--compose-overlay` and `--compose-overlay-env-file`.
+`--compose-overlay` and `--compose-overlay-env-file`. When an existing backend
+was deployed with an overlay, deployment and verification require an overlay
+again. Use the distribution's deployment command to supply its full configuration.
 
 ### Health Checks And Backups
 

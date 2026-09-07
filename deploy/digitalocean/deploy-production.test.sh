@@ -26,6 +26,8 @@ cat > "${temp_dir}/bin/docker" <<'EOF'
 #!/usr/bin/env bash
 printf '%s | %s\n' "${BOXHAVEN_VERSION:-}" "$*" >> "${DOCKER_LOG}"
 case " $* " in
+  *" ps --all --quiet backend "*) printf '%s' "${EXISTING_BACKEND_ID:-}" ;;
+  *"com.docker.compose.project.config_files"*) printf '%s' "${EXISTING_COMPOSE_FILES:-}" ;;
   *" exec -T backend node -e "*"BOXHAVEN_VERSION"*) printf '%s' "${BOXHAVEN_VERSION:-}" ;;
 esac
 EOF
@@ -48,6 +50,8 @@ overlay_env="${temp_dir}/overlay.env"
 overlay_file="${temp_dir}/compose.overlay.yml"
 printf 'BOXHAVEN_APP_HOST=app.test\n' > "$public_env"
 printf 'POLICY_IMAGE=example/policy:test\n' > "$overlay_env"
+# Compose, not the fixture shell, expands this variable.
+# shellcheck disable=SC2016
 printf 'services:\n  policy:\n    image: ${POLICY_IMAGE}\n' > "$overlay_file"
 
 run_deploy() {
@@ -97,5 +101,23 @@ run_deploy "$public_env" --verify-only --target test-host --dir "$repo_root" \
   --compose-overlay "$special_overlay" \
   --compose-overlay-env-file "$special_env" >/dev/null
 assert_contains "$(cat "$docker_log")" "--env-file ${special_env} -f ${special_overlay} ps"
+
+export EXISTING_BACKEND_ID=backend-id
+export EXISTING_COMPOSE_FILES="/opt/app/compose.yml,/opt/distribution/compose.yml"
+for mode in --local --verify-only; do
+  : > "$docker_log"
+  if output="$(run_deploy "$public_env" --local "$mode" 2>&1)"; then
+    echo "public-only deployment accepted an existing distribution overlay" >&2
+    exit 1
+  fi
+  assert_contains "$output" "use the distribution's deployment command"
+  if grep -Eq ' build$| up |^.* \| run ' "$docker_log"; then
+    echo "deployment mutated containers before rejecting the missing overlay" >&2
+    exit 1
+  fi
+done
+
+run_deploy "$public_env" --local --compose-overlay "$overlay_file" >/dev/null
+EXISTING_COMPOSE_FILES=/opt/app/compose.yml run_deploy "$public_env" --local >/dev/null
 
 echo "deploy-production overlay tests passed"

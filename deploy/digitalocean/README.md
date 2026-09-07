@@ -68,7 +68,7 @@ target-port details from `BOXHAVEN_PREVIEW_URL`, `BOXHAVEN_WEB_PORT`,
 
 ## Deploy
 
-From the repository root on your workstation:
+For the public self-hosted stack, run this from the repository root on your workstation:
 
 ```bash
 npm run deploy:app
@@ -78,11 +78,18 @@ This command SSHes to `root@app.boxhaven.dev`,
 fast-forwards `/opt/boxhaven/app` on `master`, fetches release tags, builds the docs site, runs the
 Docker Compose deploy on the Droplet, and checks
 `https://api.boxhaven.dev/healthz`, `https://app.boxhaven.dev/healthz`, and
-`https://docs.boxhaven.dev/`. They do not rebuild the remote VM image.
+`https://docs.boxhaven.dev/`. It does not rebuild the remote VM image.
 The deploy derives `BOXHAVEN_VERSION` from the checked-out Git ref so the
 public `/v1/version` endpoint can compare this installation with the latest
 BoxHaven GitHub release. Verification fails if the running backend did not
 receive that exact version.
+
+BoxHaven operators must use `npm run deploy:production` from the sibling
+private `boxhaven-hosted` repository for `app.boxhaven.dev`, followed by
+`npm run deploy:production:verify`. This builds and verifies the combined
+public and hosted image, including billing and account limits. Hosted checks
+must exercise account routes and an authenticated usage request; generic
+public health endpoints also pass when only the public core is running.
 
 If a distribution changes the production build or service wiring, supply its
 Compose overlay and optional overlay env file on every app or runtime deploy:
@@ -97,7 +104,10 @@ The equivalent flags are `--compose-overlay FILE` and
 `--compose-overlay-env-file FILE` (after `--` when invoked through npm). Remote
 deploy paths refer to files on the remote checkout. The deploy combines both
 Compose files for `up --remove-orphans`, Caddy recreation, and verification.
-With no overlay, the normal public self-hosted deployment is unchanged.
+When the existing backend's Compose metadata records an overlay, deployment
+and verification refuse to proceed without one. Use the distribution's
+deployment command to supply its complete configuration. Public self-hosted
+installations that have no overlay can deploy normally.
 
 After changing the VM runtime or image-builder code, explicitly rebuild and
 publish the remote VM image:

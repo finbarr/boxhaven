@@ -150,3 +150,8 @@ jobs:
 
       - name: Test release tooling and reproducibility
         run: make release-test
+
+      - name: Test deployment scripts
+        run: |
+          bash deploy/digitalocean/deploy-production.test.sh
+          bash deploy/digitalocean/deploy-runtime-image.test.sh

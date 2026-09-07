@@ -57,7 +57,7 @@ make smoke-remote   # Run the fast one-box production/prod-equivalent remote smo
 make smoke-remote-full  # Run the remote smoke with backend restart/reconnect
 make smoke-remote-two-box  # Run two-box production/prod-equivalent coverage
 npm --prefix backend run smoke:console  # Run seeded console screenshots and DOM checks
-npm run deploy:app  # Fast app/API deploy and health checks
+npm run deploy:app  # Public self-hosted app/API deploy; hosted operators use the private repo
 npm run deploy:runtime  # Slow remote VM image rebuild, activation, and backend restart
 make install        # Install bh to ~/.local/bin
 make clean          # Remove built binary
@@ -107,6 +107,11 @@ multiple-machine behavior needs coverage.
 
 ## Hard Learnings
 
+- Hosted production at app.boxhaven.dev uses the combined deployment from the
+  sibling boxhaven-hosted repo: `npm run deploy:production`, followed by
+  `npm run deploy:production:verify`. Public-only `deploy:app` does not load
+  billing. Verify hosted account routes and an authenticated usage request;
+  public health checks alone do not prove the hosted module is running.
 - Never add feature flags, env-gated conditional UI, compatibility shims,
   deprecated aliases, legacy redirects, or any other backup code paths unless
   Finbarr explicitly asks for them. The product is built as a whole: features

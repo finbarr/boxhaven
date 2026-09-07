@@ -221,6 +221,21 @@ if [ -n "$compose_overlay_file" ]; then
   compose_args+=(-f "$compose_overlay_file")
 fi
 
+# Compose identifies the same backend even when an earlier overlay is omitted.
+# Without this check, up --remove-orphans can silently replace a distribution
+# with the public core while all generic health checks continue to pass.
+existing_backend_ids="$(docker compose "${compose_args[@]}" ps --all --quiet backend)"
+for backend_id in $existing_backend_ids; do
+  existing_compose_files="$(docker inspect --format \
+    '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$backend_id")"
+  case "$existing_compose_files" in
+    *,*)
+      [ -n "$compose_overlay_file" ] \
+        || die "existing backend uses a Compose overlay; use the distribution's deployment command or supply its --compose-overlay and env file"
+      ;;
+  esac
+done
+
 if [ "$verify_only" -ne 1 ]; then
   echo "Building docs site"
   docker run --rm \

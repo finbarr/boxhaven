@@ -131,7 +131,7 @@ SQLite's online backup command and requires `boxhaven.sqlite` and the SSH CA
 keypair. It validates the copied database before atomically publishing the
 archive and includes Caddy data when present.
 
-Deploy the hosted production stack from the repository root:
+Deploy the public self-hosted stack from the repository root:
 
 ```bash
 npm run deploy:app
@@ -144,10 +144,17 @@ endpoints. It forwards your SSH agent so the Droplet can fetch the private
 GitHub repo without storing a GitHub token. On the Droplet itself, use
 `npm run deploy:production:local`.
 
+For hosted production at `app.boxhaven.dev`, run `npm run deploy:production`
+and `npm run deploy:production:verify` from the sibling private `boxhaven-hosted`
+repository. Its combined image includes billing, account limits, and the hosted
+console. Verify account routes and an authenticated usage request; public health
+checks do not establish that the hosted module is loaded.
+
 Distributions can pass additional build and deployment wiring through
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` or `--compose-overlay`, plus an
 optional `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE` or
-`--compose-overlay-env-file`.
+`--compose-overlay-env-file`. An existing backend deployed with an overlay
+cannot be deployed or verified without supplying one.
 
 Then sign up or sign in from another shell. The CLI prints a browser URL, tries
 to open it, and waits for the web app to grant access:

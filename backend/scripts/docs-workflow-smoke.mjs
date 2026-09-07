@@ -36,6 +36,11 @@ try {
     assert.match(await page.locator(".vp-doc").innerText(), /managed agent commands start detached and return/);
     await page.locator("#bh-run").scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(out, `commands-${size}.png`) });
+    await page.goto(`${target}/self-hosting#deploy`, { waitUntil: "networkidle" });
+    await page.locator("#deploy").scrollIntoViewIfNeeded();
+    assert.match(await page.locator(".vp-doc").innerText(), /public self-hosted stack[\s\S]*boxhaven-hosted[\s\S]*npm run deploy:production[\s\S]*authenticated usage request/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.screenshot({ path: join(out, `deployment-${size}.png`) });
     await page.goto(target, { waitUntil: "networkidle" });
     await page.locator('.vp-doc a[href="/agent-skill"]').waitFor();
     await page.screenshot({ path: join(out, `home-${size}.png`) });

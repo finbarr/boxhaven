@@ -411,7 +411,7 @@ bh create work
 ## DigitalOcean Deployment
 
 Production deployment and golden-image tooling live in
-[deploy/digitalocean](deploy/digitalocean). Deploy the hosted production stack
+[deploy/digitalocean](deploy/digitalocean). Deploy the public self-hosted stack
 from the repository root with:
 
 ```bash
@@ -421,12 +421,20 @@ npm run deploy:app
 This command SSHes to `root@app.boxhaven.dev`,
 fast-forwards `/opt/boxhaven/app` on `master`, builds the docs site, runs the
 DigitalOcean Compose deploy, and checks the production app, API, and docs health
-endpoints. They do not rebuild the remote VM snapshot.
+endpoints. It does not rebuild the remote VM snapshot.
+
+BoxHaven operators deploy `app.boxhaven.dev` from the sibling private
+`boxhaven-hosted` repository with `npm run deploy:production`, then
+`npm run deploy:production:verify`. That command includes billing, account
+limits, email configuration, and the hosted console. The public-only command
+does not load those modules. Hosted verification must check account routes and
+an authenticated usage request as well as public health endpoints.
 
 The deploy script supports distribution-specific build and service wiring through
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE` (or the matching
-`--compose-overlay` flags).
+`--compose-overlay` flags). It refuses to deploy or verify an existing
+distribution without an overlay when the backend's Compose metadata records one.
 
 After changing the VM runtime or image-builder code, explicitly rebuild and
 publish the remote VM image:
