@@ -438,30 +438,7 @@ ssh "${ssh_opts[@]}" "$ssh_target" \
   "test -f /opt/boxhaven/remote/ready && command -v codex >/dev/null && command -v claude >/dev/null && command -v docker >/dev/null && command -v rsync >/dev/null && command -v chromium >/dev/null && chromium --headless --no-sandbox --disable-gpu --dump-dom about:blank >/dev/null && ldconfig -p | grep -Fq libatk-1.0.so.0 && ldconfig -p | grep -Fq libgbm.so.1 && test -x /usr/local/bin/boxhaven-remote-session && test -x /usr/local/lib/boxhaven/agent.mjs && test -f /home/boxhaven/.codex/skills/boxhaven-web-preview/SKILL.md && test \"\$(tmux -f /etc/tmux.conf start-server \\; show-options -gqv mouse)\" = \"on\" && git config --system --get-all safe.directory | grep -Fx /opt/boxhaven/project >/dev/null && test \"\$(stat -c %U /opt/boxhaven/project)\" = boxhaven && systemctl list-unit-files boxhaven-agent.service >/dev/null"
 
 log "cleaning instance identity for reusable snapshot"
-ssh "${ssh_opts[@]}" "$ssh_target" 'bash -s' <<'REMOTE_CLEAN'
-set -euo pipefail
-
-if [ -d /etc/cloud/cloud.cfg.d ]; then
-  cat > /etc/cloud/cloud.cfg.d/99-boxhaven-golden-image.cfg <<'EOF_CLOUD'
-ssh_deletekeys: true
-EOF_CLOUD
-fi
-
-rm -f /root/.bash_history /home/boxhaven/.bash_history
-rm -f /root/.ssh/authorized_keys /home/boxhaven/.ssh/authorized_keys
-rm -f /etc/ssh/ssh_host_*
-find /tmp /var/tmp -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
-
-if command -v cloud-init >/dev/null 2>&1; then
-  cloud-init clean --logs --machine-id
-else
-  truncate -s 0 /etc/machine-id || true
-  rm -f /var/lib/dbus/machine-id || true
-  ln -sf /etc/machine-id /var/lib/dbus/machine-id || true
-fi
-
-sync
-REMOTE_CLEAN
+ssh "${ssh_opts[@]}" "$ssh_target" 'bash -s' < "${script_dir}/clean-remote-image.sh"
 
 log "shutting down builder before snapshot"
 ssh "${ssh_opts[@]}" "$ssh_target" "sync && shutdown -h now" >/dev/null 2>&1 || true
