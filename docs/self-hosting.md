@@ -233,9 +233,11 @@ Or use the checked-in npm entrypoint:
 npm run deploy:runtime
 ```
 
-Each build snapshots a fresh image and prunes older `boxhaven-remote-*`
-snapshots beyond the newest two (the new image plus one rollback). Set
-`BOXHAVEN_IMAGE_KEEP` to keep more, or `0` to disable pruning.
+Each build creates a fresh snapshot and retains existing snapshots. Names are
+also chosen by teams, so a `boxhaven-remote-*` prefix does not identify an image
+as safe to delete. After a successful production smoke, review old snapshots
+and delete only specific IDs you have confirmed are no longer needed, retaining
+a known-good golden image for rollback. Retained snapshots incur storage charges.
 
 The runtime deploy creates and snapshots a temporary DigitalOcean builder
 Droplet, updates `BOXHAVEN_REMOTE_IMAGE`, then restarts and verifies the

@@ -170,3 +170,4 @@ jobs:
         run: |
           bash deploy/digitalocean/deploy-production.test.sh
           bash deploy/digitalocean/deploy-runtime-image.test.sh
+          bash deploy/digitalocean/build-remote-image.test.sh

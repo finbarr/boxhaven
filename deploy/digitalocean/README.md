@@ -234,6 +234,10 @@ ssh -A root@<control-plane-ip> \
 ```
 
 Keep at least the previous snapshot id until a production smoke create succeeds.
+The builder retains existing snapshots, including images with names beginning
+`boxhaven-remote-`; a name prefix does not establish ownership. After verification,
+review snapshot IDs and remove only images confirmed to be unused, retaining a
+known-good golden image for rollback. Retained snapshots incur storage charges.
 Rollback is just setting `BOXHAVEN_REMOTE_IMAGE` back to the previous snapshot id
 and recreating the backend container.
 

@@ -19,6 +19,7 @@ try {
   for (const [pageName, path, heading, expectedCopy] of [
     ["images", "/images", "Team Images", /Names are unique within a team/],
     ["commands", "/commands", "bh image", /Images are private to the active team/],
+    ["self-hosting", "/self-hosting", "Golden Image Rotation", /Each build creates a fresh snapshot and retains existing snapshots/],
   ]) {
     for (const [viewportName, viewport] of [
       ["desktop", { width: 1440, height: 1000 }],
@@ -36,6 +37,7 @@ try {
       assert.equal(bodyOverflow, false, `${pageName} ${viewportName} has horizontal overflow`);
       const screenshot = join(outDir, `${pageName}-${viewportName}.png`);
       await page.getByRole("heading", { name: heading }).scrollIntoViewIfNeeded();
+      await page.getByText(expectedCopy).scrollIntoViewIfNeeded();
       await page.screenshot({ path: screenshot, fullPage: pageName === "images" });
       results.push({ page: pageName, viewport: viewportName, screenshot, bodyOverflow });
       await context.close();
