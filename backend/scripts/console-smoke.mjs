@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -21,7 +23,6 @@ const apiPort = await findOpenPort(Number(process.env.BOXHAVEN_CONSOLE_SMOKE_API
 const appPort = await findOpenPort(Number(process.env.BOXHAVEN_CONSOLE_SMOKE_APP_PORT || 5373));
 const apiURL = `http://127.0.0.1:${apiPort}`;
 const appURL = `http://127.0.0.1:${appPort}`;
-const chromeExecutable = findChromeExecutable();
 
 mkdirSync(outDir, { recursive: true });
 
@@ -33,109 +34,113 @@ try {
   const disabledAccountBackend = await startSeededBackend();
   const { token, deviceUserCode } = disabledAccountBackend;
   backend = disabledAccountBackend.app;
-  vite = await startViteApp();
-  browser = await chromium.launch({
-    executablePath: chromeExecutable,
-    headless: !process.argv.includes("--headed"),
-  });
+  if (process.argv.includes("--image-cli")) {
+    console.log(JSON.stringify(await checkImageCLI(disabledAccountBackend), null, 2));
+  } else {
+    vite = await startViteApp();
+    browser = await chromium.launch({
+      executablePath: findChromeExecutable(),
+      headless: !process.argv.includes("--headed"),
+    });
 
-  const publicContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
-  const publicPage = await publicContext.newPage();
-  const accessFacts = await checkAccessPage(publicPage);
-  await publicContext.close();
+    const publicContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+    const publicPage = await publicContext.newPage();
+    const accessFacts = await checkAccessPage(publicPage);
+    await publicContext.close();
 
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
-  await context.addInitScript((value) => {
-    localStorage.setItem("boxhaven.backend.token", value);
-  }, token);
-  const page = await context.newPage();
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+    await context.addInitScript((value) => {
+      localStorage.setItem("boxhaven.backend.token", value);
+    }, token);
+    const page = await context.newPage();
 
-  const deviceFacts = await checkDevicePage(page, deviceUserCode);
-  const gettingStartedFacts = await checkGettingStarted(page);
-  const recoveryFacts = await checkRecoveryBox(page, disabledAccountBackend.store, disabledAccountBackend.whoami);
-  const previewFacts = await checkBoxPreviews(page, disabledAccountBackend.store, disabledAccountBackend.whoami);
-  const teamMenuFacts = await checkTeamMenu(page);
-  const membersFacts = await checkMembersPage(page);
-  const teamsFacts = await checkTeamsPage(page);
-  const imagesFacts = await checkImagesPage(page);
-  const boxCreateFacts = await checkBoxCreateDrawer(page);
-  const mobileFacts = await checkMobileTeams(page);
-  const disabledAccountFacts = await checkAccountCapability(page, {
-    screenshotPrefix: "account-disabled",
-  });
-  const securityFacts = await checkSecurityPage(page, token);
-  assert.equal(disabledAccountBackend.whoami.account, undefined);
-  await context.close();
+    const deviceFacts = await checkDevicePage(page, deviceUserCode);
+    const gettingStartedFacts = await checkGettingStarted(page);
+    const recoveryFacts = await checkRecoveryBox(page, disabledAccountBackend.store, disabledAccountBackend.whoami);
+    const previewFacts = await checkBoxPreviews(page, disabledAccountBackend.store, disabledAccountBackend.whoami);
+    const teamMenuFacts = await checkTeamMenu(page);
+    const membersFacts = await checkMembersPage(page);
+    const teamsFacts = await checkTeamsPage(page);
+    const imagesFacts = await checkImagesPage(page);
+    const boxCreateFacts = await checkBoxCreateDrawer(page);
+    const mobileFacts = await checkMobileTeams(page);
+    const disabledAccountFacts = await checkAccountCapability(page, {
+      screenshotPrefix: "account-disabled",
+    });
+    const securityFacts = await checkSecurityPage(page, token);
+    assert.equal(disabledAccountBackend.whoami.account, undefined);
+    await context.close();
 
-  await backend.close();
-  backend = undefined;
-  const enabledAccountBackend = await startSeededBackend({ accountLabel: "Plan" });
-  backend = enabledAccountBackend.app;
-  assert.deepEqual(enabledAccountBackend.whoami.account, { label: "Plan" });
-  const enabledAccountContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
-  await enabledAccountContext.addInitScript((value) => {
-    localStorage.setItem("boxhaven.backend.token", value);
-  }, enabledAccountBackend.token);
-  const enabledAccountPage = await enabledAccountContext.newPage();
-  const enabledAccountFacts = await checkAccountCapability(enabledAccountPage, {
-    label: "Plan",
-    screenshotPrefix: "account-enabled",
-  });
-  await enabledAccountContext.close();
+    await backend.close();
+    backend = undefined;
+    const enabledAccountBackend = await startSeededBackend({ accountLabel: "Plan" });
+    backend = enabledAccountBackend.app;
+    assert.deepEqual(enabledAccountBackend.whoami.account, { label: "Plan" });
+    const enabledAccountContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+    await enabledAccountContext.addInitScript((value) => {
+      localStorage.setItem("boxhaven.backend.token", value);
+    }, enabledAccountBackend.token);
+    const enabledAccountPage = await enabledAccountContext.newPage();
+    const enabledAccountFacts = await checkAccountCapability(enabledAccountPage, {
+      label: "Plan",
+      screenshotPrefix: "account-enabled",
+    });
+    await enabledAccountContext.close();
 
-  console.log(JSON.stringify({
-    ok: true,
-    apiURL,
-    appURL,
-    outDir,
-    screenshots: {
-      access: join(outDir, "access.png"),
-      verification: join(outDir, "verification.png"),
-      device: join(outDir, "device.png"),
-      boxes: join(outDir, "boxes.png"),
-      mobileBoxes: join(outDir, "mobile-boxes.png"),
-      recoveryBox: join(outDir, "recovery-box.png"),
-      recoveryBoxMobile: join(outDir, "recovery-box-mobile.png"),
-      teamMenuDesktop: join(outDir, "team-menu-desktop.png"),
-      teamMenuMobile: join(outDir, "team-menu-mobile.png"),
-      teamCreateFromMenu: join(outDir, "team-create-from-menu.png"),
-      members: join(outDir, "members.png"),
-      teams: join(outDir, "teams.png"),
-      teamEditor: join(outDir, "team-editor.png"),
-      mobileTeamEditor: join(outDir, "mobile-team-editor.png"),
-      security: join(outDir, "security.png"),
-      securityMobile: join(outDir, "security-mobile.png"),
-      images: join(outDir, "images.png"),
-      boxCreate: join(outDir, "box-create.png"),
-      mobileTeams: join(outDir, "mobile-teams.png"),
-      accountDisabledDesktop: join(outDir, "account-disabled-desktop.png"),
-      accountDisabledMobile: join(outDir, "account-disabled-mobile.png"),
-      accountEnabledDesktop: join(outDir, "account-enabled-desktop.png"),
-      accountEnabledMobile: join(outDir, "account-enabled-mobile.png"),
-    },
-    accessFacts,
-    deviceFacts,
-    gettingStartedFacts,
-    recoveryFacts,
-    previewFacts,
-    teamMenuFacts,
-    membersFacts,
-    teamsFacts,
-    securityFacts,
-    imagesFacts,
-    boxCreateFacts,
-    mobileFacts,
-    accountCapabilityFacts: {
-      disabled: {
-        whoamiAccount: disabledAccountBackend.whoami.account || null,
-        ...disabledAccountFacts,
+    console.log(JSON.stringify({
+      ok: true,
+      apiURL,
+      appURL,
+      outDir,
+      screenshots: {
+        access: join(outDir, "access.png"),
+        verification: join(outDir, "verification.png"),
+        device: join(outDir, "device.png"),
+        boxes: join(outDir, "boxes.png"),
+        mobileBoxes: join(outDir, "mobile-boxes.png"),
+        recoveryBox: join(outDir, "recovery-box.png"),
+        recoveryBoxMobile: join(outDir, "recovery-box-mobile.png"),
+        teamMenuDesktop: join(outDir, "team-menu-desktop.png"),
+        teamMenuMobile: join(outDir, "team-menu-mobile.png"),
+        teamCreateFromMenu: join(outDir, "team-create-from-menu.png"),
+        members: join(outDir, "members.png"),
+        teams: join(outDir, "teams.png"),
+        teamEditor: join(outDir, "team-editor.png"),
+        mobileTeamEditor: join(outDir, "mobile-team-editor.png"),
+        security: join(outDir, "security.png"),
+        securityMobile: join(outDir, "security-mobile.png"),
+        images: join(outDir, "images.png"),
+        boxCreate: join(outDir, "box-create.png"),
+        mobileTeams: join(outDir, "mobile-teams.png"),
+        accountDisabledDesktop: join(outDir, "account-disabled-desktop.png"),
+        accountDisabledMobile: join(outDir, "account-disabled-mobile.png"),
+        accountEnabledDesktop: join(outDir, "account-enabled-desktop.png"),
+        accountEnabledMobile: join(outDir, "account-enabled-mobile.png"),
       },
-      enabled: {
-        whoamiAccount: enabledAccountBackend.whoami.account,
-        ...enabledAccountFacts,
+      accessFacts,
+      deviceFacts,
+      gettingStartedFacts,
+      recoveryFacts,
+      previewFacts,
+      teamMenuFacts,
+      membersFacts,
+      teamsFacts,
+      securityFacts,
+      imagesFacts,
+      boxCreateFacts,
+      mobileFacts,
+      accountCapabilityFacts: {
+        disabled: {
+          whoamiAccount: disabledAccountBackend.whoami.account || null,
+          ...disabledAccountFacts,
+        },
+        enabled: {
+          whoamiAccount: enabledAccountBackend.whoami.account,
+          ...enabledAccountFacts,
+        },
       },
-    },
-  }, null, 2));
+    }, null, 2));
+  }
 } finally {
   await browser?.close().catch(() => undefined);
   await vite?.close().catch(() => undefined);
@@ -146,21 +151,26 @@ async function startSeededBackend({ accountLabel } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "boxhaven-console-smoke-"));
   const fakeImages = [{
     id: "img-acme",
-    name: "boxhaven-remote-acme-tools",
+    name: "boxhaven-image-acme-tools",
     provider: "fake",
     status: "available",
     created_at: "2026-06-01T12:00:00.000Z",
     bootstrapped: true,
   }];
+  const imageCreates = [];
+  const machineCreates = [];
   const fakeProvider = {
     name: "fake",
     label: "Fake Cloud",
     async createMachine(request) {
+      machineCreates.push(request);
       return {
         machine: {
           name: request.name,
           provider: "fake",
           provider_label: "Fake Cloud",
+          provider_id: `machine-${request.name}`,
+          bootstrap_complete: true,
           public_ipv4: "127.0.0.1",
         },
         status: "ready",
@@ -175,6 +185,16 @@ async function startSeededBackend({ accountLabel } = {}) {
     async releaseMachine() {},
     async listImages() {
       return fakeImages;
+    },
+    async createImage(machine, name) {
+      imageCreates.push({ machine: machine.name, name });
+      const image = { id: `img-created-${imageCreates.length}`, name, status: "available" };
+      fakeImages.push(image);
+      return image;
+    },
+    async deleteImage(id) {
+      const index = fakeImages.findIndex((image) => image.id === id);
+      if (index !== -1) fakeImages.splice(index, 1);
     },
     async listPlans() {
       return [
@@ -261,7 +281,8 @@ async function startSeededBackend({ accountLabel } = {}) {
   assert.equal(whoami.statusCode, 200, whoami.body);
   await store.putImage({
     id: "img-acme",
-    name: "boxhaven-remote-acme-tools",
+    name: "acme-tools",
+    provider_name: "boxhaven-image-acme-tools",
     provider: "fake",
     org_id: acme.id,
     org_slug: "acme-labs",
@@ -280,7 +301,7 @@ async function startSeededBackend({ accountLabel } = {}) {
   assert.equal(device.statusCode, 200, device.body);
   assert.equal(typeof device.json().user_code, "string");
   await app.listen({ host: "127.0.0.1", port: apiPort });
-  return { app, store, token, deviceUserCode: device.json().user_code, whoami: whoami.json() };
+  return { app, store, token, imageCreates, machineCreates, deviceUserCode: device.json().user_code, whoami: whoami.json() };
 }
 
 async function signUp(app, email, password = "password123", messages = []) {
@@ -830,7 +851,14 @@ async function checkImagesPage(page) {
   assert.deepEqual(facts.globalNav, ["Teams", "Security"]);
   assert.equal(facts.hasActivate, false);
   assert.equal(facts.deleteCellAlign, "right");
-  assert.ok(facts.rows.some(([provider, name, id]) => provider === "fake" && name === "boxhaven-remote-acme-tools" && id === "img-acme"), "missing seeded team image");
+  assert.ok(facts.rows.some(([provider, name, id]) => provider === "fake" && name === "acme-tools" && id === "img-acme"), "missing seeded team image");
+  await page.getByRole("button", { name: "Snapshot a box", exact: true }).click();
+  await page.getByPlaceholder("dev-tools").fill("kyoto-dev");
+  await page.getByText("Names are unique within this team.", { exact: false }).waitFor();
+  await page.screenshot({ path: join(outDir, "image-create.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: join(outDir, "image-create-mobile.png"), fullPage: true });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "image creation drawer overflows on mobile");
   return facts;
 }
 
@@ -862,7 +890,7 @@ async function checkBoxCreateDrawer(page) {
   });
   assert.equal(facts.drawerTitle, "Create a box");
   assert.ok(facts.imageOptions.includes("BoxHaven default"), "missing default image option");
-  assert.ok(facts.imageOptions.some((option) => option?.includes("boxhaven-remote-acme-tools")), "missing team image option");
+  assert.ok(facts.imageOptions.some((option) => option?.includes("acme-tools")), "missing team image option");
   assert.ok(facts.shortcutPlanOptions.some((option) => option?.includes("large - 8 vCPU / 16 GB / 320 GB - $0.40/hr")), "missing provider plan price");
   assert.equal(facts.costTooltipVisible, "visible");
   assert.equal(facts.costTooltip, "Hour$0.10Day$2.40Month$73.00");
@@ -991,4 +1019,36 @@ function findChromeExecutable() {
     ].join(" "));
   }
   return executable;
+}
+
+async function checkImageCLI({ token, imageCreates, machineCreates }) {
+  const binary = process.env.BOXHAVEN_SMOKE_BH || join(repoDir, "bh");
+  assert.ok(existsSync(binary), "Build the CLI with make build before running smoke:images");
+  const scratch = mkdtempSync(join(tmpdir(), "boxhaven-image-cli-"));
+  const run = (args) => promisify(execFile)(binary, args, {
+    cwd: scratch,
+    env: { ...process.env, XDG_CONFIG_HOME: scratch, BOXHAVEN_BACKEND_URL: apiURL, BOXHAVEN_TOKEN: token },
+  });
+  const request = async (path, body) => fetch(`${apiURL}${path}`, {
+    method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  try {
+    assert.equal((await request("/v1/machines", { name: "image-builder" })).status, 201);
+    const created = await run(["image", "create", "image-builder", "--name", "kyoto-dev"]);
+    assert.match(created.stderr, /Snapshot kyoto-dev started/);
+    assert.equal(imageCreates.length, 1);
+    const listed = await run(["image", "ls"]);
+    assert.match(listed.stdout, /kyoto-dev/);
+    assert.doesNotMatch(listed.stdout, /boxhaven-image-/);
+    await assert.rejects(run(["image", "create", "image-builder", "--name", "kyoto-dev"]), (error) => /already exists in this team/.test(error.stderr));
+    assert.equal(imageCreates.length, 1);
+    const clone = await request("/v1/machines", { name: "image-clone", image: "kyoto-dev" });
+    assert.equal(clone.status, 201, await clone.clone().text());
+    assert.equal((await clone.json()).machine.image, "kyoto-dev");
+    assert.equal(machineCreates.at(-1).image, "img-created-1");
+    assert.equal(machineCreates.at(-1).image_bootstrapped, true);
+    await run(["image", "rm", "kyoto-dev", "--force"]);
+    assert.doesNotMatch((await run(["image", "ls"])).stdout, /kyoto-dev/);
+    return { ok: true, scope: "Built CLI and real HTTP API, auth and SQLite; cloud provisioning is simulated", checks: ["snapshot by short name", "list", "duplicate rejection", "create box by name", "delete by name"], outDir };
+  } finally { rmSync(scratch, { recursive: true, force: true }); }
 }

@@ -7,7 +7,6 @@ import Fastify, { FastifyInstance } from "fastify";
 import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
 import type { OrgMachinesResponse } from "./client.js";
-import { imageNameIsBoxHavenRemote } from "./cloudinit.js";
 import { applyBackendMigrations } from "./database.js";
 import { BackendModule, BackendModuleContext, BackendModuleRuntime, BackendTeam, BackendUserContext, TeamDeletionPolicy } from "./module.js";
 import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyActor, PolicyTeam, policyMachineIdentity } from "./policy.js";
@@ -452,10 +451,12 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     body.provider_size = selected.plan.slug;
     body.provider_hourly_price = providerPlanHourlyPrice(selected.plan, body.region || provider.info?.default_region);
     body.size = selected.name;
+    delete body.image_name;
     if (body.image) {
       const teamImage = await resolveTeamImageForCreate(options, provider, orgID, body.image, reply);
       if (!teamImage) return;
       body.image = teamImage.id;
+      body.image_name = teamImage.name;
       body.image_bootstrapped = teamImage.bootstrapped;
     }
     if (team) {
@@ -584,7 +585,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
     const refreshed = await provider.getMachine(existing);
-    const machine = normalizeMachine(options, { ...existing, ...refreshed.machine, name, user_id: auth.userID });
+    const machine = normalizeMachine(options, { ...mergeProviderMachine(existing, refreshed.machine), name, user_id: auth.userID });
     await options.store.putMachine(machine);
     const healed = await healMachineTeam(options, auth, machine);
     return { machine: decorateTeam(publicMachine(healed), auth.teams), status: refreshed.status || "leased" };
@@ -606,7 +607,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const provider = providerForMachine(options, existing, reply);
     if (!provider) return;
     const refreshed = await provider.getMachine(existing);
-    const machine = normalizeMachine(options, { ...existing, ...refreshed.machine, name, user_id: auth.userID });
+    const machine = normalizeMachine(options, { ...mergeProviderMachine(existing, refreshed.machine), name, user_id: auth.userID });
     await options.store.putMachine(machine);
     const healed = await healMachineTeam(options, auth, machine);
     return {
@@ -850,18 +851,30 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support snapshots` });
     }
     const imageName = normalizeImageName(bodyString(request.body?.name), machineName);
-    const image = await provider.createImage(machine, imageName);
     const team = auth.teams.find((candidate) => candidate.id === auth.orgID);
     const record: TeamImageRecord = {
-      id: image.id || undefined,
-      name: image.name || imageName,
+      name: imageName,
+      // Provider accounts serve multiple teams. A separate immutable identity
+      // prevents asynchronous snapshots with the same team-facing name colliding.
+      provider_name: `boxhaven-image-${randomUUID()}`,
       provider: provider.name,
       org_id: auth.orgID,
       org_slug: team?.slug,
       org_name: team?.name,
-      created_at: image.created_at || new Date().toISOString(),
-      bootstrapped: image.bootstrapped ?? imageNameIsBoxHavenRemote(image.name || imageName),
+      created_at: new Date().toISOString(),
+      bootstrapped: machine.bootstrap_complete === true,
     };
+    if (!await options.store.reserveImage(record)) {
+      return reply.code(409).send({ id: "conflict", message: `image ${imageName} already exists in this team; choose another name` });
+    }
+    let image: MachineImage;
+    try {
+      image = await provider.createImage(machine, record.provider_name);
+    } catch (error) {
+      await options.store.deleteImageForOrg(auth.orgID, provider.name, record.name);
+      throw error;
+    }
+    record.id = image.id || undefined;
     await options.store.putImage(record);
     return reply.code(202).send({ image: teamImageResponse(record, image) });
   });
@@ -1227,6 +1240,7 @@ async function createMachine(
   }
   const machine = normalizeMachine(options, {
     ...provisioned.machine,
+    image_name: body.image_name,
     name: body.name,
     user_id: auth.userID,
     org_id: orgID || undefined,
@@ -1332,8 +1346,7 @@ async function syncProviderMachines(options: BackendOptions, auth: AuthContext, 
       if (existing?.create_state === "provisioning" && existing.create_operation_id !== preflightCreateOperationID) continue;
       const name = existing?.name || item.machine.name;
       const machineInput: RemoteMachine = {
-        ...existing,
-        ...item.machine,
+        ...mergeProviderMachine(existing, item.machine),
         name,
         user_id: auth.userID,
         org_id: existing?.org_id || auth.orgID,
@@ -1362,6 +1375,18 @@ function providerMachineMatches(left: RemoteMachine, right: RemoteMachine): bool
     (left.provider_id && right.provider_id && left.provider_id === right.provider_id)
     || (left.provider_name && right.provider_name && left.provider_name === right.provider_name)
   );
+}
+
+function mergeProviderMachine(existing: RemoteMachine | undefined, refreshed: RemoteMachine): RemoteMachine {
+  const sameInstance = existing?.provider_id && existing.provider_id === refreshed.provider_id;
+  return {
+    ...existing,
+    ...refreshed,
+    image_name: sameInstance ? existing.image_name : undefined,
+    // An authenticated/prepared instance stays prepared when provider metadata
+    // lacks a recognized image prefix. Agent connectivity is checked separately.
+    ...(sameInstance && existing.bootstrap_complete ? { bootstrap_complete: true } : {}),
+  };
 }
 
 function normalizeCreateRequest(body: CreateMachineRequest | undefined): CreateMachineRequest {
@@ -1432,6 +1457,8 @@ function normalizeMachine(options: BackendOptions, machine: RemoteMachine): Remo
 
 function publicMachine(machine: RemoteMachine): RemoteMachine {
   const safe = { ...machine } as RemoteMachine & Record<string, unknown>;
+  if (safe.image_name) safe.image = safe.image_name;
+  delete safe.image_name;
   delete safe.agent_token_hash;
   delete safe.org_name;
   delete safe.org_slug;
@@ -1534,14 +1561,14 @@ async function resolveTeamImageForCreate(
   orgID: string,
   idOrName: string,
   reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
-): Promise<{ id: string; bootstrapped?: boolean } | undefined> {
+): Promise<{ id: string; name: string; bootstrapped?: boolean } | undefined> {
   const record = await options.store.getImageForOrg(orgID, provider.name, idOrName);
   if (!record) {
     reply.code(400).send({ id: "bad_request", message: "image does not belong to the target team" });
     return undefined;
   }
   if (typeof provider.listImages !== "function") {
-    return { id: record.id || record.name, bootstrapped: record.bootstrapped ?? imageNameIsBoxHavenRemote(record.name) };
+    return { id: record.id || record.provider_name, name: record.name, bootstrapped: record.bootstrapped };
   }
   const listed = (await provider.listImages()).find((image) => providerImageMatchesRecord(image, record));
   if (!listed) {
@@ -1556,19 +1583,20 @@ async function resolveTeamImageForCreate(
     await options.store.putImage({ ...record, id: listed.id, created_at: listed.created_at || record.created_at });
   }
   return {
-    id: listed.id || record.id || record.name,
-    bootstrapped: listed.bootstrapped ?? record.bootstrapped ?? imageNameIsBoxHavenRemote(record.name),
+    id: listed.id || record.id || record.provider_name,
+    name: record.name,
+    bootstrapped: record.bootstrapped,
   };
 }
 
 function providerImageMatchesRecord(image: MachineImage, record: TeamImageRecord): boolean {
-  return (!!record.id && image.id === record.id) || image.name === record.name;
+  return record.id ? image.id === record.id : image.name === record.provider_name;
 }
 
 function teamImageResponse(record: TeamImageRecord, image?: MachineImage): MachineImage {
   return {
     id: image?.id || record.id || "",
-    name: image?.name || record.name,
+    name: record.name,
     provider: record.provider,
     org_id: record.org_id,
     org_slug: record.org_slug,
@@ -1576,15 +1604,15 @@ function teamImageResponse(record: TeamImageRecord, image?: MachineImage): Machi
     status: image?.status || (record.id ? "missing" : "creating"),
     created_at: image?.created_at || record.created_at,
     size_gb: image?.size_gb,
-    bootstrapped: image?.bootstrapped ?? record.bootstrapped,
+    bootstrapped: record.bootstrapped,
   };
 }
 
 function normalizeImageName(name: string | undefined, machineName: string): string {
-  const fallback = `boxhaven-remote-${machineName}-${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}`;
+  const fallback = `${machineName}-${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}`;
   const cleaned = (name || "").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120);
   if (!cleaned) return fallback;
-  return imageNameIsBoxHavenRemote(cleaned) ? cleaned : `boxhaven-remote-${cleaned}`;
+  return cleaned;
 }
 
 function validateCreateOverride(field: "image" | "region", value: string | undefined): string | undefined {

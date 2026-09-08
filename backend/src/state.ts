@@ -83,8 +83,13 @@ export class StateStore {
     this.db.pragma("synchronous = FULL");
     this.db.pragma("busy_timeout = 5000");
     this.db.pragma("foreign_keys = ON");
-    this.migrate();
-    this.recoverInterruptedMachineCreates();
+    try {
+      this.migrate();
+      this.recoverInterruptedMachineCreates();
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
   }
 
   close(): void {
@@ -560,6 +565,18 @@ export class StateStore {
     await this.mutate(() => this.writeImage(image));
   }
 
+  async reserveImage(image: TeamImageRecord): Promise<boolean> {
+    return this.enqueue(async () => {
+      await this.beforeMutation();
+      return this.db.transaction(() => {
+        if (this.db.prepare("SELECT 1 FROM core_images WHERE org_id = ? AND name = ?").get(image.org_id, image.name)) return false;
+        this.writeImage(image);
+        this.touch();
+        return true;
+      }).immediate();
+    });
+  }
+
   async deleteImageForOrg(orgID: string, provider: string, idOrName: string): Promise<void> {
     const want = idOrName.trim();
     if (!want) return;
@@ -672,7 +689,7 @@ export class StateStore {
   }
 
   private writeImage(image: TeamImageRecord): void {
-    if (!image.org_id || !image.provider || !image.name) throw new Error("image identity is required");
+    if (!image.org_id || !image.provider || !image.name || !image.provider_name) throw new Error("image identity is required");
     this.db.prepare(`
       DELETE FROM core_images
       WHERE org_id = ? AND provider = ? AND (name = ? OR (? IS NOT NULL AND image_id = ?))
@@ -967,6 +984,16 @@ const coreMigrations: BackendDatabaseMigration[] = [{
         created_at TEXT NOT NULL
       );
       CREATE INDEX core_team_creation_reservations_user ON core_team_creation_reservations(user_id, created_at);
+    `);
+  },
+}, {
+  version: 6,
+  migrate(database) {
+    const duplicate = database.prepare("SELECT org_id, name FROM core_images GROUP BY org_id, name HAVING COUNT(*) > 1 LIMIT 1").get() as { org_id: string; name: string } | undefined;
+    if (duplicate) throw new Error(`Team ${duplicate.org_id} has duplicate image name ${duplicate.name}; remove the duplicate image before upgrading`);
+    database.exec(`
+      UPDATE core_images SET payload_json = json_set(payload_json, '$.provider_name', name);
+      CREATE UNIQUE INDEX core_images_team_name ON core_images(org_id, name);
     `);
   },
 }];

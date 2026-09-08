@@ -196,6 +196,24 @@ test("agent cloud-init user data carries token credentials and SSH CA trust", ()
   assert.doesNotMatch(userData, /victim-name/);
 });
 
+test("DigitalOcean lists unprefixed snapshots for reconciliation against the team registry", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input); urls.push(url);
+    return new URL(url).searchParams.get("page") === "2"
+      ? jsonResponse({ snapshots: [{ id: 2, name: "boxhaven-image-unique" }] })
+      : jsonResponse({ snapshots: [{ id: 1, name: "unprefixed" }], links: { pages: { next: "https://api.digitalocean.com/v2/snapshots?page=2" } } });
+  }) as typeof fetch;
+  try {
+    const provider = digitalOceanProviderFromEnv({ DIGITALOCEAN_ACCESS_TOKEN: "test" });
+    const images = await provider.listImages();
+    assert.deepEqual(images.map((image) => image.name), ["unprefixed", "boxhaven-image-unique"]);
+    assert.equal(urls.length, 2);
+    assert.equal(images[0].bootstrapped, undefined);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,

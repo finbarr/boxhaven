@@ -173,8 +173,6 @@ export class HetznerProvider implements MachineProvider {
     while (page) {
       const response: HetznerImageList = await this.request<HetznerImageList>(`/images?type=snapshot&per_page=50&page=${page}`);
       for (const image of response.images) {
-        const name = hetznerImageName(image);
-        if (!imageNameIsBoxHavenRemote(name) && !(image.labels && "boxhaven" in image.labels)) continue;
         images.push(machineImageFromHetzner(this.name, image));
       }
       page = response.meta?.pagination?.next_page ?? null;

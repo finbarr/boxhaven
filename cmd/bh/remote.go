@@ -138,7 +138,7 @@ func printRemoteUsage() {
 	fmt.Fprintln(os.Stderr, "  --provider <name>    Cloud provider for create (defaults to config or backend default)")
 	fmt.Fprintln(os.Stderr, "  --size <name>        Built-in or team-defined size shortcut (default: small)")
 	fmt.Fprintln(os.Stderr, "  --region <region>    Provider region for create")
-	fmt.Fprintln(os.Stderr, "  --image <image>      Provider image ID or slug for create")
+	fmt.Fprintln(os.Stderr, "  --image <image>      Team image name or provider image ID")
 	fmt.Fprintln(os.Stderr, "  --team <team>        Team that owns the new box (defaults to your active team)")
 	fmt.Fprintln(os.Stderr, "  --ssh-user <user>    SSH user for create")
 	fmt.Fprintln(os.Stderr, "  --backend-url <url>  Remote backend API URL for create")

@@ -141,7 +141,7 @@ export function ImagesView({ token }: { token: string }) {
             {snapshot.isPending ? "Snapshotting" : "Create snapshot"}
           </button>
           {snapshot.error ? <p className="error">{(snapshot.error as Error).message}</p> : null}
-          <p className="hint">Images belong to the active team and can be selected when creating a new box.</p>
+          <p className="hint">Names are unique within this team. Use your image name with <code>bh create --image</code>; no prefix is added.</p>
         </form>
       </Drawer>
     </>

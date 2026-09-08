@@ -51,6 +51,12 @@ on expected access-page, navigation, Members, Teams, or mobile-overflow
 regressions. Set `BOXHAVEN_PLAYWRIGHT_EXECUTABLE` if Chrome is not in a
 standard location.
 
+For image names, build the CLI with `make build` from the repository root, then
+run `npm run smoke:images` here. It exercises the built CLI against a temporary
+HTTP backend with real auth and SQLite; cloud provisioning is simulated. To
+check the rendered image documentation, start a docs preview and run
+`BOXHAVEN_DOCS_SMOKE_URL=http://127.0.0.1:4173 npm run smoke:image-docs`.
+
 ## Run With Docker Compose
 
 From the repository root:
@@ -209,8 +215,16 @@ Environment:
 - `BOXHAVEN_RESEND_API_URL`: Resend API base URL override for tests.
 
 Team images are optional per-box overrides. When `POST /v1/machines` includes
-`image`, the image must belong to the target team; otherwise the backend uses
+`image`, its name or ID must belong to the target team; otherwise the backend uses
 the provider's configured `BOXHAVEN_REMOTE_IMAGE*` default.
+
+Names are unique across providers within a team. Snapshot requests reserve the
+name transactionally before calling the provider. The team-facing name is
+separate from the immutable provider snapshot name, so different teams can use
+the same name even when they share a provider account. Existing names and IDs
+are retained during migration. If older records contain duplicate names in one
+team across providers, remove the duplicate image before upgrading; the
+migration reports the conflict without discarding records.
 
 Normal user VMs do not receive reusable DigitalOcean account SSH keys. The
 backend uses a one-time no-login key during DigitalOcean create only to prevent
@@ -309,7 +323,7 @@ verified do not receive a redundant BoxHaven verification email.
 Image management routes:
 
 - `GET /v1/images` — list images owned by the caller's active team, optionally filtered with `?provider=<name>`.
-- `POST /v1/images` — snapshot one of the caller's machines in the active team; the backend prefixes the image name with `boxhaven-remote-`.
+- `POST /v1/images` — snapshot one of the caller's machines in the active team; accepts an optional name without adding a prefix, unique across providers within the active team. Duplicate or concurrently reserved names return `409`.
 - `DELETE /v1/images/:id?provider=<name>` — delete an image owned by the active team; returns `409` while the provider image id is not known yet.
 
 Team routes (Better Auth organization plugin, mounted under `/v1/auth`):

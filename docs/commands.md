@@ -42,7 +42,7 @@ certificate trust are ready, then syncs the current directory to
 | `--provider <name>` | Cloud provider for create (defaults to config or backend default) |
 | `--size <name>` | Built-in or team-owned size shortcut; defaults to `small` |
 | `--region <region>` | Provider region for create, passed through to the provider verbatim |
-| `--image <image>` | Provider image ID or slug for create, passed through verbatim |
+| `--image <image>` | Team image name or provider image ID |
 | `--team <team>` | Team that owns the new box (defaults to your active team) |
 | `--ssh-user <user>` | SSH user for create |
 | `--backend-url <url>` | Remote backend API URL for create |
@@ -225,10 +225,10 @@ sessions.
 ```bash
 bh image ls [--provider <name>]
 bh image create <machine> [--name <name>]
-bh image rm <id> [--provider <name>] [--force]
+bh image rm <name-or-id> [--provider <name>] [--force]
 ```
 
-Images belong to the active team. Pass an image id to `bh create --image <id>`
+Image names are unique within the active team; BoxHaven adds no prefix. Pass a name or ID to `bh create --image <name-or-id>`
 when creating a box; without `--provider` image commands use the backend's
 default provider. `bh image rm` prompts unless `--force` is passed. See
 [Images](/images) for the full workflow.

@@ -16,7 +16,7 @@ bh create work --provider digitalocean --region sfo3
 bh create work --provider hetzner --region fsn1 --image 12345678
 ```
 
-`--region` and `--image` are passed through to the provider verbatim. Set a
+`--region` is passed through to the provider. `--image` accepts a name or ID from the target team’s image list. Set a
 project-wide default with the `provider` key under `[remote]` in
 `.boxhaven.toml` or the global config.
 
@@ -56,7 +56,7 @@ any other server type.
 
 Providers create boxes from a prebuilt BoxHaven snapshot when the
 `BOXHAVEN_REMOTE_IMAGE*` variable for that provider is configured, or when the
-caller selects a team image with `bh create --image <image-id>`. Machines
+caller selects a team image with `bh create --image <name-or-id>`. Machines
 created from these images are treated as backend-bootstrapped. Plain Ubuntu
 fallback images are not considered fully bootstrapped for normal CLI use; the
 CLI does not bootstrap plain hosts.

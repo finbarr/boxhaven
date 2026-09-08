@@ -107,8 +107,8 @@ Moving or sharing never copies a box. To hand a teammate a box like yours,
 snapshot it into a team image and create a new box from the resulting image:
 
 ```bash
-bh image create work
-bh create work-clone --image <image-id>
+bh image create work --name dev-tools
+bh create work-clone --image dev-tools
 ```
 
 See [Images](/images) for image management.

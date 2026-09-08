@@ -231,7 +231,7 @@ bh create work --provider digitalocean --region sfo3
 bh create work --provider hetzner --region fsn1 --image 12345678
 ```
 
-`--region` and `--image` are passed through to the provider verbatim. Set a
+`--region` is passed through to the provider. `--image` accepts a name or ID from the target team’s image list. Set a
 project-wide default with the `provider` key under `[remote]` in
 `.boxhaven.toml` or the global config.
 
@@ -324,23 +324,24 @@ Moving or sharing never copies a box. To hand a teammate a box like yours,
 snapshot it into a team image and create a new box from the resulting image:
 
 ```bash
-bh image create work
-bh create work-clone --image <image-id>
+bh image create work --name dev-tools
+bh create work-clone --image dev-tools
 ```
 
 ## Images
 
 Golden images carry the BoxHaven VM runtime so new boxes boot ready to use.
-Images belong to the active team. A team member can snapshot one of the
+Image names are unique within the active team, with no added prefix. Different
+teams can use the same name. A team member can snapshot one of the
 team's boxes, then select that image when creating another box in the same
 team. If no image is selected, BoxHaven uses the backend's configured default
 image for that provider.
 
 ```bash
 bh image ls
-bh image create work            # snapshot the box "work" into a golden image
-bh create work-clone --image <image-id>
-bh image rm <image-id> --force
+bh image create work --name dev-tools
+bh create work-clone --image dev-tools
+bh image rm dev-tools --force
 ```
 
 ## GitHub Repository Access

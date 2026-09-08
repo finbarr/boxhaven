@@ -216,7 +216,7 @@ test("snapshot and lifecycle timestamps follow queue reservation order behind a 
   const dir = await mkdtemp(join(tmpdir(), "boxhaven-policy-reservation-"));
   const path = join(dir, "boxhaven.sqlite");
   const store = new SlowFirstWriteStateStore(path, "fake");
-  const slowUpdate = store.putImage({ name: "base", provider: "fake", org_id: "team-1" });
+  const slowUpdate = store.putImage({ name: "base", provider_name: "base", provider: "fake", org_id: "team-1" });
   await store.firstWriteStarted;
 
   const snapshot = store.captureMachineSnapshot(() => new Date("2026-07-11T10:00:02.000Z"));

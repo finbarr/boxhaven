@@ -17,6 +17,8 @@ export type RemoteMachine = {
   provider_hourly_price?: number;
   hourly_price_cents?: number;
   image?: string;
+  /** Team-facing name retained independently of provider refreshes. */
+  image_name?: string;
   ssh_user?: string;
   preview_hostname?: string;
   preview_url?: string;
@@ -61,6 +63,7 @@ export type CreateMachineRequest = {
   region?: string;
   image?: string;
   image_bootstrapped?: boolean;
+  image_name?: string;
   ssh_user?: string;
   source_path?: string;
   repo_url?: string;
@@ -163,6 +166,7 @@ export type MachineProvider = {
 export type TeamImageRecord = {
   id?: string;
   name: string;
+  provider_name: string;
   provider: string;
   org_id: string;
   org_slug?: string;

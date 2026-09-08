@@ -175,7 +175,7 @@ test("Hetzner exposes server types with regional prices", async () => {
   }
 });
 
-test("Hetzner lists only BoxHaven snapshots and reads names from descriptions", async () => {
+test("Hetzner lists snapshots without relying on names or labels for team ownership", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -196,10 +196,10 @@ test("Hetzner lists only BoxHaven snapshots and reads names from descriptions", 
       BOXHAVEN_HETZNER_API_URL: "https://hetzner.example.test",
     });
     const images = await provider.listImages();
-    assert.deepEqual(images.map((image) => image.id), ["1", "3"]);
+    assert.deepEqual(images.map((image) => image.id), ["1", "2", "3"]);
     assert.equal(images[0].name, "boxhaven-remote-good");
     assert.equal(images[0].bootstrapped, true);
-    assert.equal(images[1].status, "creating");
+    assert.equal(images[2].status, "creating");
   } finally {
     globalThis.fetch = originalFetch;
   }

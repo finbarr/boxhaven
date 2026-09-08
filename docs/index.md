@@ -19,7 +19,7 @@ agents inside persistent sessions, and operate the backend.
 ## Operate boxes
 
 - [Teams](/teams): team-owned boxes, roles, invitations, and moving boxes between teams.
-- [Golden images](/images): create, snapshot, activate, and remove VM runtime images.
+- [Golden images](/images): save, select, and remove team VM images by name.
 - [Cloud providers](/providers): configure DigitalOcean and Hetzner Cloud provider settings.
 
 ## Security and operation

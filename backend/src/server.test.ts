@@ -952,27 +952,30 @@ test("backend snapshots, lists, selects, and deletes images for the active team"
     payload: { machine: "golden", name: "My Custom Build" },
   });
   assert.equal(snapshot.statusCode, 202, snapshot.body);
-  assert.equal(snapshot.json().image.name, "boxhaven-remote-my-custom-build");
-  assert.deepEqual(provider.snapshotted, [{ machine: "golden", name: "boxhaven-remote-my-custom-build" }]);
+  assert.equal(snapshot.json().image.name, "my-custom-build");
+  assert.equal(provider.snapshotted[0].machine, "golden");
+  assert.match(provider.snapshotted[0].name, /^boxhaven-image-[0-9a-f-]{36}$/);
   provider.images = [{ id: snapshot.json().image.id, name: snapshot.json().image.name, status: "available", bootstrapped: true }];
 
   const listed = await app.inject({ method: "GET", url: "/v1/images", headers });
   assert.equal(listed.statusCode, 200, listed.body);
   assert.equal(listed.json().images.length, 1);
-  assert.equal(listed.json().images[0].name, "boxhaven-remote-my-custom-build");
+  assert.equal(listed.json().images[0].name, "my-custom-build");
   assert.equal(listed.json().images[0].active, undefined);
 
   const explicitImage = await app.inject({
     method: "POST",
     url: "/v1/machines",
     headers,
-    payload: { name: "explicit-image", image: snapshot.json().image.id, region: "fra1" },
+    payload: { name: "explicit-image", image: "my-custom-build", region: "fra1" },
   });
   assert.equal(explicitImage.statusCode, 201, explicitImage.body);
   const explicitRequest = provider.created.find((request) => request.name === "explicit-image");
   assert.equal(explicitRequest?.image, snapshot.json().image.id);
   assert.equal(explicitRequest?.region, "fra1");
   assert.equal(explicitRequest?.image_bootstrapped, true);
+  assert.equal(explicitImage.json().machine.image, "my-custom-build");
+  assert.equal(explicitImage.json().machine.image_name, undefined);
 
   const defaultImage = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "default-image" } });
   assert.equal(defaultImage.statusCode, 201, defaultImage.body);
@@ -1035,7 +1038,7 @@ test("backend scopes images to teams", async () => {
 
   const teamImages = await app.inject({ method: "GET", url: "/v1/images", headers });
   assert.equal(teamImages.statusCode, 200, teamImages.body);
-  assert.deepEqual(teamImages.json().images.map((image: MachineImage) => image.name), ["boxhaven-remote-team-build"]);
+  assert.deepEqual(teamImages.json().images.map((image: MachineImage) => image.name), ["team-build"]);
 
   const backToPersonal = await app.inject({
     method: "POST",
@@ -1045,7 +1048,94 @@ test("backend scopes images to teams", async () => {
   });
   assert.equal(backToPersonal.statusCode, 200, backToPersonal.body);
   const defaultImages = await app.inject({ method: "GET", url: "/v1/images", headers });
-  assert.deepEqual(defaultImages.json().images.map((image: MachineImage) => image.name), ["boxhaven-remote-default-build"]);
+  assert.deepEqual(defaultImages.json().images.map((image: MachineImage) => image.name), ["default-build"]);
+});
+
+test("image names are reserved before snapshotting, including across providers", async () => {
+  const second = new FakeProvider("fake2", "Second Cloud");
+  const { app, provider, token } = await createTestBackend("image-race@example.com", "password123", { extraProviders: [second] });
+  const headers = { authorization: `Bearer ${token}` };
+  for (const [name, cloud] of [["first", "fake"], ["second", "fake2"]]) {
+    assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name, provider: cloud } })).statusCode, 201);
+  }
+  let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  const barrier = new Promise<void>((resolve) => { release = resolve; });
+  provider.createImage = async (machine, name) => {
+    provider.snapshotted.push({ machine: machine.name, name });
+    entered();
+    await barrier;
+    return { id: "", name, status: "creating" };
+  };
+  const pending = app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "first", name: "kyoto-dev" } }).then((response) => response);
+  await started;
+  try {
+    for (const machine of ["first", "second"]) {
+      const duplicate = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine, name: "kyoto-dev" } });
+      assert.equal(duplicate.statusCode, 409, duplicate.body);
+      assert.match(duplicate.body, /already exists in this team/);
+    }
+    assert.equal(provider.snapshotted.length, 1);
+    assert.equal(second.snapshotted.length, 0);
+    const listing = await app.inject({ method: "GET", url: "/v1/images", headers });
+    assert.deepEqual(listing.json().images.map((image: MachineImage) => [image.name, image.status]), [["kyoto-dev", "creating"]]);
+  } finally { release(); }
+  assert.equal((await pending).statusCode, 202);
+  await app.close();
+});
+
+test("asynchronous snapshots with the same name stay isolated between teams", async () => {
+  const { app, provider, token } = await createTestBackend("image-teams@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  const originalTeam = (await app.inject({ method: "GET", url: "/v1/auth/whoami", headers })).json().team.id;
+  provider.createImage = async (machine, name) => {
+    provider.snapshotted.push({ machine: machine.name, name });
+    return { id: "", name, status: "creating" };
+  };
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "builder-a" } })).statusCode, 201);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "builder-a", name: "kyoto-dev" } })).statusCode, 202);
+  const other = (await app.inject({ method: "POST", url: "/v1/auth/organization/create", headers, payload: { name: "Art", slug: "image-art" } })).json();
+  const otherTeam = other.id || other.organization?.id;
+  assert.equal((await app.inject({ method: "POST", url: "/v1/auth/organization/set-active", headers, payload: { organizationId: otherTeam } })).statusCode, 200);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "builder-b" } })).statusCode, 201);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "builder-b", name: "kyoto-dev" } })).statusCode, 202);
+  assert.notEqual(provider.snapshotted[0].name, provider.snapshotted[1].name);
+  provider.images = [
+    { id: "unowned", name: "kyoto-dev", status: "available" },
+    ...provider.snapshotted.map((image, index) => ({ id: `ready-${index}`, name: image.name, status: "available" })),
+  ];
+  for (const [index, team] of [originalTeam, otherTeam].entries()) {
+    await app.inject({ method: "POST", url: "/v1/auth/organization/set-active", headers, payload: { organizationId: team } });
+    const listed = (await app.inject({ method: "GET", url: "/v1/images", headers })).json().images;
+    assert.deepEqual(listed.map((image: MachineImage) => [image.id, image.name, image.bootstrapped]), [[`ready-${index}`, "kyoto-dev", true]]);
+    const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: `clone-${index}`, image: "kyoto-dev" } });
+    assert.equal(created.statusCode, 201, created.body);
+    assert.equal(provider.created.at(-1)?.image, `ready-${index}`);
+    assert.equal(created.json().machine.image, "kyoto-dev");
+    const saved = created.json().machine;
+    provider.discovered = [{ ...saved, image: provider.snapshotted[index].name, bootstrap_complete: false }];
+    await app.inject({ method: "GET", url: "/v1/machines", headers });
+    const refreshed = await app.inject({ method: "GET", url: `/v1/machines/clone-${index}`, headers });
+    assert.equal(refreshed.json().machine.image, "kyoto-dev");
+    assert.equal(refreshed.json().machine.bootstrap_complete, true);
+  }
+  await app.close();
+});
+
+test("failed snapshot requests release their reserved name for a retry", async () => {
+  const { app, provider, token } = await createTestBackend("image-failure@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "builder" } });
+  const createImage = provider.createImage.bind(provider);
+  provider.createImage = async () => { throw new Error("snapshot unavailable"); };
+  const failed = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "builder", name: "kyoto-dev" } });
+  assert.equal(failed.statusCode, 500);
+  provider.createImage = createImage;
+  const retry = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "builder", name: "kyoto-dev" } });
+  assert.equal(retry.statusCode, 202, retry.body);
+  assert.equal(retry.json().image.name, "kyoto-dev");
+  await app.close();
 });
 
 test("backend creates a default team automatically and scopes boxes to teams", async () => {

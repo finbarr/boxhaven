@@ -247,7 +247,7 @@ dependency rebuilds.
 
 `npm run deploy:runtime` writes `BOXHAVEN_REMOTE_IMAGE` to the env file as
 the env-configured default. Team images do not override that default globally;
-they are selected per box with `bh create --image <image-id>` or the console
+they are selected per box with `bh create --image <name-or-id>` or the console
 create form.
 
 Keep the previous snapshot id until the remote lifecycle smoke passes.

@@ -17,13 +17,17 @@ console Images page or the CLI:
 
 ```bash
 bh image ls
-bh image create work            # snapshot the box "work" into a team image
-bh create work-clone --image <image-id>
-bh image rm <image-id> --force
+bh image create work --name dev-tools
+bh create work-clone --image dev-tools
+bh image rm dev-tools --force
 ```
 
 `bh image create` snapshots one of your own boxes in the active team; the
-backend prefixes the image name with `boxhaven-remote-`. The snapshot starts in
+name is used without a BoxHaven prefix. Names are unique within a team, across
+providers; other teams can reuse the same name. Duplicate names return a conflict,
+including while a snapshot is being created. Without `--name`, a name is generated
+from the box name and timestamp. Names are normalized to lowercase with
+unsupported characters replaced by hyphens. The snapshot starts in
 `creating` status and can be selected for new boxes after the provider reports
 it as `available`.
 

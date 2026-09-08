@@ -178,7 +178,6 @@ export class DigitalOceanProvider implements MachineProvider {
     while (path) {
       const response = await this.request<SnapshotList>(path);
       for (const snapshot of response.snapshots) {
-        if (!imageNameIsBoxHavenRemote(snapshot.name)) continue;
         images.push({
           id: String(snapshot.id),
           name: snapshot.name || String(snapshot.id),
@@ -186,7 +185,6 @@ export class DigitalOceanProvider implements MachineProvider {
           status: "available",
           created_at: snapshot.created_at,
           size_gb: snapshot.size_gigabytes,
-          bootstrapped: true,
         });
       }
       path = nextPath(response.links?.pages?.next);
@@ -208,7 +206,7 @@ export class DigitalOceanProvider implements MachineProvider {
       name,
       provider: this.name,
       status: "creating",
-      bootstrapped: imageNameIsBoxHavenRemote(name),
+      bootstrapped: machine.bootstrap_complete === true,
     };
   }
 
