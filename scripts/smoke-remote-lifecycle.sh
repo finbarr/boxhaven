@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Remote script strings expand variables on the VM, not the laptop.
+# shellcheck disable=SC2016
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -106,7 +108,7 @@ bh() {
 run_remote() {
   local name="$1"
   local script="$2"
-  bh run "$name" run bash -lc "$script"
+  bh run "$name" bash -lc "$script"
 }
 
 preview_url_for() {
@@ -218,6 +220,14 @@ check() {
 
 check "BOXHAVEN_REMOTE env" test "$BOXHAVEN_REMOTE" = "1"
 check "BOXHAVEN_PROJECT_PATH env" test "$BOXHAVEN_PROJECT_PATH" = "/opt/boxhaven/project"
+machine_id="$(cat /etc/machine-id)"
+[[ "$machine_id" =~ ^[0-9a-f]{32}$ ]] || {
+  printf "runtime check failed: initialized machine identity\n" >&2
+  exit 1
+}
+check "D-Bus machine identity link" test -L /var/lib/dbus/machine-id
+check "matching D-Bus machine identity" test "$(cat /var/lib/dbus/machine-id)" = "$machine_id"
+printf "machine identity: %s\n" "$machine_id"
 check "preview target port env" test "${BOXHAVEN_PREVIEW_TARGET_PORT:-}" = "80"
 check "web bind env" test "${BOXHAVEN_WEB_BIND:-}" = "0.0.0.0"
 if command -v jq >/dev/null 2>&1 && [ -f "${BOXHAVEN_CONTEXT_FILE:-/run/boxhaven/context.json}" ]; then
