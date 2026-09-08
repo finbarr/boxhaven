@@ -57,6 +57,15 @@ HTTP backend with real auth and SQLite; cloud provisioning is simulated. To
 check the rendered image documentation, start a docs preview and run
 `BOXHAVEN_DOCS_SMOKE_URL=http://127.0.0.1:4173 npm run smoke:image-docs`.
 
+For real snapshot and clone verification, run
+[`scripts/smoke-remote-images.sh`](../scripts/smoke-remote-images.sh) on a Linux
+Docker host. It runs this build with isolated auth and SQLite, creates two
+temporary DigitalOcean boxes and one snapshot, prepares the disposable source
+with the golden-image identity cleanup, verifies project persistence, SSH and
+team isolation, and cleans up its resources. See the
+[cloud smoke setup](../deploy/digitalocean/README.md#image-snapshot-and-clone-smoke)
+for credentials and agent callback routing.
+
 ## Run With Docker Compose
 
 From the repository root:
@@ -215,8 +224,8 @@ Environment:
 - `BOXHAVEN_RESEND_API_URL`: Resend API base URL override for tests.
 
 Team images are optional per-box overrides. When `POST /v1/machines` includes
-`image`, its name or ID must belong to the target team; otherwise the backend uses
-the provider's configured `BOXHAVEN_REMOTE_IMAGE*` default.
+`image`, its name or ID must belong to the target team. When `image` is omitted,
+the backend uses the provider's configured `BOXHAVEN_REMOTE_IMAGE*` default.
 
 Names are unique across providers within a team. Snapshot requests reserve the
 name transactionally before calling the provider. The team-facing name is

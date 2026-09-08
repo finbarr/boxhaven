@@ -251,6 +251,64 @@ The application backup fails without `boxhaven.sqlite` or the SSH CA keypair.
 It validates the copied database and matching CA keys, then atomically publishes
 the archive. Caddy data is included when present.
 
+### Image snapshot and clone smoke
+
+For custom image changes, `scripts/smoke-remote-images.sh` exercises real
+DigitalOcean snapshot creation, polling, cloning by team image name, signed SSH
+access, project-file persistence, fresh host identity, and isolation from an
+unrelated user. It creates two temporary VMs and one snapshot, which incur
+provider charges until cleanup completes.
+
+The disposable source is flushed to disk and cleaned of cloud-init state,
+machine identity, authorized keys, and SSH host keys before snapshotting, as in
+the golden-image builder above. Snapshot APIs copy disk contents; they do not
+perform this preparation on a user's source box. Live snapshots can omit
+buffered writes, and unprepared snapshots retain the source's machine ID.
+For application consistency, follow
+[DigitalOcean's snapshot preparation guidance](https://docs.digitalocean.com/products/snapshots/how-to/snapshot-droplets/).
+
+Run it on a Linux Docker host with `python3`, `ss`, a reachable hostname, and
+an existing valid TLS certificate for that hostname. Build `backend/dist` first
+with `npm --prefix backend run build`, and provide a backend Docker image built
+with the same dependency lockfile. The script mounts the current `backend/dist`
+into that image and starts a separate backend with a fresh SQLite database,
+auth secret, and SSH CA. It captures verification emails locally. Production
+databases, auth, billing, and email credentials are not used.
+
+```bash
+docker build -t boxhaven/backend:local backend
+sudo env \
+  BOXHAVEN_IMAGE_SMOKE_ENV_FILE=/path/to/provider.env \
+  BOXHAVEN_IMAGE_SMOKE_HOSTNAME=smoke.example.com \
+  BOXHAVEN_IMAGE_SMOKE_TLS_CERT=/path/to/fullchain.pem \
+  BOXHAVEN_IMAGE_SMOKE_TLS_KEY=/path/to/privkey.pem \
+  scripts/smoke-remote-images.sh
+```
+
+The env file must contain a DigitalOcean token and `BOXHAVEN_REMOTE_IMAGE` (or
+`BOXHAVEN_REMOTE_IMAGE_DIGITALOCEAN`) pointing to a prebuilt runtime snapshot.
+The runner also accepts the provider region, default size, and VPC settings.
+It filters out all other credentials. The runtime image can be selected with
+`BOXHAVEN_IMAGE_SMOKE_RUNTIME_IMAGE`.
+
+Allow inbound TCP port 8443 from the test VMs in both the host firewall and any
+DigitalOcean cloud firewall for the duration of the test, then remove any
+temporary rules. `BOXHAVEN_IMAGE_SMOKE_TLS_PORT` changes this port;
+`BOXHAVEN_IMAGE_SMOKE_PORT` changes the backend's loopback port (default 18789).
+Both ports must be unused. A temporary Caddy container serves only the agent
+callback routes under `/v1/agent/`; all other public paths return 404. The
+production proxy configuration remains untouched.
+
+Results and a resource journal are retained under `backend/.artifacts/`.
+The harness deletes its own VMs and snapshot in `finally`, and the runner
+removes both temporary containers and its filtered credential file. On failure,
+inspect `result.json` and confirm `cleanup` is true. After a forced process kill
+or host failure, use the recorded provider IDs and names to remove only that
+run's resources. Keep the private test database for recovery until cleanup is
+confirmed; it is separate from the production database.
+
+### Remote lifecycle smoke
+
 After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or
 agent reconnect behavior, run the reusable lifecycle smoke from a machine with a
 valid BoxHaven session token:
