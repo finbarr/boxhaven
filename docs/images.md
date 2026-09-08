@@ -24,10 +24,15 @@ bh image rm dev-tools --force
 
 `bh image create` snapshots one of your own boxes in the active team; the
 name is used without a BoxHaven prefix. Names are unique within a team, across
-providers; other teams can reuse the same name. Duplicate names return a conflict,
+providers. Images remain private to their owning team; different teams may
+independently use the same name. Duplicate names return a conflict,
 including while a snapshot is being created. Without `--name`, a name is generated
 from the box name and timestamp. Names are normalized to lowercase with
-unsupported characters replaced by hyphens. The snapshot starts in
+unsupported characters replaced by hyphens, and must start with a letter or
+number. Names such as `.dev` or `_dev` are rejected before a snapshot is created.
+If a reference matches one image's name and another image's ID, selecting or
+deleting it returns a conflict; use an unambiguous name or ID from `bh image ls`.
+The snapshot starts in
 `creating` status and can be selected for new boxes after the provider reports
 it as `available`.
 

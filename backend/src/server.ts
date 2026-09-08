@@ -14,7 +14,7 @@ import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { GitHubReleaseChecker, ReleaseUpdateChecker } from "./releases.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
-import { DeletionGuardError, MachineCleanupPendingError, StateStore, TeamDeletionBlockers } from "./state.js";
+import { AmbiguousImageReferenceError, DeletionGuardError, MachineCleanupPendingError, StateStore, TeamDeletionBlockers } from "./state.js";
 import { CreateMachineRequest, MachineCreateError, MachineImage, MachinePlan, MachineProvider, MachineSizeOption, MachineSizeShortcut, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
 
 export type BackendOptions = {
@@ -851,6 +851,8 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support snapshots` });
     }
     const imageName = normalizeImageName(bodyString(request.body?.name), machineName);
+    const imageNameError = validateCreateOverride("image", imageName);
+    if (imageNameError) return reply.code(400).send({ id: "bad_request", message: "invalid image name: start with a letter or number" });
     const team = auth.teams.find((candidate) => candidate.id === auth.orgID);
     const record: TeamImageRecord = {
       name: imageName,
@@ -871,7 +873,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     try {
       image = await provider.createImage(machine, record.provider_name);
     } catch (error) {
-      await options.store.deleteImageForOrg(auth.orgID, provider.name, record.name);
+      await options.store.deleteImage(record);
       throw error;
     }
     record.id = image.id || undefined;
@@ -891,7 +893,8 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return reply.code(400).send({ id: "bad_request", message: `provider ${provider.name} does not support managed images` });
     }
     const id = request.params.id.trim();
-    const record = await options.store.getImageForOrg(auth.orgID, provider.name, id);
+    const record = await resolveTeamImageReference(options.store, auth.orgID, provider.name, id, reply);
+    if (record === null) return;
     if (!record) {
       return reply.code(404).send({ id: "not_found", message: "image does not belong to the active team" });
     }
@@ -899,7 +902,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return reply.code(409).send({ id: "not_ready", message: "image is still being created; wait for the provider image id before deleting it" });
     }
     await provider.deleteImage(record.id);
-    await options.store.deleteImageForOrg(auth.orgID, provider.name, id);
+    await options.store.deleteImage(record);
     return reply.code(204).send();
   });
 
@@ -1562,7 +1565,8 @@ async function resolveTeamImageForCreate(
   idOrName: string,
   reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
 ): Promise<{ id: string; name: string; bootstrapped?: boolean } | undefined> {
-  const record = await options.store.getImageForOrg(orgID, provider.name, idOrName);
+  const record = await resolveTeamImageReference(options.store, orgID, provider.name, idOrName, reply);
+  if (record === null) return undefined;
   if (!record) {
     reply.code(400).send({ id: "bad_request", message: "image does not belong to the target team" });
     return undefined;
@@ -1587,6 +1591,22 @@ async function resolveTeamImageForCreate(
     name: record.name,
     bootstrapped: record.bootstrapped,
   };
+}
+
+async function resolveTeamImageReference(
+  store: StateStore,
+  orgID: string,
+  provider: string,
+  reference: string,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+): Promise<TeamImageRecord | undefined | null> {
+  try {
+    return await store.getImageForOrg(orgID, provider, reference);
+  } catch (error) {
+    if (!(error instanceof AmbiguousImageReferenceError)) throw error;
+    reply.code(409).send({ id: "ambiguous_image", message: error.message });
+    return null;
+  }
 }
 
 function providerImageMatchesRecord(image: MachineImage, record: TeamImageRecord): boolean {

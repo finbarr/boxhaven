@@ -854,7 +854,7 @@ async function checkImagesPage(page) {
   assert.ok(facts.rows.some(([provider, name, id]) => provider === "fake" && name === "acme-tools" && id === "img-acme"), "missing seeded team image");
   await page.getByRole("button", { name: "Snapshot a box", exact: true }).click();
   await page.getByPlaceholder("dev-tools").fill("kyoto-dev");
-  await page.getByText("Names are unique within this team.", { exact: false }).waitFor();
+  await page.getByText("Images are private to this team.", { exact: false }).waitFor();
   await page.screenshot({ path: join(outDir, "image-create.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: join(outDir, "image-create-mobile.png"), fullPage: true });
@@ -1036,6 +1036,8 @@ async function checkImageCLI({ token, imageCreates, machineCreates }) {
     assert.equal((await request("/v1/machines", { name: "image-builder" })).status, 201);
     const created = await run(["image", "create", "image-builder", "--name", "kyoto-dev"]);
     assert.match(created.stderr, /Snapshot kyoto-dev started/);
+    assert.equal(imageCreates.length, 1);
+    await assert.rejects(run(["image", "create", "image-builder", "--name", ".dev"]), (error) => /invalid image name/.test(error.stderr));
     assert.equal(imageCreates.length, 1);
     const listed = await run(["image", "ls"]);
     assert.match(listed.stdout, /kyoto-dev/);

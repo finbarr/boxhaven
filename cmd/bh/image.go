@@ -57,9 +57,9 @@ func printImageUsage() {
 	fmt.Fprintln(os.Stderr, "  bh image create <machine> [--name <name>]")
 	fmt.Fprintln(os.Stderr, "  bh image rm <name-or-id> [--provider <name>] [--force]")
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Image names are unique within the active team; no prefix is added.")
-	fmt.Fprintln(os.Stderr, "Pass a name or ID to `bh create --image <name-or-id>`")
-	fmt.Fprintln(os.Stderr, "when creating a box; otherwise BoxHaven uses its default image.")
+	fmt.Fprintln(os.Stderr, "Images are private to the active team; names are unique, with no added prefix.")
+	fmt.Fprintln(os.Stderr, "Names must start with a letter or number. Use an unambiguous name or ID.")
+	fmt.Fprintln(os.Stderr, "Pass one to `bh create --image <name-or-id>`; otherwise the default image is used.")
 	fmt.Fprintln(os.Stderr, "Removing an image prompts unless --force is passed.")
 }
 

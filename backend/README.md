@@ -221,7 +221,11 @@ the provider's configured `BOXHAVEN_REMOTE_IMAGE*` default.
 Names are unique across providers within a team. Snapshot requests reserve the
 name transactionally before calling the provider. The team-facing name is
 separate from the immutable provider snapshot name, so different teams can use
-the same name even when they share a provider account. Existing names and IDs
+the same name even when they share a provider account. Images remain private to
+their owning team; listing, selection, and deletion enforce team ownership.
+Normalized names must start with a letter or number. A reference matching two
+different images by name and provider ID returns `409 ambiguous_image`, without
+creating a box or deleting either image. Existing names and IDs
 are retained during migration. If older records contain duplicate names in one
 team across providers, remove the duplicate image before upgrading; the
 migration reports the conflict without discarding records.

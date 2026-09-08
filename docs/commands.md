@@ -228,7 +228,10 @@ bh image create <machine> [--name <name>]
 bh image rm <name-or-id> [--provider <name>] [--force]
 ```
 
-Image names are unique within the active team; BoxHaven adds no prefix. Pass a name or ID to `bh create --image <name-or-id>`
+Images are private to the active team. Names are unique within that team, must
+start with a letter or number after normalization, and get no added prefix.
+Ambiguous references that match different images by name and ID return a conflict.
+Pass an unambiguous name or ID to `bh create --image <name-or-id>`
 when creating a box; without `--provider` image commands use the backend's
 default provider. `bh image rm` prompts unless `--force` is passed. See
 [Images](/images) for the full workflow.

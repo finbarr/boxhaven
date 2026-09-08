@@ -332,7 +332,8 @@ bh create work-clone --image dev-tools
 
 Golden images carry the BoxHaven VM runtime so new boxes boot ready to use.
 Image names are unique within the active team, with no added prefix. Different
-teams can use the same name. A team member can snapshot one of the
+teams can independently use the same name; images remain private to their owning
+team. Names must start with a letter or number after normalization. A team member can snapshot one of the
 team's boxes, then select that image when creating another box in the same
 team. If no image is selected, BoxHaven uses the backend's configured default
 image for that provider.

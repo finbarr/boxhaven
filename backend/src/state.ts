@@ -65,6 +65,12 @@ export class MachineCleanupPendingError extends Error {
   }
 }
 
+export class AmbiguousImageReferenceError extends Error {
+  constructor(reference: string) {
+    super(`image reference ${reference} matches one image's name and another image's ID; use an unambiguous name or ID`);
+  }
+}
+
 export type CapacityReservation =
   | { status: "reserved"; id: string }
   | { status: "conflict" | "limit_reached" };
@@ -553,8 +559,9 @@ export class StateStore {
     const rows = this.db.prepare(`
       SELECT payload_json FROM core_images
       WHERE org_id = ? AND provider = ? AND (image_id = ? OR name = ?)
-      ORDER BY rowid LIMIT 1
+      ORDER BY rowid LIMIT 2
     `).all(orgID, provider, want, want) as PayloadRow[];
+    if (rows.length > 1) throw new AmbiguousImageReferenceError(want);
     return rows[0] ? parsePayload<TeamImageRecord>(rows[0].payload_json, "image") : undefined;
   }
 
@@ -577,14 +584,13 @@ export class StateStore {
     });
   }
 
-  async deleteImageForOrg(orgID: string, provider: string, idOrName: string): Promise<void> {
-    const want = idOrName.trim();
-    if (!want) return;
+  async deleteImage(image: TeamImageRecord): Promise<void> {
     await this.mutate(() => {
       this.db.prepare(`
         DELETE FROM core_images
-        WHERE org_id = ? AND provider = ? AND (image_id = ? OR name = ?)
-      `).run(orgID, provider, want, want);
+        WHERE org_id = ? AND provider = ? AND name = ?
+          AND json_extract(payload_json, '$.provider_name') = ?
+      `).run(image.org_id, image.provider, image.name, image.provider_name);
     });
   }
 
@@ -692,15 +698,15 @@ export class StateStore {
     if (!image.org_id || !image.provider || !image.name || !image.provider_name) throw new Error("image identity is required");
     this.db.prepare(`
       DELETE FROM core_images
-      WHERE org_id = ? AND provider = ? AND (name = ? OR (? IS NOT NULL AND image_id = ?))
-    `).run(image.org_id, image.provider, image.name, image.id || null, image.id || null);
+      WHERE org_id = ? AND provider = ? AND name = ?
+    `).run(image.org_id, image.provider, image.name);
     this.db.prepare(`
       INSERT INTO core_images (org_id, provider, identity, image_id, name, payload_json)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       image.org_id,
       image.provider,
-      image.id || image.name,
+      `name:${image.name}`,
       image.id || null,
       image.name,
       JSON.stringify(image),
@@ -996,6 +1002,13 @@ const coreMigrations: BackendDatabaseMigration[] = [{
       CREATE UNIQUE INDEX core_images_team_name ON core_images(org_id, name);
     `);
   },
+}, {
+  version: 7,
+  migrate(database) {
+    // Names are already unique per team. Keep the storage key independent of
+    // provider IDs so a pending numeric name cannot collide with a ready image.
+    database.exec("UPDATE core_images SET identity = 'name:' || name");
+  },
 }];
 
 function parsePayload<T>(value: string, label: string): T {
@@ -1026,7 +1039,7 @@ function providerMachineNameForRecovery(userID: string, machineName: string): st
 }
 
 function imageKey(image: TeamImageRecord): string {
-  return `${image.org_id}:${image.provider}:${image.id || image.name}`;
+  return `${image.org_id}:${image.provider}:name:${image.name}`;
 }
 
 function cleanupEventID(action: MachineLifecycleAction, machine: RemoteMachine): string {

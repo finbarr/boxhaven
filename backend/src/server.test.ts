@@ -937,6 +937,93 @@ test("backend handles non-string image request fields without 500s", async () =>
   assert.equal(numericCreateImage.statusCode, 400, numericCreateImage.body);
 });
 
+test("unrelated users cannot list, use, or delete one another's same-name images", async () => {
+  const { app, provider, token } = await createTestBackend("review-a@example.com");
+  try {
+    const otherToken = await signUp(app, "review-b@example.com");
+    const headers = [token, otherToken].map((value) => ({ authorization: `Bearer ${value}` }));
+    provider.createImage = async (machine, name) => {
+      provider.snapshotted.push({ machine: machine.name, name });
+      return { id: "", name, status: "creating" };
+    };
+    for (const h of headers) {
+      assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: h, payload: { name: "builder" } })).statusCode, 201);
+      assert.equal((await app.inject({ method: "POST", url: "/v1/images", headers: h, payload: { machine: "builder", name: "kyoto-dev" } })).statusCode, 202);
+    }
+    provider.images = provider.snapshotted.map((image, i) => ({ id: `private-${i}`, name: image.name, status: "available" }));
+    provider.images.push({ id: "unowned", name: "kyoto-dev", status: "available" });
+    assert.notEqual(provider.snapshotted[0].name, provider.snapshotted[1].name);
+    for (const [i, h] of headers.entries()) {
+      const otherID = `private-${1-i}`;
+      const listed = await app.inject({ method: "GET", url: "/v1/images", headers: h });
+      assert.deepEqual(listed.json().images.map((image: MachineImage) => [image.id, image.name]), [[`private-${i}`, "kyoto-dev"]]);
+      for (const image of [otherID, "unowned"]) {
+        assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers: h, payload: { name: "forbidden", image } })).statusCode, 400);
+        assert.equal((await app.inject({ method: "DELETE", url: `/v1/images/${image}`, headers: h })).statusCode, 404);
+      }
+      const clone = await app.inject({ method: "POST", url: "/v1/machines", headers: h, payload: { name: "clone", image: "kyoto-dev" } });
+      assert.equal(clone.statusCode, 201, clone.body);
+      assert.equal(provider.created.at(-1)?.image, `private-${i}`);
+    }
+    assert.equal(provider.deletedImages.length, 0);
+    assert.equal((await app.inject({ method: "DELETE", url: "/v1/images/kyoto-dev", headers: headers[0] })).statusCode, 204);
+    assert.deepEqual(provider.deletedImages, ["private-0"]);
+    assert.deepEqual((await app.inject({ method: "GET", url: "/v1/images", headers: headers[1] })).json().images.map((image: MachineImage) => image.id), ["private-1"]);
+  } finally { await app.close(); }
+});
+
+test("invalid image names are rejected before snapshotting", async () => {
+  const { app, provider, token } = await createTestBackend("review-name@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  try {
+    await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "builder" } });
+    const snapshot = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "builder", name: ".dev" } });
+    assert.equal(snapshot.statusCode, 400, snapshot.body);
+    assert.equal(provider.snapshotted.length, 0);
+    for (const name of ["_dev", ".", "__"]) {
+      const invalid = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "builder", name } });
+      assert.equal(invalid.statusCode, 400, invalid.body);
+    }
+    for (const [name, normalized] of [["My Dev_1.2", "my-dev_1.2"], ["123", "123"]]) {
+      const saved = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "builder", name } });
+      assert.equal(saved.statusCode, 202, saved.body);
+      assert.equal(saved.json().image.name, normalized);
+      provider.images.push({ ...saved.json().image, status: "available" });
+      const clone = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: `clone-${provider.images.length}`, image: normalized } });
+      assert.equal(clone.statusCode, 201, clone.body);
+    }
+  } finally { await app.close(); }
+});
+
+test("ambiguous image references cannot create or delete an image", async () => {
+  const { app, provider, token } = await createTestBackend("review-id@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  try {
+    await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "builder" } });
+    let sequence = 100;
+    provider.createImage = async (_machine, name) => ({ id: String(sequence++), name, status: "available" });
+    const first = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "builder", name: "101" } });
+    const second = await app.inject({ method: "POST", url: "/v1/images", headers, payload: { machine: "builder", name: "other" } });
+    assert.equal(first.statusCode, 202, first.body);
+    assert.equal(second.statusCode, 202, second.body);
+    provider.images = [first.json().image, second.json().image];
+    assert.equal((await app.inject({ method: "GET", url: "/v1/images", headers })).json().images.length, 2);
+    const ambiguousDelete = await app.inject({ method: "DELETE", url: "/v1/images/101", headers });
+    assert.equal(ambiguousDelete.statusCode, 409, ambiguousDelete.body);
+    assert.equal(ambiguousDelete.json().id, "ambiguous_image");
+    const ambiguousCreate = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "clone", image: "101" } });
+    assert.equal(ambiguousCreate.statusCode, 409, ambiguousCreate.body);
+    assert.deepEqual(provider.deletedImages, []);
+    assert.equal((await app.inject({ method: "GET", url: "/v1/images", headers })).json().images.length, 2);
+    assert.equal((await app.inject({ method: "DELETE", url: "/v1/images/100", headers })).statusCode, 204);
+    assert.deepEqual(provider.deletedImages, ["100"]);
+    const remaining = (await app.inject({ method: "GET", url: "/v1/images", headers })).json().images;
+    assert.deepEqual(remaining.map((image: MachineImage) => [image.id, image.name]), [["101", "other"]]);
+    assert.equal((await app.inject({ method: "DELETE", url: "/v1/images/other", headers })).statusCode, 204);
+    assert.deepEqual(provider.deletedImages, ["100", "101"]);
+  } finally { await app.close(); }
+});
+
 test("backend snapshots, lists, selects, and deletes images for the active team", async () => {
   const { app, provider, token } = await createTestBackend("image-owner@example.com");
   const headers = { authorization: `Bearer ${token}` };

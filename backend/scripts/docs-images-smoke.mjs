@@ -18,7 +18,7 @@ try {
   const results = [];
   for (const [pageName, path, heading, expectedCopy] of [
     ["images", "/images", "Team Images", /Names are unique within a team/],
-    ["commands", "/commands", "bh image", /BoxHaven adds no prefix/],
+    ["commands", "/commands", "bh image", /Images are private to the active team/],
   ]) {
     for (const [viewportName, viewport] of [
       ["desktop", { width: 1440, height: 1000 }],
