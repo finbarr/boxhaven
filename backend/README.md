@@ -169,6 +169,13 @@ repository. Its combined image includes billing, account limits, and the hosted
 console. Verify account routes and an authenticated usage request; public health
 checks do not establish that the hosted module is loaded.
 
+For a hosted product release, run `npm run release:production -- vX.Y.Z` in
+`boxhaven-hosted` after preparing the release as described in
+[the release runbook](https://github.com/finbarr/boxhaven/blob/master/RELEASING.md).
+That command publishes and verifies the CLI, deploys the same source with the
+hosted modules, checks authenticated billing, and tests and updates Homebrew.
+`deploy:production` by itself only updates the service.
+
 Distributions can pass additional build and deployment wiring through
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` or `--compose-overlay`, plus an
 optional `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE` or

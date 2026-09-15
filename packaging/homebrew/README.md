@@ -56,3 +56,9 @@ For a release tag `$TAG` (e.g. `v0.3.0`), the release operator:
 Never update the live tap before the matching GitHub release exists and passes
 `scripts/verify-published-release.sh`. See [RELEASING.md](../../RELEASING.md)
 for the exact release, tap update, clean install, and production smoke runbook.
+
+Hosted operators publish this formula as part of the sibling private repository's
+`npm run release:production -- vX.Y.Z`. That command verifies the public release,
+deploys the matching hosted service, then audits, fetches, installs, and tests the
+formula before pushing the live tap. See [RELEASING.md](../../RELEASING.md) for
+preparation and the final remote lifecycle checks.

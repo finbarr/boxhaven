@@ -453,6 +453,13 @@ limits, email configuration, and the hosted console. The public-only command
 does not load those modules. Hosted verification must check account routes and
 an authenticated usage request as well as public health endpoints.
 
+For a hosted product release, run `npm run release:production -- vX.Y.Z` in
+`boxhaven-hosted` after preparing the release as described in
+[the release runbook](https://github.com/finbarr/boxhaven/blob/master/RELEASING.md).
+That command publishes and verifies the CLI, deploys the same source with the
+hosted modules, checks authenticated billing, and tests and updates Homebrew.
+`deploy:production` by itself only updates the service.
+
 The deploy script supports distribution-specific build and service wiring through
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE` (or the matching

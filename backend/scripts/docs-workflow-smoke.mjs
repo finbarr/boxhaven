@@ -67,6 +67,11 @@ try {
     assert.match(await page.locator(".vp-doc").innerText(), /public self-hosted stack[\s\S]*boxhaven-hosted[\s\S]*npm run deploy:production[\s\S]*authenticated usage request/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: join(out, `deployment-${size}.png`) });
+    const releaseCopy = page.locator(".vp-doc p").filter({ hasText: "For a hosted product release" });
+    await releaseCopy.scrollIntoViewIfNeeded();
+    assert.match(await releaseCopy.innerText(), /release:production[\s\S]*CLI[\s\S]*Homebrew/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.screenshot({ path: join(out, `production-release-${size}.png`) });
     await page.goto(target, { waitUntil: "networkidle" });
     await page.locator('.vp-doc a[href="/agent-skill"]').waitFor();
     await page.screenshot({ path: join(out, `home-${size}.png`) });

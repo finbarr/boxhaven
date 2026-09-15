@@ -99,6 +99,13 @@ public and hosted image, including billing and account limits. Hosted checks
 must exercise account routes and an authenticated usage request; generic
 public health endpoints also pass when only the public core is running.
 
+For a hosted product release, run `npm run release:production -- vX.Y.Z` in
+`boxhaven-hosted` after preparing the release as described in
+[the release runbook](https://github.com/finbarr/boxhaven/blob/master/RELEASING.md).
+That command publishes and verifies the CLI, deploys the same source with the
+hosted modules, checks authenticated billing, and tests and updates Homebrew.
+`deploy:production` by itself only updates the service.
+
 If a distribution changes the production build or service wiring, supply its
 Compose overlay and optional overlay env file on every app or runtime deploy:
 

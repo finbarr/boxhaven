@@ -1,8 +1,18 @@
 # Release Runbook
 
-This runbook is for the release operator. It intentionally separates publishing
-the GitHub release from updating `finbarr/homebrew-tap`: the tap must never
-point at an artifact that does not exist yet.
+This runbook is for the release operator. Hosted product releases use the sibling
+private repository's `npm run release:production -- vX.Y.Z` command. After the
+preparation and local checks in step 1, run that command with `BOXHAVEN_TOKEN`
+set to an existing hosted session, then complete the remote checks in step 4.
+It waits for public and private CI, publishes and verifies the CLI, deploys and
+verifies the combined hosted service at those exact commits, checks authenticated
+billing, and tests and publishes Homebrew. Inspect its console screenshots in the
+private repository's `.artifacts/billing-production-smoke` directory.
+
+`deploy:production` alone only deploys the service. It does not publish the CLI
+or Homebrew. The manual CLI/tap procedures below are also documented for public
+release operators. In every workflow the tap must only point at an existing,
+verified GitHub release. Never move an existing tag or replace published assets.
 
 Set the release tag once in the shell that will run the commands below:
 
@@ -58,7 +68,9 @@ git push origin master
 ```
 
 Run every public verification surface from that commit. ShellCheck 0.11.0 or
-newer is required for the shell command below.
+newer is required for the shell command below. Artifact reproducibility checks
+require GNU tar. On macOS, install it with `brew install gnu-tar` and put it first
+on this shell's path with `export PATH="$(brew --prefix gnu-tar)/libexec/gnubin:$PATH"`.
 
 ```bash
 make clean
@@ -253,7 +265,7 @@ run `git status --short`. While it is working, detach from tmux with
 "$BH" list
 "$BH" connect "$AGENT_BOX"
 # After inspecting the completed agent session, detach again, then:
-"$BH" run "$AGENT_BOX" run test -s /opt/boxhaven/project/release-agent-smoke.txt
+"$BH" run "$AGENT_BOX" test -s /opt/boxhaven/project/release-agent-smoke.txt
 "$BH" destroy "$AGENT_BOX" --force
 "$BH" list
 ```

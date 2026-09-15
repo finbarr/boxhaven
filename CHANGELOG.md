@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+## v0.3.0 - 2026-09-15
+
+### Added
+
+- Published the installable BoxHaven laptop agent skill, including project sync
+  guidance, documentation links, version pins, and a parallel agent launcher.
+- Published Markdown documentation and an `llms.txt` index for agent discovery.
+- Added direct public preview links and stable box characters in the console.
+
+### Changed
+
+- New image names use exactly the requested name, without an added prefix.
+  Names are unique within a team across providers; images remain private to
+  their owning team. Existing image names are preserved.
+- Updated the golden image's Codex CLI for GPT-6 Astra.
+- Added a coordinated hosted production release command that publishes the CLI,
+  verifies the matching hosted deployment, and tests and updates Homebrew.
+- Removed obsolete deployment aliases, device-link compatibility code, and
+  legacy configuration labels.
+
+### Fixed
+
+- Reject ambiguous image references and invalid snapshot names.
+- Reset machine and D-Bus identity when preparing images, and preserve existing
+  snapshots when rebuilding the golden image.
+- Preserve in-flight provisioning during provider discovery and keep the
+  backend active after runtime-image deployment.
+- Prevent public deployment commands from dropping hosted distribution modules,
+  and verify the deployed backend version against CLI release tags.
+- Updated backend dependencies to resolve security audit findings.
+
 ## v0.2.0 - 2026-08-11
 
 ### Added
