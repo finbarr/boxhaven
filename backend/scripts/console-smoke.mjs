@@ -439,6 +439,11 @@ async function checkGettingStarted(page) {
   await page.goto(appURL, { waitUntil: "domcontentloaded" });
   await waitForConsole(page);
   await page.waitForSelector(".getting-started", { timeout: 10_000 });
+  await page.getByRole("link", { name: "Images", exact: true }).click();
+  await page.getByRole("heading", { name: "Images", exact: true }).waitFor();
+  await page.getByRole("link", { name: "BoxHaven home" }).locator("img").click();
+  await page.waitForURL(`${appURL}/`);
+  await page.locator(".getting-started").waitFor();
   await page.screenshot({ path: join(outDir, "boxes.png"), fullPage: true });
   const desktop = await page.evaluate(() => ({
     commands: [...document.querySelectorAll(".getting-started .command-block code")].map((node) => node.textContent?.trim()),
@@ -457,6 +462,12 @@ async function checkGettingStarted(page) {
   assert.equal(desktop.updateRel, "noopener noreferrer");
 
   await page.setViewportSize({ width: 390, height: 900 });
+  await page.getByRole("link", { name: "Images", exact: true }).click();
+  await page.getByRole("heading", { name: "Images", exact: true }).waitFor();
+  await page.getByRole("link", { name: "BoxHaven home" }).focus();
+  await page.keyboard.press("Enter");
+  await page.waitForURL(`${appURL}/`);
+  await page.locator(".getting-started").waitFor();
   await page.screenshot({ path: join(outDir, "mobile-boxes.png"), fullPage: true });
   const mobile = await page.evaluate(() => ({
     bodyScrollWidth: document.documentElement.scrollWidth,
