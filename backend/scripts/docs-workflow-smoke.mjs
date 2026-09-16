@@ -71,7 +71,7 @@ try {
     await releaseCopy.scrollIntoViewIfNeeded();
     assert.match(await releaseCopy.innerText(), /release:production[\s\S]*CLI[\s\S]*Homebrew/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-    await page.screenshot({ path: join(out, `production-release-${size}.png`) });
+    await releaseCopy.screenshot({ path: join(out, `production-release-${size}.png`), animations: "disabled" });
     await page.goto(target, { waitUntil: "networkidle" });
     await page.locator('.vp-doc a[href="/agent-skill"]').waitFor();
     await page.screenshot({ path: join(out, `home-${size}.png`) });

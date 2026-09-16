@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v0.3.1 - 2026-09-16
+
+### Fixed
+
+- Generate Homebrew formulas with readable permissions and literal release URLs,
+  allowing Homebrew to infer the version and pass strict audits.
+- Bound hosted production builds and release their worker memory afterward,
+  including after failures, to preserve capacity for the live service.
+
 ## v0.3.0 - 2026-09-15
 
 ### Added

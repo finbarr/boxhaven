@@ -65,7 +65,7 @@ sed \
 
 ! grep -Eq '__[A-Z0-9_]+__' "$temporary_formula" \
   || fail "formula still contains an unsubstituted placeholder"
-grep -Fq "version \"${version}\"" "$temporary_formula" \
+grep -Fq "/releases/download/${tag}/bh_${tag}_" "$temporary_formula" \
   || fail "formula does not contain version ${version}"
 for checksum in "$darwin_amd64" "$darwin_arm64" "$linux_amd64" "$linux_arm64"; do
   [ "$(grep -Fc "sha256 \"${checksum}\"" "$temporary_formula")" -eq 1 ] \
@@ -75,6 +75,7 @@ if command -v ruby >/dev/null 2>&1; then
   ruby -c "$temporary_formula" >/dev/null
 fi
 
+chmod 0644 "$temporary_formula"
 mv "$temporary_formula" "$output_formula"
 trap - EXIT
 echo "rendered ${tag} Homebrew formula at ${output_formula}"

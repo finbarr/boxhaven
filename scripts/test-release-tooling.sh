@@ -24,10 +24,20 @@ diff -ru "$first" "$second" \
 formula="${temporary_dir}/Formula/boxhaven.rb"
 "${repo_root}/scripts/render-homebrew-formula.sh" \
   "$tag" "${first}/SHA256SUMS" "$formula"
-grep -Fq 'version "0.0.0"' "$formula" \
+grep -Fq "/releases/download/${tag}/bh_${tag}_" "$formula" \
   || fail "rendered formula does not contain the test version"
 grep -Fq 'license "AGPL-3.0-only"' "$formula" \
   || fail "rendered formula does not contain the repository license"
+
+# Homebrew infers the version from literal URLs and audits readable permissions.
+python3 - "$formula" <<'PYTHON'
+import pathlib
+import stat
+import sys
+formula = pathlib.Path(sys.argv[1])
+assert stat.S_IMODE(formula.stat().st_mode) == 0o644
+assert '  version "' not in formula.read_text()
+PYTHON
 
 dry_run_output="${temporary_dir}/install-dry-run"
 BOXHAVEN_VERSION="$tag" \
