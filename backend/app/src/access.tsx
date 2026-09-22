@@ -1,6 +1,7 @@
 import { useMutation, type UseMutationResult } from "@tanstack/react-query";
 import { Copy, KeyRound, MailCheck, Play, RotateCw, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { clearEmailVerificationResult } from "../../src/browser-session";
 import { apiFetch, BoxHavenAPIError, formatUserCode, LoginResponse } from "./api";
 import { GitHubMark, isHostedService, privacyURL, termsURL } from "./shell";
 
@@ -24,8 +25,8 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
   notice?: string;
   initialMode?: "signin" | "signup";
 }) {
-  const verified = new URLSearchParams(window.location.search).get("verified") === "true";
   const verificationError = verificationErrorMessage(new URLSearchParams(window.location.search).get("error"));
+  const verified = !verificationError && new URLSearchParams(window.location.search).get("verified") === "true";
   const [mode, setMode] = useState<"signin" | "signup">(initialMode ?? (verified || verificationError ? "signin" : "signup"));
   const [forgot, setForgot] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -63,7 +64,10 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
       });
     },
     onSuccess: (data) => {
-      if (data.token) onToken(data.token);
+      if (data.token) {
+        clearEmailVerificationResult();
+        onToken(data.token);
+      }
       else {
         setVerificationDeliveryFailed(false);
         setVerificationEmail(email);

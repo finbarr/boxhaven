@@ -19,6 +19,7 @@ try {
   for (const [pageName, path, heading, expectedCopy] of [
     ["teams", "/teams", "Deleting A Team", /stale in-progress reservation/],
     ["operator-policy", "/operator-policy", "Deletion Policy", /excluded from commercial-policy reconciliation/],
+    ["self-hosting-verification", "/self-hosting", "Environment Variables", /The link signs out any account already active in that browser/],
   ]) {
     for (const [viewportName, viewport] of [
       ["desktop", { width: 1440, height: 1000 }],
@@ -36,6 +37,10 @@ try {
       assert.equal(bodyOverflow, false, `${pageName} ${viewportName} has horizontal overflow`);
       const screenshot = join(outDir, `${pageName}-${viewportName}.png`);
       await page.screenshot({ path: screenshot, fullPage: true });
+      if (pageName === "self-hosting-verification") {
+        await page.getByText(expectedCopy).scrollIntoViewIfNeeded();
+        await page.screenshot({ path: join(outDir, `${pageName}-${viewportName}-detail.png`) });
+      }
       results.push({ page: pageName, viewport: viewportName, screenshot, bodyOverflow });
       await context.close();
     }

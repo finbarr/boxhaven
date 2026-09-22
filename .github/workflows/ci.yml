@@ -68,6 +68,13 @@ jobs:
       - name: Test backend
         run: npm --prefix backend test
 
+      - name: Install browser for auth regression
+        run: npx playwright-core install --with-deps chromium
+        working-directory: backend
+
+      - name: Test email verification with an existing browser session
+        run: npm --prefix backend run smoke:email-verification
+
   backup:
     name: Backup Integrity
     runs-on: ubuntu-latest

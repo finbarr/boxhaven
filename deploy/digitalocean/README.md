@@ -44,7 +44,9 @@ cp deploy/digitalocean/env.production.example deploy/digitalocean/.env.productio
 ```
 
 `BETTER_AUTH_SECRET` must be a long random value and `RESEND_API_KEY` is
-required so password signups can verify their email before signing in. The
+required so password signups can verify their email before signing in.
+Verification links sign out any existing browser account before showing the
+sign-in form. The
 backend also needs `DIGITALOCEAN_ACCESS_TOKEN` so it can create remote VMs for users. Normal user
 VMs do not receive reusable DigitalOcean account SSH keys; the backend uses a
 one-time no-login key during create only to prevent provider password emails,
