@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,9 +15,12 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 )
 
 const remoteAuthDeviceClientID = "boxhaven-cli"
+const suggestedHostedBackendURL = "https://api.boxhaven.dev"
 
 var (
 	openBrowserURL  = defaultOpenBrowserURL
@@ -91,9 +96,9 @@ func runLogin(args []string) error {
 		return fmt.Errorf("unexpected login args: %v", fs.Args())
 	}
 
-	backendURL = strings.TrimRight(strings.TrimSpace(backendURL), "/")
-	if err := validateRemoteBackendURL(backendURL); err != nil {
-		return fmt.Errorf("invalid --backend-url: %w", err)
+	backendURL, err = loginBackendURL(backendURL, os.Stdin, os.Stderr, term.IsTerminal(int(os.Stdin.Fd())))
+	if err != nil {
+		return err
 	}
 	token = strings.TrimSpace(token)
 	if token == "" {
@@ -115,6 +120,30 @@ func runLogin(args []string) error {
 	success("Logged in to %s", backendURL)
 	printLoginDefaultTeam(cfg)
 	return nil
+}
+
+func loginBackendURL(value string, input io.Reader, output io.Writer, interactive bool) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		if !interactive {
+			return "", fmt.Errorf("backend URL is required on first login; pass --backend-url <url> or set %s", remoteBackendURLEnv)
+		}
+		fmt.Fprintln(output, "Choose your backend API URL. Press Enter to use hosted BoxHaven.")
+		fmt.Fprintf(output, "Backend URL [%s]: ", suggestedHostedBackendURL)
+		answer, err := bufio.NewReader(input).ReadString('\n')
+		if err != nil {
+			return "", fmt.Errorf("read backend URL: %w", err)
+		}
+		value = strings.TrimSpace(answer)
+		if value == "" {
+			value = suggestedHostedBackendURL
+		}
+	}
+	value = strings.TrimRight(value, "/")
+	if err := validateRemoteBackendURL(value); err != nil {
+		return "", fmt.Errorf("invalid backend URL: %w", err)
+	}
+	return value, nil
 }
 
 func runLogout(args []string) error {
@@ -145,6 +174,8 @@ func printLoginUsage() {
 	fmt.Fprintln(os.Stderr, "  bh login [--backend-url <url>] [--no-open]")
 	fmt.Fprintln(os.Stderr, "  bh login [--backend-url <url>] --token <token>")
 	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "First login asks for the backend API URL; press Enter to choose hosted BoxHaven.")
+	fmt.Fprintln(os.Stderr, "Without a terminal, pass --backend-url or set BOXHAVEN_BACKEND_URL. Saved URLs are reused.")
 	fmt.Fprintln(os.Stderr, "Without --token, boxhaven opens a browser approval flow and also prints the URL.")
 	fmt.Fprintln(os.Stderr, "--token stores an existing backend session token without calling the login API.")
 }

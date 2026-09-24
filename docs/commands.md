@@ -259,6 +259,10 @@ bh login [--backend-url <url>] [--no-open]
 bh login [--backend-url <url>] --token <token>
 ```
 
+First login asks for the backend API URL, with hosted BoxHaven as the
+Enter-to-accept choice. Later logins reuse the saved URL. Noninteractive first
+login requires `--backend-url` or `BOXHAVEN_BACKEND_URL`.
+
 Without `--token`, boxhaven opens a browser approval flow and also prints the
 URL. `--no-open` prints the browser login URL without trying to open it.
 `--token` stores an existing backend session token without calling the login

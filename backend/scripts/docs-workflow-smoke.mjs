@@ -30,8 +30,13 @@ try {
     const page = await browser.newPage({ viewport, reducedMotion: "reduce" });
     page.setDefaultTimeout(10_000);
     page.setDefaultNavigationTimeout(20_000);
-    const response = await page.goto(`${target}/getting-started#open-a-web-preview`, { waitUntil: "networkidle" });
+    const response = await page.goto(`${target}/getting-started#log-in`, { waitUntil: "networkidle" });
     assert.ok(response?.ok());
+    await page.locator("#log-in").scrollIntoViewIfNeeded();
+    assert.match(await page.locator(".vp-doc").innerText(), /first login[\s\S]*backend API URL[\s\S]*Press Enter[\s\S]*saves your choice/i);
+    assert.doesNotMatch(await page.locator(".vp-doc").innerText(), /Terms of Service|Privacy Policy/);
+    await page.screenshot({ path: join(out, `login-${size}.png`) });
+    await page.goto(`${target}/getting-started#open-a-web-preview`, { waitUntil: "networkidle" });
     const section = page.locator("#open-a-web-preview");
     await section.scrollIntoViewIfNeeded();
     assert.match(await page.locator(".vp-doc").innerText(), /Public preview[\s\S]*Open preview[\s\S]*BOXHAVEN_PREVIEW_URL/);

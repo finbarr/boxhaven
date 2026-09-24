@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	defaultRemoteBackendURL       = "https://api.boxhaven.dev"
 	remoteBackendURLEnv           = "BOXHAVEN_BACKEND_URL"
 	remoteAuthTokenEnv            = "BOXHAVEN_TOKEN"
 	remoteBackendDefaultTimeout   = 30 * time.Second
@@ -304,11 +303,13 @@ func remoteBackendRequest(cfg Config, method string, endpoint string, body any, 
 }
 
 func remoteBackendRequestWithTimeout(cfg Config, method string, endpoint string, body any, out any, timeout time.Duration) error {
-	baseURL := remoteBackendURL(cfg)
+	return remoteBackendSessionRequest(remoteBackendURL(cfg), remoteAuthToken(cfg), method, endpoint, body, out, timeout)
+}
+
+func remoteBackendSessionRequest(baseURL, token, method, endpoint string, body any, out any, timeout time.Duration) error {
 	if baseURL == "" {
-		return fmt.Errorf("remote backend URL is not configured")
+		return fmt.Errorf("remote backend URL is not configured; run `bh login` or set %s", remoteBackendURLEnv)
 	}
-	token := remoteAuthToken(cfg)
 	if token == "" {
 		return fmt.Errorf("remote session token is not configured; run `bh login` or set %s", remoteAuthTokenEnv)
 	}
@@ -442,7 +443,7 @@ func remoteBackendURL(cfg Config) string {
 	if url := strings.TrimSpace(cfg.Remote.BackendURL); url != "" {
 		return strings.TrimRight(url, "/")
 	}
-	return defaultRemoteBackendURL
+	return ""
 }
 
 func remoteAuthToken(cfg Config) string {

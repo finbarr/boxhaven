@@ -26,8 +26,7 @@ type Config struct {
 func defaultConfig() Config {
 	return Config{
 		Remote: RemoteConfig{
-			BackendURL: defaultRemoteBackendURL,
-			SSHUser:    remoteDefaultSSHUser,
+			SSHUser: remoteDefaultSSHUser,
 		},
 	}
 }
@@ -126,7 +125,7 @@ func saveGlobalConfig(cfg Config) error {
 		lines = append(lines, fmt.Sprintf("command = %s", formatTomlStringSlice(cfg.Command)))
 	}
 	lines = append(lines, "", "[remote]")
-	if cfg.Remote.BackendURL != "" && cfg.Remote.BackendURL != defaultConfig().Remote.BackendURL {
+	if cfg.Remote.BackendURL != "" {
 		lines = append(lines, fmt.Sprintf("backend_url = %q", cfg.Remote.BackendURL))
 	}
 	if cfg.Remote.Token != "" {
@@ -145,7 +144,7 @@ func saveGlobalConfig(cfg Config) error {
 }
 
 func printConfig(cfg Config) error {
-	fmt.Printf("%sbackend_url:%s %s\n", colorBold, colorReset, remoteBackendURL(cfg))
+	fmt.Printf("%sbackend_url:%s %s\n", colorBold, colorReset, configValueOrNotSet(remoteBackendURL(cfg)))
 	fmt.Printf("%stoken:%s %s\n", colorBold, colorReset, redactConfigSecret(remoteAuthToken(cfg)))
 	fmt.Printf("%sssh_user:%s %s\n", colorBold, colorReset, configValueOrNotSet(cfg.Remote.SSHUser))
 	fmt.Printf("%sprovider:%s %s\n", colorBold, colorReset, configValueOrNotSet(cfg.Remote.Provider))

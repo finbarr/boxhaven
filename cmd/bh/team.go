@@ -464,7 +464,7 @@ func teamActiveLabel(team *teamOrganization) string {
 
 func printLoginDefaultTeam(cfg Config) {
 	var whoami teamWhoamiResponse
-	if err := remoteBackendRequest(cfg, http.MethodGet, "/v1/auth/whoami", nil, &whoami); err != nil {
+	if err := remoteBackendSessionRequest(cfg.Remote.BackendURL, cfg.Remote.Token, http.MethodGet, "/v1/auth/whoami", nil, &whoami, remoteBackendDefaultTimeout); err != nil {
 		return
 	}
 	if whoami.Team == nil {

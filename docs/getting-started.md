@@ -70,17 +70,23 @@ prints a concise link to that release.
 
 ## Log In
 
-Use the hosted backend:
+Choose your backend:
 
 ```bash
 bh login
 ```
 
-Use a local or self-hosted backend:
+On first login, enter your backend API URL. Press Enter to choose hosted
+BoxHaven. The CLI saves your choice and reuses it on later logins.
+
+To select a local or self-hosted backend directly:
 
 ```bash
 bh login --backend-url http://127.0.0.1:8787
 ```
+
+Without an interactive terminal, first login requires `--backend-url` or
+`BOXHAVEN_BACKEND_URL`. No backend is contacted until one is selected.
 
 The CLI prints a browser URL, tries to open it, and waits for the web app to
 grant access. The resulting session token is stored in

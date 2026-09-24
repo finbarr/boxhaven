@@ -36,6 +36,10 @@ bh run work claude    # claude starts working in the box's tmux session
 bh connect work
 ```
 
+On first login, enter your backend API URL, or press Enter to choose hosted
+BoxHaven. Later logins reuse the saved URL. For scripts or a noninteractive
+terminal, pass `--backend-url` or set `BOXHAVEN_BACKEND_URL`.
+
 Mid-conversation with Claude locally? `bh run work claude --continue` resumes
 that exact session on the box.
 

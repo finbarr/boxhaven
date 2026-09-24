@@ -346,6 +346,24 @@ No email is sent. Copy that private file locally and set
 This helper refuses the hosted `boxhaven.dev` domains and refuses to overwrite
 existing test credentials. Use it only on a disposable installation.
 
+### CLI login smoke
+
+With the test credentials above copied locally and a freshly built `./bh`, run:
+
+```bash
+export BOXHAVEN_SMOKE_CREDENTIALS=/path/to/self-hosted-test-account.json
+python3 scripts/smoke-cli-login-terminal.py
+BOXHAVEN_APP_URL=https://app.example.com \
+BOXHAVEN_API_URL=https://api.example.com \
+node backend/scripts/cli-login-smoke.mjs
+```
+
+The terminal smoke selects the backend in a real terminal prompt. The browser
+smoke checks that noninteractive first login requires a URL, approves a real
+CLI device request, and lists boxes using the saved session. Both isolate and
+remove their local config; the browser smoke also revokes its temporary CLI
+session. Neither creates boxes or sends email.
+
 ### Remote lifecycle smoke
 
 After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or
