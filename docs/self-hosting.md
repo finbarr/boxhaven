@@ -1,19 +1,18 @@
 # Self-Hosting
 
 The open-source backend is the remote control plane. The CLI always talks to
-a backend; it does not provision cloud machines locally. The same backend
-that powers the hosted `app.boxhaven.dev` self-hosts with your own provider
-credentials and no built-in limits.
+a backend; it does not provision cloud machines locally. Run the complete
+backend with your own provider credentials and no built-in limits. No BoxHaven
+subscription or company account is required; your cloud provider charges for
+the machines you create.
 
 The browser app is built with TanStack Router and TanStack Query. It is the
 console/auth surface: login, signup, CLI device approval, invitations, and
 authenticated box/team/image views. The API serves the built console from
 `dist-app`, and teams can host the static `docs/` build alongside it.
 
-In production the intended split is `boxhaven.dev` for the paid-service
-website, `docs.boxhaven.dev` for documentation, `app.boxhaven.dev` for the
-console/auth app, and `api.boxhaven.dev` for the API. The API also serves the
-built console app from `dist-app` for simple self-hosted deployments.
+Use your own domains for the console, API, documentation, and box previews.
+The API can serve the console on the same origin for a simple installation.
 
 The open-source console shows a compact update banner when the backend reports
 a newer public BoxHaven GitHub release. The backend caches successful checks
@@ -29,6 +28,7 @@ npm ci
 BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
 DIGITALOCEAN_ACCESS_TOKEN=dop_v1_example \
 RESEND_API_KEY=re_replace_with_a_key \
+BOXHAVEN_EMAIL_FROM="BoxHaven <noreply@example.com>" \
 npm run dev
 ```
 
@@ -57,6 +57,7 @@ From the repository root:
 export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
 export DIGITALOCEAN_ACCESS_TOKEN=dop_v1_example
 export RESEND_API_KEY=re_replace_with_a_key
+export BOXHAVEN_EMAIL_FROM="BoxHaven <noreply@example.com>"
 export BOXHAVEN_VERSION="$(git describe --tags --match 'v[0-9]*' --always)"
 docker compose -f docker-compose.backend.yml up --build
 ```
@@ -76,17 +77,16 @@ DigitalOcean token and a CLI login token for the local backend.
 
 ### Build A Distribution
 
-The backend is also a local npm package named `@boxhaven/backend`. An internal
-or hosted distribution can depend on it and call
+The backend is also a local npm package named `@boxhaven/backend`. A custom
+distribution can depend on it and call
 `startBackendFromEnv({ modules, appDir })` from its own entrypoint. Compile-time
-modules can add sequential migrations, private tables, authenticated Fastify
+modules can add sequential migrations, module tables, authenticated Fastify
 routes, and one in-process commercial policy. Their migrations share the
 `boxhaven_migrations` ledger and SQLite database with core, while a separately
 built `appDir` replaces the open-source browser UI for that distribution.
 
-The standard entrypoint loads no modules. There is no runtime switch that can
-enable private functionality in a self-hosted build, and private modules do not
-need to duplicate the core API, auth, provider, SSH, or CLI implementations.
+The standard entrypoint loads no modules and has no locked features. Modules
+can reuse the core API, auth, provider, SSH, and CLI implementations.
 
 ## Environment Variables
 
@@ -95,21 +95,21 @@ need to duplicate the core API, auth, provider, SSH, or CLI implementations.
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated trusted browser origins.
 - `RESEND_API_KEY`: required Resend API key. Password signups must follow an emailed verification link before signing in. The link signs out any account already active in that browser so the user can sign in to the verified account.
 - `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: optional GitHub OAuth credentials. The console shows GitHub sign-in only when both are configured; email sign-in remains available.
-- `BOXHAVEN_EMAIL_FROM`: transactional From address, default `BoxHaven <noreply@boxhaven.dev>`.
+- `BOXHAVEN_EMAIL_FROM`: transactional From address, required verified sender address from your own domain (for example, `BoxHaven <noreply@example.com>`).
 - `BOXHAVEN_EMAIL_VERIFICATION_EXPIRES_SECONDS`: positive verification-link lifetime, default `3600`.
 - `BOXHAVEN_APP_URL`: public console/auth app URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_API_URL`: public API URL, default derived from `BETTER_AUTH_URL` in direct runs and `http://127.0.0.1:8787` in Compose.
 - `BOXHAVEN_VERSION`: current backend version used by the public `/v1/version` release-status endpoint. Set it from CLI release tags using `git describe --tags --match 'v[0-9]*' --always`; this excludes separately versioned skills. The production deploy script derives it automatically and verifies the running backend received it.
 - `BOXHAVEN_DOCS_URL`: public documentation URL used by console footer links in Docker builds. Set this when self-hosting internal docs; otherwise the app links to `https://docs.boxhaven.dev`.
 - `BOXHAVEN_BACKEND_CORS_ORIGINS`: comma-separated browser origins allowed to call the API.
-- `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.boxhaven.dev`.
+- `BOXHAVEN_PREVIEW_BASE_DOMAIN`: optional base domain for generated machine preview hosts, such as `at.example.com`.
 - `BOXHAVEN_PREVIEW_TARGET_PORT`: machine port that preview hosts proxy to, default `80`.
 - `BOXHAVEN_DATABASE_PATH`: shared SQLite database path, default `~/.local/state/boxhaven/boxhaven.sqlite`.
 - `BOXHAVEN_BACKEND_LISTEN`: listen address, default `127.0.0.1:8787`.
 - `BOXHAVEN_SSH_CA_KEY`: backend SSH user CA private key path, default beside `BOXHAVEN_DATABASE_PATH`.
 - `BOXHAVEN_ADMIN_EMAILS`: comma-separated emails granted admin access to the image-management endpoints.
 - `BOXHAVEN_MAX_TEAMS_PER_USER`: optional positive cap on teams a user owns. Concurrent creates reserve capacity and invitations to someone else's team do not consume an ownership slot.
-- `BOXHAVEN_MAX_MACHINES_PER_USER`: optional positive per-user cap on existing and provisioning boxes across all of their teams. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. Capacity is released after a definitive provider failure or successful destroy. Hosted distributions set this; self-hosted deployments may leave it unset.
+- `BOXHAVEN_MAX_MACHINES_PER_USER`: optional positive per-user cap on existing and provisioning boxes across all of their teams. When the cap is reached, `POST /v1/machines` returns `403` with `{ "id": "limit_reached" }`. Capacity is released after a definitive provider failure or successful destroy. Leave it unset for no built-in limit.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed policy delivery or policy-requested machine cleanup retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: complete active-machine reconciliation and lifecycle-policy evaluation interval, default `300000`.
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
@@ -118,17 +118,17 @@ Provider credentials and image variables (`DIGITALOCEAN_*`, `HCLOUD_TOKEN`,
 `HETZNER_*`, `BOXHAVEN_REMOTE_IMAGE*`) are documented on the
 [Cloud Providers](/providers) page.
 The [backend modules](/operator-policy) page documents the build-time extension
-boundary for distributions that add private models, routes, or policy.
+boundary for distributions that add custom models, routes, or policy.
 
 ## Production DigitalOcean Deployment
 
 The repository includes a production bundle in `deploy/digitalocean/` for a
 self-hosted installation:
 
-- `app.boxhaven.dev` for the browser console/auth app
-- `api.boxhaven.dev` for API and Better Auth routes
-- `docs.boxhaven.dev` for the static documentation site
-- `*.at.boxhaven.dev` for generated machine preview URLs
+- `app.example.com` for the browser console/auth app
+- `api.example.com` for API and Better Auth routes
+- `docs.example.com` for the static documentation site
+- `*.at.example.com` for generated machine preview URLs
 - Caddy-managed TLS in front of the backend container
 - a Caddy file-server mount for the built `docs/.vitepress/dist` artifact
 - host-mounted backend and Caddy data under `/opt/boxhaven/data`
@@ -142,10 +142,10 @@ Enable DigitalOcean Droplet backups for machine-level restore coverage.
 Required DNS records:
 
 ```text
-app.boxhaven.dev.  A  <droplet-ip>
-api.boxhaven.dev.  A  <droplet-ip>
-docs.boxhaven.dev. CNAME app.boxhaven.dev.
-*.at.boxhaven.dev.  A  <droplet-ip>
+app.example.com.  A  <droplet-ip>
+api.example.com.  A  <droplet-ip>
+docs.example.com. CNAME app.example.com.
+*.at.example.com.  A  <droplet-ip>
 ```
 
 ### Configure
@@ -173,31 +173,16 @@ to the wildcard domain above.
 Deploy the public self-hosted stack from the repository root:
 
 ```bash
-npm run deploy:app
+npm run deploy:app -- --target root@app.example.com
 ```
 
-By default the command SSHes to `root@app.boxhaven.dev`,
-fast-forwards `/opt/boxhaven/app` on `master`, builds the docs site, runs the
-Compose deploy on the Droplet, and checks the public app, API, and docs health
-endpoints. It forwards your SSH agent so the Droplet can fetch the private
-GitHub repo without storing a GitHub token. Override the SSH target with
-`BOXHAVEN_DEPLOY_TARGET=root@<control-plane-ip>` or `-- --target user@host`
-for self-hosted installs. On the Droplet itself, use
+The SSH target is required: use `-- --target user@host` or set
+`BOXHAVEN_DEPLOY_TARGET`. The command fast-forwards `/opt/boxhaven/app` on
+`master`, builds the docs site, and runs the Compose deploy on that machine.
+Health checks use `BOXHAVEN_API_URL`, `BOXHAVEN_APP_URL`, and
+`BOXHAVEN_DOCS_URL` from its Compose environment. The remote VM snapshot is
+rebuilt separately. On the Droplet itself, use
 `npm run deploy:production:local`.
-
-BoxHaven operators deploy `app.boxhaven.dev` from the sibling private
-`boxhaven-hosted` repository using `npm run deploy:production`, followed by
-`npm run deploy:production:verify`. The combined deployment includes billing,
-account limits, and the hosted console. Verify account routes and an
-authenticated usage request too: public health endpoints do not establish that
-the hosted module is running.
-
-For a hosted product release, run `npm run release:production -- vX.Y.Z` in
-`boxhaven-hosted` after preparing the release as described in
-[the release runbook](https://github.com/finbarr/boxhaven/blob/master/RELEASING.md).
-That command publishes and verifies the CLI, deploys the same source with the
-hosted modules, checks authenticated billing, and tests and updates Homebrew.
-`deploy:production` by itself only updates the service.
 
 Distributions can add a build-time module or replace deployment wiring with
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and an optional
@@ -209,7 +194,7 @@ again. Use the distribution's deployment command to supply its full configuratio
 ### Health Checks And Backups
 
 ```bash
-npm run deploy:production:verify
+npm run deploy:production:verify -- --target root@app.example.com
 sudo systemctl status boxhaven-backend-backup.timer --no-pager
 ```
 
@@ -239,7 +224,7 @@ keep their installed version.
 Or use the checked-in npm entrypoint:
 
 ```bash
-npm run deploy:runtime
+npm run deploy:runtime -- --target root@app.example.com
 ```
 
 Each build creates a fresh snapshot and retains existing snapshots. Names are
@@ -253,7 +238,7 @@ Droplet, updates `BOXHAVEN_REMOTE_IMAGE`, then restarts and verifies the
 backend so new boxes use the image. When an active `BOXHAVEN_REMOTE_IMAGE`
 exists, the builder starts from that snapshot by default instead of
 reinstalling the full OS/toolchain from Ubuntu. Use
-`npm run deploy:runtime -- --full-base-image` only for base OS or runtime
+`npm run deploy:runtime -- --target root@app.example.com --full-base-image` only for base OS or runtime
 dependency rebuilds.
 
 `npm run deploy:runtime` writes `BOXHAVEN_REMOTE_IMAGE` to the env file as
@@ -269,6 +254,7 @@ Run the reusable remote lifecycle smoke against the backend after remote VM,
 SSH, sync, snapshot, preview, or agent changes:
 
 ```bash
+BOXHAVEN_SMOKE_BACKEND_URL=https://api.example.com \
 BOXHAVEN_TOKEN=... \
 GH_TOKEN=... \
 BOXHAVEN_SMOKE_GIT_REMOTE=https://github.com/<org>/<smoke-repo>.git \
@@ -283,7 +269,7 @@ and destroys the box unless `BOXHAVEN_SMOKE_KEEP=1` is set.
 Useful options:
 
 ```bash
-BOXHAVEN_SMOKE_BACKEND_URL=https://api.boxhaven.dev
+BOXHAVEN_SMOKE_BACKEND_URL=https://api.example.com
 BOXHAVEN_SMOKE_TIER=small
 BOXHAVEN_SMOKE_PREFIX=my-smoke
 BOXHAVEN_SMOKE_KEEP=1
@@ -296,7 +282,7 @@ for concurrency, provider import, or multiple-machine behavior.
 
 ## Web Preview
 
-Each hosted box receives a public preview URL when the backend is configured
+Each box receives a public preview URL when the backend is configured
 with a preview base domain. The backend warms the preview URL during machine
 create so Caddy has already completed on-demand certificate issuance before the
 URL is shown. Public HTTPS and WebSocket traffic terminate at the BoxHaven
@@ -317,11 +303,3 @@ Apps should bind HTTP to `0.0.0.0:$BOXHAVEN_WEB_PORT` or run a reverse proxy
 on that port to the app's internal dev-server port. Framework dev-server
 WebSockets, including Vite HMR, use the same preview URL. The default
 `boxhaven` user has sudo access if binding to port 80 is required.
-
-## Hosted Versus Self-Hosted
-
-`app.boxhaven.dev` is the hosted control plane run by the BoxHaven operators.
-Hosted boxes are provisioned from the operators' cloud provider accounts, with
-per-user team and active-box capacity policies enforced by the control plane.
-The same open-source backend self-hosts
-with your own provider credentials and no built-in limits.

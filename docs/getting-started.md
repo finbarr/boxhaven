@@ -76,11 +76,6 @@ Use the hosted backend:
 bh login
 ```
 
-Creating a hosted account requires accepting the
-[Terms of Service](https://boxhaven.dev/terms/) and acknowledging the
-[Privacy Policy](https://boxhaven.dev/privacy/). These policies do not govern
-self-hosted deployments operated by someone else.
-
 Use a local or self-hosted backend:
 
 ```bash

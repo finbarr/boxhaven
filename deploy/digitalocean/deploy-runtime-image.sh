@@ -14,7 +14,7 @@ temporary DigitalOcean builder Droplet.
 Options:
   --local          Run in this checkout instead of SSHing to the production host.
   --target HOST    SSH target for remote deploys.
-                   Default: BOXHAVEN_DEPLOY_TARGET or root@app.boxhaven.dev.
+                   Required: --target or BOXHAVEN_DEPLOY_TARGET for remote deploys.
   --dir PATH       Remote checkout path.
                    Default: BOXHAVEN_DEPLOY_DIR or /opt/boxhaven/app.
   --branch NAME    Branch to fast-forward on the remote checkout.
@@ -40,7 +40,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 
 local_mode=0
-deploy_target="${BOXHAVEN_DEPLOY_TARGET:-root@app.boxhaven.dev}"
+deploy_target="${BOXHAVEN_DEPLOY_TARGET:-}"
 deploy_dir="${BOXHAVEN_DEPLOY_DIR:-/opt/boxhaven/app}"
 deploy_branch="${BOXHAVEN_DEPLOY_BRANCH:-master}"
 env_file="${BOXHAVEN_PRODUCTION_ENV_FILE:-deploy/digitalocean/.env.production}"

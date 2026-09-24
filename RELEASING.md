@@ -1,18 +1,9 @@
 # Release Runbook
 
-This runbook is for the release operator. Hosted product releases use the sibling
-private repository's `npm run release:production -- vX.Y.Z` command. After the
-preparation and local checks in step 1, run that command with `BOXHAVEN_TOKEN`
-set to an existing hosted session, then complete the remote checks in step 4.
-It waits for public and private CI, publishes and verifies the CLI, deploys and
-verifies the combined hosted service at those exact commits, checks authenticated
-billing, and tests and publishes Homebrew. Inspect its console screenshots in the
-private repository's `.artifacts/billing-production-smoke` directory.
-
-`deploy:production` alone only deploys the service. It does not publish the CLI
-or Homebrew. The manual CLI/tap procedures below are also documented for public
-release operators. In every workflow the tap must only point at an existing,
-verified GitHub release. Never move an existing tag or replace published assets.
+This runbook covers public CLI and Homebrew releases. The tap must only point
+at an existing, verified GitHub release. Never move an existing tag or replace
+published assets. Test against a deployment you operate with a disposable
+account and cloud resources.
 
 Set the release tag once in the shell that will run the commands below:
 
@@ -220,17 +211,17 @@ BH="${CLEAN_ROOT}/bin/bh"
 "$BH" version | grep -F "bh ${TAG} ("
 ```
 
-Log in with the disposable production smoke account. Set
+Log in with the disposable smoke account on your test deployment. Set
 `BOXHAVEN_SMOKE_GIT_REMOTE` to an existing disposable GitHub repository and
 provide a token that can push and delete temporary branches there; leaving the
 variable unset skips that required proof.
 
 ```bash
-"$BH" login --backend-url https://api.boxhaven.dev
+export BOXHAVEN_SMOKE_BACKEND_URL=https://api.example.com
+"$BH" login --backend-url "$BOXHAVEN_SMOKE_BACKEND_URL"
 export GH_TOKEN="$(gh auth token)"
 export BOXHAVEN_SMOKE_GIT_REMOTE="https://github.com/<org>/<smoke-repo>.git"
 BOXHAVEN_SMOKE_BH="$BH" \
-BOXHAVEN_SMOKE_BACKEND_URL=https://api.boxhaven.dev \
 BOXHAVEN_SMOKE_PREFIX="release-${TAG#v}-$(date -u +%H%M%S)" \
   scripts/smoke-remote-lifecycle.sh
 ```

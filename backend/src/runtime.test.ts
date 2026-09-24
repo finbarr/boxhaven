@@ -20,6 +20,7 @@ test("a fresh backend can be backed up before creating a box and keeps its SSH C
     BOXHAVEN_BACKEND_PROVIDER: "digitalocean",
     DIGITALOCEAN_ACCESS_TOKEN: "unused-provider-token",
     RESEND_API_KEY: "unused-email-key",
+    BOXHAVEN_EMAIL_FROM: "BoxHaven <noreply@example.com>",
     BETTER_AUTH_SECRET: "first-start-test-secret-with-at-least-32-bytes",
     BETTER_AUTH_URL: "http://127.0.0.1:8787/v1/auth",
   };

@@ -1118,7 +1118,7 @@ async function deleteTeam(
     await audit("failed", `Better Auth organization deletion failed: ${safeErrorMessage(error)}`);
     return reply.code(500).send({
       id: "team_deletion_failed",
-      message: "The team was not deleted. No boxes or billing state were changed; try again or contact your operator.",
+      message: "The team was not deleted. No boxes or team state were changed; try again or contact your operator.",
     });
   }
 }

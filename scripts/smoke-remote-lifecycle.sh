@@ -7,7 +7,11 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 
 bh_bin="${BOXHAVEN_SMOKE_BH:-${repo_root}/bh}"
-backend_url="${BOXHAVEN_SMOKE_BACKEND_URL:-${BOXHAVEN_BACKEND_URL:-https://api.boxhaven.dev}}"
+backend_url="${BOXHAVEN_SMOKE_BACKEND_URL:-${BOXHAVEN_BACKEND_URL:-}}"
+if [ -z "$backend_url" ]; then
+  printf 'Set BOXHAVEN_SMOKE_BACKEND_URL to the backend you want to test\n' >&2
+  exit 1
+fi
 size="${BOXHAVEN_SMOKE_SIZE:-small}"
 keep="${BOXHAVEN_SMOKE_KEEP:-0}"
 require_preview="${BOXHAVEN_SMOKE_REQUIRE_PREVIEW:-1}"

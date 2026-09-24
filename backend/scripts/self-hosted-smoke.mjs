@@ -93,6 +93,8 @@ try {
     await page.getByRole("heading", { name: "Create a BoxHaven account" }).waitFor();
     assert.equal(await page.locator(".github-button").count(), social_providers.includes("github") ? 1 : 0);
     assert.equal(await page.locator(".divider").count(), social_providers.includes("github") ? 1 : 0);
+    assert.doesNotMatch(await page.locator("body").innerText(), /Default Alive|dba BoxHaven|Terms of Service|arbitration|Privacy Policy/);
+    assert.equal(await page.locator(".legal-consent").count(), 0);
     const favicon = await page.locator('link[rel="icon"]').getAttribute("href");
     const icon = await context.request.get(new URL(favicon, appURL).href);
     assert.equal(icon.status(), 200);

@@ -68,14 +68,12 @@ try {
     await page.screenshot({ path: join(out, `first-start-backup-${size}.png`) });
     await page.goto(`${target}/self-hosting#deploy`, { waitUntil: "networkidle" });
     await page.locator("#deploy").scrollIntoViewIfNeeded();
-    assert.match(await page.locator(".vp-doc").innerText(), /public self-hosted stack[\s\S]*boxhaven-hosted[\s\S]*npm run deploy:production[\s\S]*authenticated usage request/);
+    const deploymentText = await page.locator(".vp-doc").innerText();
+    assert.match(deploymentText, /public self-hosted stack[\s\S]*--target root@app.example.com[\s\S]*SSH target is required/);
+    assert.match(deploymentText, /Health checks use BOXHAVEN_API_URL, BOXHAVEN_APP_URL, and BOXHAVEN_DOCS_URL/);
+    assert.doesNotMatch(deploymentText, /boxhaven-hosted|app\.boxhaven\.dev|authenticated billing|paid-service/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: join(out, `deployment-${size}.png`) });
-    const releaseCopy = page.locator(".vp-doc p").filter({ hasText: "For a hosted product release" });
-    await releaseCopy.scrollIntoViewIfNeeded();
-    assert.match(await releaseCopy.innerText(), /release:production[\s\S]*CLI[\s\S]*Homebrew/);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-    await releaseCopy.screenshot({ path: join(out, `production-release-${size}.png`), animations: "disabled" });
     await page.goto(target, { waitUntil: "networkidle" });
     await page.locator('.vp-doc a[href="/agent-skill"]').waitFor();
     await page.screenshot({ path: join(out, `home-${size}.png`) });

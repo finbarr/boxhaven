@@ -1,6 +1,6 @@
 # Backend Modules
 
-BoxHaven can add private or deployment-specific behavior at build time through
+BoxHaven can add deployment-specific behavior at build time through
 the `BackendModule` interface exported by `@boxhaven/backend`. The standard
 open-source entrypoint loads no modules and uses the in-process allow-all
 commercial policy.
@@ -10,7 +10,7 @@ a `CommercialPolicy` implementation, and a provider-neutral
 `TeamDeletionPolicy`. It receives the core database,
 provider registry, state store, authentication helpers, and team authorization
 helpers in process. This keeps provisioning, auth, SSH, and lifecycle behavior
-in the open core while allowing a distribution to add its own models and UI.
+in the open-source backend while allowing a distribution to add its own models and UI.
 
 ## Database Ownership
 
@@ -19,7 +19,7 @@ and module migrations before listening and records them in the shared
 `boxhaven_migrations` table. It refuses duplicate module names, missing
 versions, migration downgrades, and changed migration history.
 
-Use a prefix unique to the module for every private table and index. A module
+Use a prefix unique to the module for every module table and index. A module
 must not modify tables owned by the core or another module. The backend process
 is the sole owner of the SQLite connection and closes module runtimes before
 closing core storage.
@@ -80,9 +80,9 @@ durable machine record. After a restart, core clears the stale reservation and
 marks that record as requiring recovery; the record continues to block team and
 account deletion until the box is explicitly destroyed. Recovery records are
 not provider-confirmed lifecycle facts and are excluded from commercial-policy
-reconciliation, so a crash cannot activate billing by itself.
+reconciliation, so a crash cannot emit an unconfirmed lifecycle fact.
 Provider discovery can fill in VM identity and address details for cleanup, but
-it never promotes a recovery record into a usable or billable machine. The box
+it never promotes a recovery record into a usable machine. The box
 must be destroyed and created again. A provider may classify an error as
 definitively not created; only then does core remove the placeholder
 automatically. Unknown outcomes keep the recovery record.
@@ -102,11 +102,11 @@ entrypoint:
 
 ```ts
 import { startBackendFromEnv } from "@boxhaven/backend";
-import { hostedModule } from "./hosted-module.js";
+import { operatorModule } from "./operator-module.js";
 
-await startBackendFromEnv({ modules: [hostedModule] });
+await startBackendFromEnv({ modules: [operatorModule] });
 ```
 
 The standard `@boxhaven/backend` entrypoint always starts with zero modules.
-There is no environment variable that enables private functionality in the
-open-source image.
+Modules are included explicitly at build time; the standard image is complete
+and has no locked features.

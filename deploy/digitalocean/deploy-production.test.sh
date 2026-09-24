@@ -26,6 +26,7 @@ cat > "${temp_dir}/bin/docker" <<'EOF'
 #!/usr/bin/env bash
 printf '%s | %s\n' "${BOXHAVEN_VERSION:-}" "$*" >> "${DOCKER_LOG}"
 case " $* " in
+  *" config --environment "*) printf '%s\n' "${COMPOSE_ENV_VALUES:-}" ;;
   *" ps --all --quiet backend "*) printf '%s' "${EXISTING_BACKEND_ID:-}" ;;
   *"com.docker.compose.project.config_files"*) printf '%s' "${EXISTING_COMPOSE_FILES:-}" ;;
   *" exec -T backend node -e "*"BOXHAVEN_VERSION"*) printf '%s' "${BOXHAVEN_VERSION:-}" ;;
@@ -67,6 +68,39 @@ run_deploy() {
     BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL=http://docs.test/ \
     "$deploy_script" "${@:2}"
 }
+
+# No remote operation may silently select a production host.
+for script in "$deploy_script" "${repo_root}/deploy/digitalocean/deploy-runtime-image.sh"; do
+  if output="$(env -u BOXHAVEN_DEPLOY_TARGET "$script" 2>&1)"; then
+    echo "deployment accepted a missing SSH target" >&2
+    exit 1
+  fi
+  assert_contains "$output" "set BOXHAVEN_DEPLOY_TARGET"
+done
+
+# Health checks follow the resolved Compose environment, including URL slashes.
+: > "$curl_log"
+env -u BOXHAVEN_PRODUCTION_API_HEALTH_URL \
+  -u BOXHAVEN_PRODUCTION_APP_HEALTH_URL -u BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL \
+  PATH="${temp_dir}/bin:${PATH}" DOCKER_LOG="$docker_log" CURL_LOG="$curl_log" \
+  BOXHAVEN_PRODUCTION_ENV_FILE="$public_env" \
+  COMPOSE_ENV_VALUES=$'BOXHAVEN_API_URL=https://api.operator.test/\nBOXHAVEN_APP_URL=https://app.operator.test\nBOXHAVEN_DOCS_URL=https://docs.operator.test/\nSECRET=never-log-me' \
+  "$deploy_script" --local --verify-only > "${temp_dir}/derived.log"
+assert_contains "$(cat "$curl_log")" "https://api.operator.test/healthz"
+assert_contains "$(cat "$curl_log")" "https://app.operator.test/healthz"
+assert_contains "$(cat "$curl_log")" "https://docs.operator.test/"
+if grep -q 'never-log-me' "${temp_dir}/derived.log"; then
+  echo "deployment logged an unrelated Compose secret" >&2
+  exit 1
+fi
+if output="$(env -u BOXHAVEN_PRODUCTION_API_HEALTH_URL \
+  PATH="${temp_dir}/bin:${PATH}" DOCKER_LOG="$docker_log" CURL_LOG="$curl_log" \
+  BOXHAVEN_PRODUCTION_ENV_FILE="$public_env" COMPOSE_ENV_VALUES= \
+  "$deploy_script" --local --verify-only 2>&1)"; then
+  echo "deployment accepted a missing API health URL" >&2
+  exit 1
+fi
+assert_contains "$output" "set BOXHAVEN_API_URL"
 
 : > "$docker_log"
 : > "$curl_log"

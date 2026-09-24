@@ -8,7 +8,8 @@ import { chromium } from "playwright-core";
 // Supply a session token through the environment; never write it into artifacts.
 const token = process.env.BOXHAVEN_TOKEN;
 assert.ok(token, "BOXHAVEN_TOKEN is required");
-const target = process.env.BOXHAVEN_CONSOLE_SMOKE_URL || "https://app.boxhaven.dev";
+const target = process.env.BOXHAVEN_CONSOLE_SMOKE_URL;
+assert.ok(target, "BOXHAVEN_CONSOLE_SMOKE_URL is required");
 const origin = new URL(target).origin;
 const out = process.env.BOXHAVEN_CONSOLE_SMOKE_OUT || join(dirname(dirname(fileURLToPath(import.meta.url))), ".artifacts/console-preview-production");
 const executablePath = [process.env.BOXHAVEN_PLAYWRIGHT_EXECUTABLE,

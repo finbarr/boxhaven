@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createBackendAuth, migrateBackendAuth } from "./auth.js";
-import { EmailService } from "./email.js";
+import { EmailService, emailServiceFromEnv } from "./email.js";
 import { ProviderRegistry } from "./providers.js";
 import { createBackend } from "./server.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
@@ -17,6 +17,12 @@ type SentEmail = {
   authorization: string;
   body: { from?: string; to?: string[]; subject?: string; text?: string };
 };
+
+test("email configuration requires the operator's own sender address", () => {
+  assert.throws(() => emailServiceFromEnv({ RESEND_API_KEY: "fixture-key" }), /BOXHAVEN_EMAIL_FROM is required/);
+  assert.throws(() => emailServiceFromEnv({ RESEND_API_KEY: "fixture-key", BOXHAVEN_EMAIL_FROM: "  " }), /BOXHAVEN_EMAIL_FROM is required/);
+  assert.ok(emailServiceFromEnv({ RESEND_API_KEY: "fixture-key", BOXHAVEN_EMAIL_FROM: "Operator <noreply@example.com>" }));
+});
 
 // A minimal Resend stand-in that records every POST /emails request.
 class FakeResend {

@@ -1,5 +1,4 @@
 const resendAPIBaseURL = "https://api.resend.com";
-const defaultEmailFrom = "BoxHaven <noreply@boxhaven.dev>";
 
 export type EmailServiceOptions = {
   apiKey: string;
@@ -48,9 +47,11 @@ export class EmailService {
 export function emailServiceFromEnv(env = process.env): EmailService | undefined {
   const apiKey = env.RESEND_API_KEY;
   if (!apiKey) return undefined;
+  const from = env.BOXHAVEN_EMAIL_FROM?.trim();
+  if (!from) throw new Error("BOXHAVEN_EMAIL_FROM is required; use a sender address verified with your email provider");
   return new EmailService({
     apiKey,
-    from: env.BOXHAVEN_EMAIL_FROM || defaultEmailFrom,
+    from,
     apiURL: env.BOXHAVEN_RESEND_API_URL,
   });
 }

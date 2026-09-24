@@ -58,9 +58,8 @@ bh size rm <name> [--team <team>]
 
 `list` shows the three built-in sizes plus the selected team's shortcuts.
 `plans` shows available provider plans, including hardware, GPUs, and the
-effective price with hourly, daily, and monthly estimates. In hosted BoxHaven
-this is the BoxHaven price; without a commercial policy it is the provider
-price. Team owners and admins can create or remove shortcuts.
+provider price with hourly, daily, and monthly estimates. Team owners and
+admins can create or remove shortcuts.
 
 ## bh run
 
@@ -302,7 +301,7 @@ config from `.boxhaven.toml`:
 
 ```toml
 [remote]
-backend_url = "https://api.boxhaven.dev"
+backend_url = "https://api.example.com"
 token = "browser-granted-session-token"
 ssh_user = "boxhaven"
 provider = "hetzner"

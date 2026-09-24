@@ -12,7 +12,7 @@ Options:
                    SSHing to the production host.
   --verify-only    Skip container updates and run production health checks.
   --target HOST    SSH target for remote deploys.
-                   Default: BOXHAVEN_DEPLOY_TARGET or root@app.boxhaven.dev.
+                   Required: --target or BOXHAVEN_DEPLOY_TARGET for remote deploys.
   --dir PATH       Remote checkout path.
                    Default: BOXHAVEN_DEPLOY_DIR or /opt/boxhaven/app.
   --branch NAME    Branch to fast-forward on the remote checkout.
@@ -30,9 +30,9 @@ Environment:
                                        Additional Docker Compose file.
   BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE
                                        Additional env file used with the overlay.
-  BOXHAVEN_PRODUCTION_API_HEALTH_URL   Default: https://api.boxhaven.dev/healthz.
-  BOXHAVEN_PRODUCTION_APP_HEALTH_URL   Default: https://app.boxhaven.dev/healthz.
-  BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL  Default: https://docs.boxhaven.dev/.
+  BOXHAVEN_PRODUCTION_API_HEALTH_URL   Default: configured BOXHAVEN_API_URL/healthz.
+  BOXHAVEN_PRODUCTION_APP_HEALTH_URL   Default: configured BOXHAVEN_APP_URL/healthz.
+  BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL  Default: configured BOXHAVEN_DOCS_URL/.
 
 Remote deploys use SSH agent forwarding so the Droplet can fetch private GitHub
 repositories without storing a long-lived GitHub token on the host.
@@ -49,7 +49,7 @@ repo_root="$(cd "${script_dir}/../.." && pwd)"
 
 local_mode=0
 verify_only=0
-deploy_target="${BOXHAVEN_DEPLOY_TARGET:-root@app.boxhaven.dev}"
+deploy_target="${BOXHAVEN_DEPLOY_TARGET:-}"
 deploy_dir="${BOXHAVEN_DEPLOY_DIR:-/opt/boxhaven/app}"
 deploy_branch="${BOXHAVEN_DEPLOY_BRANCH:-master}"
 compose_overlay_file="${BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE:-}"
@@ -185,9 +185,6 @@ export BOXHAVEN_VERSION="${boxhaven_version:-dev}"
 
 compose_file="deploy/digitalocean/docker-compose.yml"
 env_file="${BOXHAVEN_PRODUCTION_ENV_FILE:-deploy/digitalocean/.env.production}"
-api_health_url="${BOXHAVEN_PRODUCTION_API_HEALTH_URL:-https://api.boxhaven.dev/healthz}"
-app_health_url="${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-https://app.boxhaven.dev/healthz}"
-docs_health_url="${BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL:-https://docs.boxhaven.dev/}"
 
 if [ -n "$compose_overlay_env_file" ] && [ -z "$compose_overlay_file" ]; then
   die "an overlay env file requires --compose-overlay or BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE"
@@ -220,6 +217,22 @@ fi
 if [ -n "$compose_overlay_file" ]; then
   compose_args+=(-f "$compose_overlay_file")
 fi
+
+configured_health_url() {
+  local override="$1" key="$2" suffix="$3" base
+  if [ -n "$override" ]; then
+    printf '%s' "$override"
+    return
+  fi
+  # Ask Compose to resolve its env files and interpolation. Filter before
+  # capturing output so credentials never enter deployment logs or variables.
+  base="$(docker compose "${compose_args[@]}" config --environment | awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print }')"
+  [ -n "$base" ] || die "set ${key} in the Compose environment or supply its health URL override"
+  printf '%s%s' "${base%/}" "$suffix"
+}
+api_health_url="$(configured_health_url "${BOXHAVEN_PRODUCTION_API_HEALTH_URL:-}" BOXHAVEN_API_URL /healthz)"
+app_health_url="$(configured_health_url "${BOXHAVEN_PRODUCTION_APP_HEALTH_URL:-}" BOXHAVEN_APP_URL /healthz)"
+docs_health_url="$(configured_health_url "${BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL:-}" BOXHAVEN_DOCS_URL /)"
 
 # Compose identifies the same backend even when an earlier overlay is omitted.
 # Without this check, up --remove-orphans can silently replace a distribution

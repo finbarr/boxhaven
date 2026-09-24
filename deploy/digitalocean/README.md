@@ -1,12 +1,12 @@
 # DigitalOcean deployment
 
 This bundle runs the BoxHaven console/auth app, API, and documentation site on
-a single DigitalOcean Droplet. Caddy terminates TLS for `app.boxhaven.dev`,
-`api.boxhaven.dev`, `docs.boxhaven.dev`, and generated preview hostnames under
-`at.boxhaven.dev`. App and API hostnames proxy to the backend container. The
+a single DigitalOcean Droplet. Caddy terminates TLS for `app.example.com`,
+`api.example.com`, `docs.example.com`, and generated preview hostnames under
+`at.example.com`. App and API hostnames proxy to the backend container. The
 docs hostname serves the static `docs/.vitepress/dist` artifact. Backend state
 is stored on the host under `/opt/boxhaven/data/backend` so it can be backed up
-outside Docker.
+outside Docker. Replace `example.com` with a domain you control.
 
 The docs build also generates `llms.txt` and each public page's `.md` source
 alongside its HTML. Caddy serves these from the same artifact; no extra service
@@ -28,10 +28,10 @@ Droplet backups for machine-level restore coverage.
 Required DNS records:
 
 ```text
-app.boxhaven.dev.  A  <droplet-ip>
-api.boxhaven.dev.  A  <droplet-ip>
-docs.boxhaven.dev. CNAME app.boxhaven.dev.
-*.at.boxhaven.dev.  A  <droplet-ip>
+app.example.com.  A  <droplet-ip>
+api.example.com.  A  <droplet-ip>
+docs.example.com. CNAME app.example.com.
+*.at.example.com.  A  <droplet-ip>
 ```
 
 ## Configure
@@ -82,32 +82,21 @@ target-port details from `BOXHAVEN_PREVIEW_URL`, `BOXHAVEN_WEB_PORT`,
 For the public self-hosted stack, run this from the repository root on your workstation:
 
 ```bash
-npm run deploy:app
+npm run deploy:app -- --target root@app.example.com
 ```
 
-This command SSHes to `root@app.boxhaven.dev`,
-fast-forwards `/opt/boxhaven/app` on `master`, fetches release tags, builds the docs site, runs the
-Docker Compose deploy on the Droplet, and checks
-`https://api.boxhaven.dev/healthz`, `https://app.boxhaven.dev/healthz`, and
-`https://docs.boxhaven.dev/`. It does not rebuild the remote VM image.
+The SSH target is required: use `-- --target user@host` or set
+`BOXHAVEN_DEPLOY_TARGET`. The command fast-forwards `/opt/boxhaven/app` on
+`master`, builds the docs site, and runs the Compose deploy on that machine.
+Health checks use `BOXHAVEN_API_URL`, `BOXHAVEN_APP_URL`, and
+`BOXHAVEN_DOCS_URL` from its Compose environment. The remote VM snapshot is
+rebuilt separately. On the Droplet itself, use
+`npm run deploy:production:local`.
+
 The deploy derives `BOXHAVEN_VERSION` from the checked-out Git ref so the
 public `/v1/version` endpoint can compare this installation with the latest
 BoxHaven GitHub release. Verification fails if the running backend did not
 receive that exact version.
-
-BoxHaven operators must use `npm run deploy:production` from the sibling
-private `boxhaven-hosted` repository for `app.boxhaven.dev`, followed by
-`npm run deploy:production:verify`. This builds and verifies the combined
-public and hosted image, including billing and account limits. Hosted checks
-must exercise account routes and an authenticated usage request; generic
-public health endpoints also pass when only the public core is running.
-
-For a hosted product release, run `npm run release:production -- vX.Y.Z` in
-`boxhaven-hosted` after preparing the release as described in
-[the release runbook](https://github.com/finbarr/boxhaven/blob/master/RELEASING.md).
-That command publishes and verifies the CLI, deploys the same source with the
-hosted modules, checks authenticated billing, and tests and updates Homebrew.
-`deploy:production` by itself only updates the service.
 
 If a distribution changes the production build or service wiring, supply its
 Compose overlay and optional overlay env file on every app or runtime deploy:
@@ -115,7 +104,7 @@ Compose overlay and optional overlay env file on every app or runtime deploy:
 ```bash
 BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE=deploy/operator/compose.policy.yml \
 BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_ENV_FILE=deploy/operator/policy.env \
-npm run deploy:app
+npm run deploy:app -- --target root@app.example.com
 ```
 
 The equivalent flags are `--compose-overlay FILE` and
@@ -131,7 +120,7 @@ After changing the VM runtime or image-builder code, explicitly rebuild and
 publish the remote VM image:
 
 ```bash
-npm run deploy:runtime
+npm run deploy:runtime -- --target root@app.example.com
 ```
 
 The runtime deploy creates a temporary builder Droplet, snapshots it, updates
@@ -140,17 +129,16 @@ so future boxes use the new image. By default, it builds from the current active
 `BOXHAVEN_REMOTE_IMAGE` snapshot when one exists, so runtime script changes do
 not reinstall the full OS/toolchain from Ubuntu.
 
-Both remote deploy commands forward your SSH agent so the Droplet can fetch the
-private GitHub repo without storing a GitHub token. For self-hosted installs,
-override the SSH target or checkout path:
+Both remote deploy commands forward your SSH agent for Git access. Set the
+SSH target and optionally override the checkout path or health-check URLs:
 
 ```bash
-BOXHAVEN_DEPLOY_TARGET=root@<control-plane-ip> \
+BOXHAVEN_DEPLOY_TARGET=root@app.example.com \
 BOXHAVEN_DEPLOY_DIR=/opt/boxhaven/app \
 BOXHAVEN_PRODUCTION_API_HEALTH_URL=https://api.example.com/healthz \
 BOXHAVEN_PRODUCTION_APP_HEALTH_URL=https://app.example.com/healthz \
 BOXHAVEN_PRODUCTION_DOCS_HEALTH_URL=https://docs.example.com/ \
-npm run deploy:app
+npm run deploy:app -- --target root@app.example.com
 ```
 
 From the repository root on the Droplet, run the local variant:
@@ -162,7 +150,7 @@ npm run deploy:production:local
 Run only the production container and health checks with:
 
 ```bash
-npm run deploy:production:verify
+npm run deploy:production:verify -- --target root@app.example.com
 ```
 
 Install and start the backup timer after the backend is healthy. Startup
@@ -204,13 +192,13 @@ replaced from scratch.
 From a clean, committed checkout:
 
 ```bash
-npm run deploy:runtime
+npm run deploy:runtime -- --target root@app.example.com
 ```
 
 Force a full Ubuntu/base rebuild:
 
 ```bash
-npm run deploy:runtime -- --full-base-image
+npm run deploy:runtime -- --target root@app.example.com --full-base-image
 ```
 
 The builder Droplet still needs an SSH key for the temporary image build. Use
@@ -255,7 +243,7 @@ and recreating the backend container.
 ## Verify
 
 ```bash
-npm run deploy:production:verify
+npm run deploy:production:verify -- --target root@app.example.com
 sudo systemctl status boxhaven-backend-backup.timer --no-pager
 sudo systemctl start boxhaven-backend-backup.service
 ls -lh /opt/boxhaven/backups
@@ -365,6 +353,7 @@ agent reconnect behavior, run the reusable lifecycle smoke from a machine with a
 valid BoxHaven session token:
 
 ```bash
+BOXHAVEN_SMOKE_BACKEND_URL=https://api.example.com \
 BOXHAVEN_TOKEN=... \
 GH_TOKEN=... \
 BOXHAVEN_SMOKE_GIT_REMOTE=https://github.com/<org>/<smoke-repo>.git \

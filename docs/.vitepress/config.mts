@@ -15,7 +15,7 @@ const pageSeo: Record<string, { title: string, description: string, noindex?: bo
   },
   '/getting-started': {
     title: 'Installation and First Box',
-    description: 'Install the bh CLI, log in to a hosted or self-hosted backend, create your first remote box, and resume your local agent session on it.',
+    description: 'Install the bh CLI, log in to your backend, create your first remote box, and resume your local agent session on it.',
   },
   '/commands': {
     title: 'CLI Reference',
@@ -198,8 +198,6 @@ export default defineConfig({
       { text: 'Get Started', link: '/getting-started' },
       { text: 'Commands', link: '/commands' },
       { text: 'Self-Hosting', link: '/self-hosting' },
-      { text: 'Website', link: 'https://boxhaven.dev' },
-      { text: 'Console', link: 'https://app.boxhaven.dev' },
     ],
 
     sidebar: [

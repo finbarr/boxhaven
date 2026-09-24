@@ -15,7 +15,7 @@ body:
     attributes:
       label: Environment
       description: "OS, shell, and backend URL or deployment"
-      placeholder: "macOS 15.3, zsh, https://api.boxhaven.dev"
+      placeholder: "macOS 15.3, zsh, https://api.example.com"
     validations:
       required: true
   - type: textarea

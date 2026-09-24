@@ -8,8 +8,6 @@
 
 - Generate Homebrew formulas with readable permissions and literal release URLs,
   allowing Homebrew to infer the version and pass strict audits.
-- Bound hosted production builds and release their worker memory afterward,
-  including after failures, to preserve capacity for the live service.
 
 ## v0.3.0 - 2026-09-15
 
@@ -26,8 +24,6 @@
   Names are unique within a team across providers; images remain private to
   their owning team. Existing image names are preserved.
 - Updated the golden image's Codex CLI for GPT-6 Astra.
-- Added a coordinated hosted production release command that publishes the CLI,
-  verifies the matching hosted deployment, and tests and updates Homebrew.
 - Removed obsolete deployment aliases, device-link compatibility code, and
   legacy configuration labels.
 
@@ -38,7 +34,7 @@
   snapshots when rebuilding the golden image.
 - Preserve in-flight provisioning during provider discovery and keep the
   backend active after runtime-image deployment.
-- Prevent public deployment commands from dropping hosted distribution modules,
+- Prevent public deployment commands from dropping distribution modules,
   and verify the deployed backend version against CLI release tags.
 - Updated backend dependencies to resolve security audit findings.
 
@@ -65,8 +61,8 @@
   tables, and contextual drawers, with destructive actions requiring explicit
   confirmation in both the CLI and console.
 - Unified public backend state in SQLite and replaced runtime module loading
-  with compile-time contracts. Hosted commercial policy now runs outside the
-  public backend; self-hosting remains vendor-neutral and defaults to allow-all.
+  with compile-time contracts. Self-hosting remains vendor-neutral and defaults
+  to allow-all policy.
 - Excluded dependency caches from project syncs and added elapsed-time reporting
   for create and sync operations.
 - Split the marketing site, documentation, and console surfaces so self-hosted

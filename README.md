@@ -150,17 +150,13 @@ BoxHaven is open source under the GNU Affero General Public License v3.0 only
 (`AGPL-3.0-only`). See [NOTICE](NOTICE) and [LICENSE](LICENSE) for the
 copyright notice and full license text.
 
-## Hosted And Self-Hosted
+## Self-Hosting
 
-`app.boxhaven.dev` is the hosted control plane run by the BoxHaven operators.
-Hosted boxes are provisioned from the operators' cloud provider accounts, with
-per-user team and active-box capacity policies enforced by the control plane.
-Use of the hosted service is subject to the [Terms of Service](https://boxhaven.dev/terms/)
-and [Privacy Policy](https://boxhaven.dev/privacy/).
-
-The same open-source backend self-hosts with your own provider credentials and
-no built-in limits. See [backend/README.md](backend/README.md) for running the
-backend and [deploy](deploy) for the production deployment bundle.
+Run the complete open-source backend with your own provider credentials and
+no built-in limits. No BoxHaven subscription or company account is required.
+See [backend/README.md](backend/README.md) for running the backend and
+[deploy](deploy) for the deployment bundle. Your cloud provider charges for
+the machines you create.
 
 ## Install
 
@@ -206,7 +202,7 @@ config from `.boxhaven.toml`.
 
 ```toml
 [remote]
-backend_url = "https://api.boxhaven.dev"
+backend_url = "https://api.example.com"
 token = "browser-granted-session-token"
 ssh_user = "boxhaven"
 provider = "hetzner"
@@ -289,7 +285,7 @@ bh team create acme
 
 Invite teammates by shareable link. `bh team invite <email>` (or the console
 Teams view) creates an invitation and prints an invite URL such as
-`https://app.boxhaven.dev/invite?id=<invitation-id>`; send that link to the
+`https://app.example.com/invite?id=<invitation-id>`; send that link to the
 teammate, who accepts it after signing in with the invited email address.
 BoxHaven does not send invitation emails.
 
@@ -381,7 +377,7 @@ Open a box's **Public preview** link in the console, or use **Open preview** in
 its details drawer. Previews open in a new tab. Each box has a small character
 inspired by the logo; its appearance stays the same across renames and team moves.
 
-Each hosted box receives a public preview URL when the backend is configured
+Each box receives a public preview URL when the backend is configured
 with a preview base domain. The backend warms the preview URL during machine
 create so Caddy has already completed on-demand certificate issuance before the
 URL is shown. Public HTTPS and WebSocket traffic terminate at the BoxHaven
@@ -440,27 +436,16 @@ Production deployment and golden-image tooling live in
 from the repository root with:
 
 ```bash
-npm run deploy:app
+npm run deploy:app -- --target root@app.example.com
 ```
 
-This command SSHes to `root@app.boxhaven.dev`,
-fast-forwards `/opt/boxhaven/app` on `master`, builds the docs site, runs the
-DigitalOcean Compose deploy, and checks the production app, API, and docs health
-endpoints. It does not rebuild the remote VM snapshot.
-
-BoxHaven operators deploy `app.boxhaven.dev` from the sibling private
-`boxhaven-hosted` repository with `npm run deploy:production`, then
-`npm run deploy:production:verify`. That command includes billing, account
-limits, email configuration, and the hosted console. The public-only command
-does not load those modules. Hosted verification must check account routes and
-an authenticated usage request as well as public health endpoints.
-
-For a hosted product release, run `npm run release:production -- vX.Y.Z` in
-`boxhaven-hosted` after preparing the release as described in
-[the release runbook](https://github.com/finbarr/boxhaven/blob/master/RELEASING.md).
-That command publishes and verifies the CLI, deploys the same source with the
-hosted modules, checks authenticated billing, and tests and updates Homebrew.
-`deploy:production` by itself only updates the service.
+The SSH target is required: use `-- --target user@host` or set
+`BOXHAVEN_DEPLOY_TARGET`. The command fast-forwards `/opt/boxhaven/app` on
+`master`, builds the docs site, and runs the Compose deploy on that machine.
+Health checks use `BOXHAVEN_API_URL`, `BOXHAVEN_APP_URL`, and
+`BOXHAVEN_DOCS_URL` from its Compose environment. The remote VM snapshot is
+rebuilt separately. On the Droplet itself, use
+`npm run deploy:production:local`.
 
 The deploy script supports distribution-specific build and service wiring through
 `BOXHAVEN_PRODUCTION_COMPOSE_OVERLAY_FILE` and
@@ -472,26 +457,26 @@ After changing the VM runtime or image-builder code, explicitly rebuild and
 publish the remote VM image:
 
 ```bash
-npm run deploy:runtime
+npm run deploy:runtime -- --target root@app.example.com
 ```
 
 The runtime deploy creates and snapshots a temporary DigitalOcean builder
 Droplet, updates `BOXHAVEN_REMOTE_IMAGE`, then restarts and verifies the backend
 so new boxes use the image. When an active `BOXHAVEN_REMOTE_IMAGE` exists, the
 builder starts from that snapshot by default instead of reinstalling the full
-OS/toolchain from Ubuntu. Use `npm run deploy:runtime -- --full-base-image` only
+OS/toolchain from Ubuntu. Use `npm run deploy:runtime -- --target root@app.example.com --full-base-image` only
 for base OS or runtime dependency rebuilds.
 
-Both deploy commands forward your SSH agent so the Droplet can fetch the private
-GitHub repo without storing a GitHub token. Override the target with
-`BOXHAVEN_DEPLOY_TARGET` or `-- --target user@host` for self-hosted installs.
+Both deploy commands forward your SSH agent for Git access. Set
+`BOXHAVEN_DEPLOY_DIR` if the server checkout is not `/opt/boxhaven/app`.
 
 ## Production Smoke
 
-Run the reusable remote lifecycle smoke against the hosted backend after remote
+Run the reusable remote lifecycle smoke against your test backend after remote
 VM, SSH, sync, snapshot, or agent changes:
 
 ```bash
+BOXHAVEN_SMOKE_BACKEND_URL=https://api.example.com \
 BOXHAVEN_TOKEN=... \
 GH_TOKEN=... \
 BOXHAVEN_SMOKE_GIT_REMOTE=https://github.com/<org>/<smoke-repo>.git \

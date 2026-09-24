@@ -6,7 +6,7 @@ description: Install BoxHaven, run remote boxes, manage teams and images, and se
 # BoxHaven Documentation
 
 BoxHaven runs remote development boxes for AI coding agents. Use these docs to
-install the CLI, connect to a hosted or self-hosted backend, create boxes, run
+install the CLI, connect to your backend, create boxes, run
 agents inside persistent sessions, and operate the backend.
 
 ## Start here

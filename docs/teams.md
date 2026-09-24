@@ -19,7 +19,7 @@ in the console's Team view.
 
 Invite teammates by shareable link. `bh team invite <email>` (or the console
 Teams view) creates an invitation and prints an invite URL such as
-`https://app.boxhaven.dev/invite?id=<invitation-id>`; send that link to the
+`https://app.example.com/invite?id=<invitation-id>`; send that link to the
 teammate, who accepts it after signing in with the invited email address.
 BoxHaven does not send invitation emails.
 
