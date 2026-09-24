@@ -320,6 +320,42 @@ or host failure, use the recorded provider IDs and names to remove only that
 run's resources. Keep the private test database for recovery until cleanup is
 confirmed; it is separate from the production database.
 
+### Self-hosted browser smoke
+
+Verify a disposable deployment with a session token from that installation:
+
+```bash
+BOXHAVEN_APP_URL=https://app.example.com \
+BOXHAVEN_API_URL=https://api.example.com \
+BOXHAVEN_DOCS_URL=https://docs.example.com \
+BOXHAVEN_TOKEN=... \
+node backend/scripts/self-hosted-smoke.mjs
+```
+
+The smoke checks authenticated API access, rejection of unauthenticated machine
+requests, favicons, and desktop/mobile console and docs screenshots. Results go
+under `backend/.artifacts/self-hosted-smoke/`. It does not provision machines;
+run the lifecycle smoke below against the same backend for that coverage.
+
+For a fresh disposable test installation, run this on the server from the
+repository root:
+
+```bash
+docker compose --env-file deploy/digitalocean/.env.production \
+  -f deploy/digitalocean/docker-compose.yml run --rm --no-deps \
+  -v "$PWD/backend/scripts:/app/scripts:ro" \
+  backend node scripts/self-hosted-smoke.mjs --seed-test-account
+```
+
+It creates an
+`oss-test@example.invalid` account through Better Auth, captures its verification
+email locally, and verifies and signs in through the public API. Credentials
+are written with owner-only permissions to `/data/self-hosted-test-account.json`.
+No email is sent. Copy that private file locally and set
+`BOXHAVEN_SMOKE_CREDENTIALS` to its path instead of `BOXHAVEN_TOKEN`.
+This helper refuses the hosted `boxhaven.dev` domains and refuses to overwrite
+existing test credentials. Use it only on a disposable installation.
+
 ### Remote lifecycle smoke
 
 After changing the CLI remote path, VM runtime, SSH certificate flow, sync, or
