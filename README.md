@@ -1,7 +1,8 @@
 # BoxHaven
 
 BoxHaven gives development teams a standard way to run AI coding agents and
-developer shells on named remote Linux boxes. Each box keeps running after a
+developer shells on named remote Linux boxes. Try the [hosted version](https://app.boxhaven.dev/)
+or self-host it with your own cloud credentials. Each box keeps running after a
 laptop disconnects, has a managed tmux session for long-running Codex, Claude,
 Gemini, or shell work, and can sync the current project to and from the remote
 machine.
