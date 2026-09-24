@@ -25,7 +25,8 @@ void prepareEmailVerificationReturn(apiBaseURL, tokenKey).then(() => {
   );
 }).catch(() => {
   root.render(<main className="narrow-layout"><section className="auth-panel">
-    <p role="alert">Could not sign out of the previous account. Try again to finish email verification.</p>
+    <p role="alert">Could not finish signing you in. Try again to continue.</p>
     <button className="primary-button" onClick={() => window.location.reload()}>Try again</button>
+    <a href="/signup?mode=signin">Back to sign in</a>
   </section></main>);
 });

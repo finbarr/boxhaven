@@ -44,7 +44,8 @@ cp deploy/digitalocean/env.production.example deploy/digitalocean/.env.productio
 ```
 
 `BETTER_AUTH_SECRET` must be a long random value and `RESEND_API_KEY` is
-required so password signups can verify their email before signing in.
+required for password-account verification. Opening the verification link
+verifies the email and signs the user in automatically.
 Verification links sign out any existing browser account before showing the
 sign-in form. GitHub sign-in appears only when both `GITHUB_CLIENT_ID` and
 `GITHUB_CLIENT_SECRET` are configured. The
@@ -345,6 +346,34 @@ No email is sent. Copy that private file locally and set
 `BOXHAVEN_SMOKE_CREDENTIALS` to its path instead of `BOXHAVEN_TOKEN`.
 This helper refuses the hosted `boxhaven.dev` domains and refuses to overwrite
 existing test credentials. Use it only on a disposable installation.
+
+### Verification-link smoke
+
+To test automatic sign-in on a disposable installation without sending email,
+run the seed step inside its backend container from the server checkout:
+
+```bash
+docker compose --env-file deploy/digitalocean/.env.production \
+  -f deploy/digitalocean/docker-compose.yml exec -T backend \
+  node --input-type=module - --seed-test-link \
+  < backend/scripts/email-verification-live-smoke.mjs
+```
+
+This creates a pending test account and saves its private, single-use link to
+`/data/email-verification-test.json`. Copy the file locally, then run:
+
+```bash
+BOXHAVEN_APP_URL=https://app.example.com \
+BOXHAVEN_API_URL=https://api.example.com \
+BOXHAVEN_SMOKE_CREDENTIALS=/path/to/email-verification-test.json \
+BOXHAVEN_SMOKE_PREVIOUS_CREDENTIALS=/path/to/self-hosted-test-account.json \
+node backend/scripts/email-verification-live-smoke.mjs
+```
+
+The browser test verifies automatic sign-in, replacement of the previous
+account, and session persistence after refresh. It revokes its temporary
+session afterward; the empty test account remains on the disposable backend.
+Use a new `BOXHAVEN_SMOKE_CREDENTIALS` path inside the container for each run.
 
 ### CLI login smoke
 

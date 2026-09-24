@@ -224,6 +224,10 @@ test("password signup requires verification, supports resend, and rejects expire
       url: `${freshURL.pathname}?token=${encodeURIComponent(freshURL.searchParams.get("token") || "")}`,
     });
     assert.equal(verified.statusCode, 200, verified.body);
+    const cookies = verified.cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+    const session = await app.inject({ method: "GET", url: "/v1/auth/get-session", headers: { cookie: cookies } });
+    assert.equal(session.json().user.email, "verify@example.com", "verification creates a signed-in session");
+    assert.equal(session.json().user.emailVerified, true);
 
     const signedIn = await app.inject({
       method: "POST",
@@ -278,6 +282,10 @@ test("failed signup verification delivery leaves the created account recoverable
       url: `${freshURL.pathname}?token=${encodeURIComponent(freshURL.searchParams.get("token") || "")}`,
     });
     assert.equal(verified.statusCode, 200, verified.body);
+    const cookies = verified.cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+    const session = await app.inject({ method: "GET", url: "/v1/auth/get-session", headers: { cookie: cookies } });
+    assert.equal(session.json().user.email, "recoverable@example.com", "verification creates a signed-in session");
+    assert.equal(session.json().user.emailVerified, true);
     const signedIn = await app.inject({
       method: "POST",
       url: "/v1/auth/sign-in/email",

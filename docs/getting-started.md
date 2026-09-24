@@ -89,7 +89,8 @@ Without an interactive terminal, first login requires `--backend-url` or
 `BOXHAVEN_BACKEND_URL`. No backend is contacted until one is selected.
 
 The CLI prints a browser URL, tries to open it, and waits for the web app to
-grant access. The resulting session token is stored in
+grant access. If you create a password account, the verification email link
+signs you in automatically and returns you to the CLI approval page. The resulting session token is stored in
 `~/.config/boxhaven/config.toml`. `BOXHAVEN_BACKEND_URL` and `BOXHAVEN_TOKEN`
 override the stored config when set.
 

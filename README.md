@@ -43,8 +43,9 @@ terminal, pass `--backend-url` or set `BOXHAVEN_BACKEND_URL`.
 Mid-conversation with Claude locally? `bh run work claude --continue` resumes
 that exact session on the box.
 
-Sign up with email and password, follow the one-hour verification link, then
-sign in. Opening the link signs out any account already active in that browser.
+Sign up with email and password, then follow the one-hour verification link.
+The link verifies your email and signs you in automatically, replacing any
+other account open in that browser.
 The "Continue with GitHub" button appears only when the operator configures a GitHub OAuth app
 (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`). GitHub's provider-verified email
 does not need a second verification step; `bh login` then works the same either

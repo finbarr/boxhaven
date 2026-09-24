@@ -331,11 +331,12 @@ password reset links, and team invitation links
 without `RESEND_API_KEY`. Invitation delivery remains best-effort because the
 team console exposes a copyable link. GitHub accounts whose provider email is
 verified do not receive a redundant BoxHaven verification email.
-Returning from an email verification link signs out the existing browser session
-before showing the verification result and sign-in form. The user then signs
-in to the account they verified. Run `npm run smoke:email-verification` to check
-this with real local auth sessions, including an already signed-in account,
-cookie-only sessions, invalid/expired links, and a failed sign-out retry.
+Opening a valid verification link verifies the email and signs in to that
+account automatically. The console replaces any previous browser account with
+the new session and returns to the original CLI approval or invitation page.
+Run `npm run smoke:email-verification` to check fresh signup, account switching,
+cookie-only sessions, invalid/expired links, session-load retries, and both
+return destinations using real local auth sessions.
 
 Image management routes:
 

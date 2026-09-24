@@ -26,8 +26,7 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
   initialMode?: "signin" | "signup";
 }) {
   const verificationError = verificationErrorMessage(new URLSearchParams(window.location.search).get("error"));
-  const verified = !verificationError && new URLSearchParams(window.location.search).get("verified") === "true";
-  const [mode, setMode] = useState<"signin" | "signup">(initialMode ?? (verified || verificationError ? "signin" : "signup"));
+  const [mode, setMode] = useState<"signin" | "signup">(initialMode ?? (verificationError ? "signin" : "signup"));
   const [forgot, setForgot] = useState(false);
   const providers = useQuery({
     queryKey: ["auth-providers"],
@@ -122,7 +121,6 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
             <span>{mode === "signup" ? "create account" : "welcome back"}</span>
             <h1>{mode === "signup" ? "Create a BoxHaven account" : "Open the console"}</h1>
           </div>
-          {verified ? <p className="success-text">Email verified. Sign in to open the console.</p> : null}
           {verificationError ? <p className="error" role="alert">{verificationError}</p> : null}
           {notice ? <p className="hint">{notice}</p> : null}
           <div className="segmented">
@@ -181,7 +179,7 @@ function VerificationPending({ email, resend, deliveryFailed, onUseAnother }: {
         {deliveryFailed && !resend.isSuccess ? (
           <p>Your account for <strong>{email}</strong> exists, but the first email could not be delivered. Resend it to continue.</p>
         ) : (
-          <p>We sent a verification link to <strong>{email}</strong>. Open it within one hour, then sign in.</p>
+          <p>We sent a verification link to <strong>{email}</strong>. Open it within one hour to verify your email and sign in.</p>
         )}
       </div>
       {resend.isSuccess ? <p className="success-text">A fresh verification link is on its way.</p> : null}
@@ -197,6 +195,8 @@ function VerificationPending({ email, resend, deliveryFailed, onUseAnother }: {
 
 function verificationCallbackURL(): string {
   const callback = new URL(window.location.href);
+  if (callback.pathname === "/signup") callback.pathname = "/";
+  callback.searchParams.delete("mode");
   callback.searchParams.delete("error");
   callback.searchParams.set("verified", "true");
   return callback.toString();

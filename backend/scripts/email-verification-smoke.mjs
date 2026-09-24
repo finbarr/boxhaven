@@ -57,28 +57,58 @@ try {
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/google-chrome", "/usr/bin/chromium",
   ].find((candidate) => candidate && existsSync(candidate));
   browser = await chromium.launch({ ...(executablePath ? { executablePath } : {}), headless: true });
-  for (const scenario of ["different-account", "cookie-only", "expired", "invalid", "signout-retry"]) {
+  for (const scenario of ["fresh-signup", "different-account", "cookie-only", "expired", "invalid", "session-retry", "device", "invitation"]) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const page = await context.newPage();
     page.setDefaultTimeout(10_000);
     const oldEmail = `${scenario}-old@example.com`;
     const newEmail = `${scenario}-new@example.com`;
-    const oldLink = await signUp(oldEmail);
-    assert.equal((await fetch(oldLink, { redirect: "manual" })).status, 302);
-    const signIn = await context.request.post(`${apiURL}/v1/auth/sign-in/email`, { data: { email: oldEmail, password } });
-    assert.equal(signIn.status(), 200);
-    const oldToken = (await signIn.json()).token;
-    await page.goto(appURL);
-    if (scenario !== "cookie-only") {
-      await page.evaluate(({ tokenKey, oldToken }) => localStorage.setItem(tokenKey, oldToken), { tokenKey, oldToken });
-      await page.reload();
-      await page.locator(".console-shell").waitFor();
+    let oldToken;
+    if (scenario !== "fresh-signup") {
+      const oldLink = await signUp(oldEmail);
+      assert.equal((await fetch(oldLink, { redirect: "manual" })).status, 302);
+      const signIn = await context.request.post(`${apiURL}/v1/auth/sign-in/email`, { data: { email: oldEmail, password } });
+      assert.equal(signIn.status(), 200);
+      oldToken = (await signIn.json()).token;
+      await page.goto(appURL);
+      if (scenario !== "cookie-only") {
+        await page.evaluate(({ tokenKey, oldToken }) => localStorage.setItem(tokenKey, oldToken), { tokenKey, oldToken });
+        await page.reload();
+        await page.locator(".console-shell").waitFor();
+      }
     }
-    const newLink = await signUp(newEmail);
+    let returnPath = "/";
+    let device;
+    if (scenario === "device") {
+      const response = await app.inject({ method: "POST", url: "/v1/auth/device/code", payload: { client_id: "boxhaven-cli", scope: "remote" } });
+      assert.equal(response.statusCode, 200);
+      device = response.json();
+      returnPath = `/device?user_code=${device.user_code}`;
+    } else if (scenario === "invitation") {
+      const headers = { authorization: `Bearer ${oldToken}` };
+      const organization = await app.inject({ method: "POST", url: "/v1/auth/organization/create", headers,
+        payload: { name: "Verification Team", slug: "verification-team" } });
+      assert.equal(organization.statusCode, 200, organization.body);
+      const invite = await app.inject({ method: "POST", url: "/v1/auth/organization/invite-member", headers,
+        payload: { organizationId: organization.json().id, email: newEmail, role: "member" } });
+      assert.equal(invite.statusCode, 200, invite.body);
+      returnPath = `/invite?id=${invite.json().id}`;
+    }
+    let newLink;
+    if (scenario === "fresh-signup") {
+      await page.goto(`${appURL}/signup`);
+      await page.getByLabel("Email", { exact: true }).fill(newEmail);
+      await page.getByLabel("Name", { exact: true }).fill("New user");
+      await page.getByLabel("Password", { exact: true }).fill(password);
+      const consent = page.locator('.legal-consent input[type="checkbox"]');
+      if (await consent.count()) await consent.check();
+      await page.locator('form button[type="submit"], form button.primary-button').last().click();
+      await page.getByRole("heading", { name: "Check your inbox", exact: true }).waitFor();
+      await page.getByText("Open it within one hour to verify your email and sign in.", { exact: false }).waitFor();
+      newLink = verificationLink(newEmail);
+    } else newLink = await signUp(newEmail, returnPath);
     let destination = newLink;
     if (scenario === "expired") {
-      // A real, already expired verification JWT, signed with this fixture's
-      // secret, exercises Better Auth's error redirect without a timed sleep.
       const { createEmailVerificationToken } = await import("better-auth/api");
       const expired = new URL(newLink);
       expired.searchParams.set("token", await createEmailVerificationToken(authOptions.secret, newEmail, undefined, -1));
@@ -88,40 +118,56 @@ try {
       invalid.searchParams.set("token", "invalid-verification-token");
       destination = invalid.href;
     }
-    let failSignout = scenario === "signout-retry";
-    if (failSignout) await page.route("**/v1/auth/sign-out", (route) => failSignout ? route.abort() : route.continue());
+    let failSession = scenario === "session-retry";
+    if (failSession) await page.route("**/v1/auth/get-session", (route) => failSession ? route.abort() : route.continue());
+    let signoutCalls = 0;
+    page.on("request", (request) => { if (new URL(request.url()).pathname === "/v1/auth/sign-out") signoutCalls++; });
     await page.goto(destination);
-    if (failSignout) {
-      await page.getByRole("alert").filter({ hasText: "Could not sign out" }).waitFor();
+    if (failSession) {
+      await page.getByRole("alert").filter({ hasText: "Could not finish signing you in" }).waitFor();
       assert.equal(await page.locator(".console-shell").count(), 0);
-      failSignout = false;
+      assert.equal(await page.evaluate((key) => localStorage.getItem(key), tokenKey), null);
+      failSession = false;
       await page.getByRole("button", { name: "Try again", exact: true }).click();
     }
     const error = scenario === "expired" || scenario === "invalid";
     if (error) {
       await page.getByRole("alert").filter({ hasText: `That verification link ${scenario === "expired" ? "has expired" : "is invalid"}` }).waitFor();
-      assert.equal(await page.getByText("Email verified. Sign in to open the console.", { exact: true }).count(), 0);
-    } else await page.getByText("Email verified. Sign in to open the console.", { exact: true }).waitFor();
-    assert.equal(await page.locator(".console-shell").count(), 0);
-    assert.equal(await page.evaluate((key) => localStorage.getItem(key), tokenKey), null);
-    assert.equal((await fetch(`${apiURL}/v1/auth/whoami`, { headers: { Authorization: `Bearer ${oldToken}` } })).status, 401, "previous session must be revoked");
-    assert.equal(await (await context.request.get(`${apiURL}/v1/auth/get-session`)).json(), null, "previous session cookie must be cleared");
+      assert.equal(await page.locator(".console-shell").count(), 0);
+      assert.equal(await page.evaluate((key) => localStorage.getItem(key), tokenKey), null);
+    } else {
+      if (scenario === "device") await page.getByRole("button", { name: "Allow", exact: true }).waitFor();
+      else if (scenario === "invitation") await page.getByRole("button", { name: "Accept invitation", exact: true }).waitFor();
+      else await page.locator(".console-shell").waitFor();
+      const newToken = await page.evaluate((key) => localStorage.getItem(key), tokenKey);
+      assert.ok(newToken, "verification must sign in without another password submission");
+      assert.notEqual(newToken, oldToken, "must replace the old browser account");
+      const identity = await (await fetch(`${apiURL}/v1/auth/whoami`, { headers: { Authorization: `Bearer ${newToken}` } })).json();
+      assert.equal(identity.user.email, newEmail);
+      assert.equal((await (await context.request.get(`${apiURL}/v1/auth/get-session`)).json()).user.email, newEmail);
+      assert.equal(new URL(page.url()).pathname + new URL(page.url()).search, returnPath);
+      await page.reload();
+      if (scenario === "device") await page.getByRole("button", { name: "Allow", exact: true }).waitFor();
+      else if (scenario === "invitation") await page.getByRole("button", { name: "Accept invitation", exact: true }).waitFor();
+      else await page.locator(".console-shell").waitFor();
+      assert.equal(await page.evaluate((key) => localStorage.getItem(key), tokenKey), newToken, "refresh must preserve the new session");
+    }
+    assert.equal(signoutCalls, 0, "verification must not revoke the newly created session");
     for (const [size, viewport] of Object.entries({ desktop: { width: 1440, height: 1000 }, mobile: { width: 390, height: 844 } })) {
       await page.setViewportSize(viewport);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       await page.screenshot({ path: join(out, `${scenario}-${size}.png`), fullPage: true });
     }
-    if (!error) {
-      await page.getByLabel("Email", { exact: true }).fill(newEmail);
-      await page.getByLabel("Password", { exact: true }).fill(password);
-      await page.locator('form button[type="submit"], form button.primary-button').last().click();
-      await page.locator(".console-shell").waitFor();
-      const newToken = await page.evaluate((key) => localStorage.getItem(key), tokenKey);
-      const identity = await (await fetch(`${apiURL}/v1/auth/whoami`, { headers: { Authorization: `Bearer ${newToken}` } })).json();
-      assert.equal(identity.user.email, newEmail);
-      await page.reload();
-      await page.locator(".console-shell").waitFor();
-      assert.equal(await page.evaluate((key) => localStorage.getItem(key), tokenKey), newToken, "refresh must preserve the new session");
+    if (scenario === "device" || scenario === "invitation") {
+      await page.getByRole("button", { name: scenario === "device" ? "Allow" : "Accept invitation", exact: true }).click();
+      if (device) {
+        const exchanged = await app.inject({ method: "POST", url: "/v1/auth/device/token", payload: {
+          grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: device.device_code, client_id: "boxhaven-cli",
+        } });
+        assert.equal(exchanged.statusCode, 200, exchanged.body);
+        const identity = await app.inject({ method: "GET", url: "/v1/auth/whoami", headers: { authorization: `Bearer ${exchanged.json().access_token}` } });
+        assert.equal(identity.json().user.email, newEmail);
+      } else await page.locator(".console-shell").waitFor();
     }
     await context.close();
     console.log(`PASS ${scenario}`);
@@ -134,11 +180,17 @@ try {
   rmSync(dir, { recursive: true, force: true });
 }
 
-async function signUp(email) {
+async function signUp(email, returnPath = "/") {
+  const callback = new URL(returnPath, appURL);
+  callback.searchParams.set("verified", "true");
   const response = await app.inject({ method: "POST", url: "/v1/auth/sign-up/email", payload: {
-    email, password, name: email.split("@")[0], callbackURL: `${appURL}/?verified=true`,
+    email, password, name: email.split("@")[0], callbackURL: callback.href,
   } });
   assert.equal(response.statusCode, 200, response.body);
+  return verificationLink(email);
+}
+
+function verificationLink(email) {
   const message = messages.findLast((entry) => entry.to === email);
   const link = message?.text.match(/https?:\/\/\S+\/verify-email\?\S+/)?.[0];
   assert.ok(link, `verification email for ${email}`);

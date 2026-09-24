@@ -93,7 +93,7 @@ can reuse the core API, auth, provider, SSH, and CLI implementations.
 - `BETTER_AUTH_SECRET`: required signing secret for Better Auth sessions.
 - `BETTER_AUTH_URL`: public auth base URL, default `http://<listen>/v1/auth`.
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated trusted browser origins.
-- `RESEND_API_KEY`: required Resend API key. Password signups must follow an emailed verification link before signing in. The link signs out any account already active in that browser so the user can sign in to the verified account.
+- `RESEND_API_KEY`: required Resend API key. Password signups must follow an emailed verification link before signing in. The link verifies the email and signs in to that account automatically, replacing any other account open in the browser.
 - `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: optional GitHub OAuth credentials. The console shows GitHub sign-in only when both are configured; email sign-in remains available.
 - `BOXHAVEN_EMAIL_FROM`: transactional From address, required verified sender address from your own domain (for example, `BoxHaven <noreply@example.com>`).
 - `BOXHAVEN_EMAIL_VERIFICATION_EXPIRES_SECONDS`: positive verification-link lifetime, default `3600`.

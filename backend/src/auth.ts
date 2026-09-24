@@ -83,13 +83,13 @@ function authConfig(options: BackendAuthOptions, database: Database.Database) {
       expiresIn: options.emailVerificationExpiresInSeconds || defaultEmailVerificationExpiresInSeconds,
       sendOnSignUp: true,
       sendOnSignIn: false,
-      autoSignInAfterVerification: false,
+      autoSignInAfterVerification: true,
       async sendVerificationEmail(data: { user: { email: string }; url: string }) {
         await sendRequiredEmail(options.email, {
           to: data.user.email,
           subject: "Verify your BoxHaven email",
           text: [
-            "Verify your email address to finish creating your BoxHaven account.",
+            "Open this link to verify your email address and sign in to BoxHaven.",
             "",
             `Verify your email: ${data.url}`,
             "",

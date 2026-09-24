@@ -18,26 +18,31 @@ export function githubReturnPath(callbackURL: string): string {
 
 function localAuthDestination(destination: URL, origin: string): string {
   if (destination.origin !== origin || ["/auth/github", "/signup", "/reset-password"].includes(destination.pathname.replace(/\/+$/, ""))) return "/";
-  // Replaying an email-verification return would sign out the new OAuth session.
+  // Auth callbacks must not replay stale verification or error markers.
   destination.searchParams.delete("verified");
   destination.searchParams.delete("error");
   destination.searchParams.delete("mode");
   return `${destination.pathname}${destination.search}${destination.hash}`;
 }
 
-// Verification proves email ownership; it does not sign the user in. Finish
-// signing out before either console can restore a different browser account.
+// Better Auth creates a session cookie on the API origin after verification.
+// Replace any stale console bearer token with that cookie's session before
+// mounting either console, so a previously open account cannot win the race.
 export async function prepareEmailVerificationReturn(baseURL: string, tokenKey: string): Promise<void> {
-  if (new URLSearchParams(window.location.search).get("verified") !== "true") return;
-  await apiRequest(baseURL, "/v1/auth/sign-out", localStorage.getItem(tokenKey) || "", {
-    method: "POST",
-    body: {},
+  const query = new URLSearchParams(window.location.search);
+  if (query.get("verified") !== "true") return;
+  localStorage.removeItem(tokenKey);
+  if (query.has("error")) return;
+  const result = await apiRequest<{ session?: { token?: string } } | null>(baseURL, "/v1/auth/get-session", "", {
     credentials: "include",
   });
-  localStorage.removeItem(tokenKey);
+  const token = result?.session?.token;
+  if (!token) throw new Error("Email verification did not produce a sign-in session");
+  localStorage.setItem(tokenKey, token);
+  clearEmailVerificationResult();
 }
 
-// Once the user signs in, refreshing this page must not sign them out again.
+// Refreshing the destination must keep the session without repeating the callback.
 export function clearEmailVerificationResult(): void {
   const url = new URL(window.location.href);
   url.searchParams.delete("verified");
