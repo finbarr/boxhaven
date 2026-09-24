@@ -69,6 +69,7 @@ try {
   await page.reload();
   await page.locator(".console-shell").waitFor();
   assert.equal(await page.evaluate(() => localStorage.getItem("boxhaven.backend.token")), token);
+  await page.getByRole("heading", { name: "Your first box", exact: true }).waitFor();
   for (const [size, viewport] of Object.entries({ desktop: { width: 1440, height: 1000 }, mobile: { width: 390, height: 844 } })) {
     await page.setViewportSize(viewport);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
