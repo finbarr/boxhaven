@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createRootRoute, HeadContent, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
 import { ArrowUpRight, Compass } from "lucide-react";
 import { apiFetch, VersionResponse } from "../api";
-import { docsURL, GitHubMark, isHostedService, privacyURL, repoURL, termsURL, TopBar } from "../shell";
+import { docsURL, GitHubMark, repoURL, TopBar } from "../shell";
 
 // App shell only: backdrop + topbar slot. Auth lives in the _console layout.
 export const Route = createRootRoute({
@@ -18,7 +18,7 @@ function RootShell() {
   const onDevice = Boolean(matchRoute({ to: "/device" }));
   const version = useQuery({
     queryKey: ["boxhaven-version"],
-    enabled: !isHostedService && !onDevice,
+    enabled: !onDevice,
     retry: false,
     staleTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -42,10 +42,8 @@ function RootShell() {
         </div>
         {onDevice ? null : (
           <footer className="site-footer">
-            <span>© 2026 Default Alive LLC dba BoxHaven</span>
+            <span>BoxHaven</span>
             <nav>
-              {isHostedService ? <a href={termsURL}>Terms</a> : null}
-              {isHostedService ? <a href={privacyURL}>Privacy</a> : null}
               <a href={docsURL} target="_blank" rel="noreferrer">Docs</a>
               <a href={repoURL} target="_blank" rel="noreferrer"><GitHubMark size={13} /> GitHub</a>
               <a href={`${repoURL}/blob/master/LICENSE`} target="_blank" rel="noreferrer">AGPL-3.0</a>

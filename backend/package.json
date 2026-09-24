@@ -38,7 +38,6 @@
     "smoke:images": "tsx scripts/console-smoke.mjs --image-cli",
     "smoke:image-docs": "node scripts/docs-images-smoke.mjs",
     "smoke:docs-deletion": "tsx scripts/docs-deletion-smoke.mjs",
-    "smoke:hosted-legal": "tsx scripts/hosted-legal-smoke.mjs",
     "test": "node --import tsx --test src/*.test.ts"
   },
   "dependencies": {

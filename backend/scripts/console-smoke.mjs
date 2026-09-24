@@ -379,6 +379,8 @@ async function checkAccessPage(page) {
   assert.equal(facts.topbarSubtitle, "console access");
   assert.equal(facts.landingPresent, false);
   assert.equal(facts.marketingCopyPresent, false);
+  assert.doesNotMatch(await page.locator("body").innerText(), /Default Alive|dba BoxHaven|Terms of Service|arbitration|Privacy Policy/);
+  assert.equal(await page.locator(".legal-consent").count(), 0);
   assert.deepEqual(facts.authModes, ["Sign up", "Sign in"]);
   assert.equal(facts.docsHref, "https://docs.console-smoke.test/custom");
   assert.ok(facts.updateText?.includes("BoxHaven v0.2.0 is available."));
@@ -791,8 +793,7 @@ async function checkTeamsPage(page) {
   assert.deepEqual(drawerFacts.inputs, ["Acme Labs", "acme-labs"]);
   assert.ok(drawerFacts.buttons.some((text) => text?.includes("Save team")), "missing drawer Save action");
   assert.ok(drawerFacts.buttons.some((text) => text?.includes("Delete team")), "missing drawer Delete action");
-  assert.match(drawerFacts.deletionGuidance || "", /Destroy every box first/);
-  assert.match(drawerFacts.deletionGuidance || "", /billing to show inactive/);
+  assert.equal(drawerFacts.deletionGuidance, "Destroy every box in the team before deleting it.");
   facts.drawerFacts = drawerFacts;
   return facts;
 }
@@ -987,7 +988,7 @@ async function checkMobileTeams(page) {
     deletionGuidance: document.querySelector(".team-delete-control p")?.textContent?.trim(),
   }));
   assert.ok(editorFacts.bodyScrollWidth <= editorFacts.viewport, `mobile team editor overflows horizontally: ${editorFacts.bodyScrollWidth} > ${editorFacts.viewport}`);
-  assert.match(editorFacts.deletionGuidance || "", /Destroy every box first/);
+  assert.equal(editorFacts.deletionGuidance, "Destroy every box in the team before deleting it.");
   facts.editor = editorFacts;
   return facts;
 }

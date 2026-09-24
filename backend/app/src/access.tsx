@@ -3,7 +3,7 @@ import { Copy, KeyRound, MailCheck, Play, RotateCw, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { clearEmailVerificationResult, githubCallbackURL } from "../../src/browser-session";
 import { apiFetch, AuthProvidersResponse, BoxHavenAPIError, formatUserCode, LoginResponse } from "./api";
-import { GitHubMark, isHostedService, privacyURL, termsURL } from "./shell";
+import { GitHubMark } from "./shell";
 
 export const installCommand = "curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh";
 
@@ -29,8 +29,6 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
   const verified = !verificationError && new URLSearchParams(window.location.search).get("verified") === "true";
   const [mode, setMode] = useState<"signin" | "signup">(initialMode ?? (verified || verificationError ? "signin" : "signup"));
   const [forgot, setForgot] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const requiresTerms = isHostedService && mode === "signup";
   const providers = useQuery({
     queryKey: ["auth-providers"],
     queryFn: () => apiFetch<AuthProvidersResponse>("/v1/auth/providers"),
@@ -98,7 +96,6 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (requiresTerms && !acceptedTerms) return;
     mutation.mutate();
   }
 
@@ -132,22 +129,8 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
             <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>Sign up</button>
             <button type="button" className={mode === "signin" ? "active" : ""} onClick={() => setMode("signin")}>Sign in</button>
           </div>
-          {requiresTerms ? (
-            <label className="legal-consent">
-              <input
-                type="checkbox"
-                checked={acceptedTerms}
-                onChange={(event) => setAcceptedTerms(event.target.checked)}
-                required
-              />
-              <span>
-                I agree to the <a href={termsURL} target="_blank" rel="noreferrer">Terms of Service</a>, including
-                individual arbitration, and acknowledge the <a href={privacyURL} target="_blank" rel="noreferrer">Privacy Policy</a>.
-              </span>
-            </label>
-          ) : null}
           {githubEnabled ? <>
-            <button className="github-button" type="button" disabled={github.isPending || (requiresTerms && !acceptedTerms)} onClick={() => github.mutate()}>
+            <button className="github-button" type="button" disabled={github.isPending} onClick={() => github.mutate()}>
               <GitHubMark size={16} />
               {github.isPending ? "Redirecting" : "Continue with GitHub"}
             </button>
@@ -172,7 +155,7 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
             <button className="link-button forgot-link" type="button" onClick={() => setForgot(true)}>Forgot password?</button>
           ) : null}
           {deviceUserCode ? <p className="hint">Sign in here to approve CLI access for code <code>{formatUserCode(deviceUserCode)}</code>.</p> : null}
-          <button className="primary-button" type="submit" disabled={mutation.isPending || (requiresTerms && !acceptedTerms)}>
+          <button className="primary-button" type="submit" disabled={mutation.isPending}>
             <Play size={16} />
             {mutation.isPending ? "Working" : mode === "signup" ? "Create account" : "Open console"}
           </button>

@@ -193,13 +193,13 @@ function TeamSettingsDrawer({ open, token, user, org, onClose }: {
       footer={org ? (
         isOwner ? (
           <div className="team-delete-control">
-            <p>Destroy every box first. On hosted BoxHaven, cancel the team subscription and wait for billing to show inactive.</p>
+            <p>Destroy every box in the team before deleting it.</p>
             <button
               className="danger-button"
               type="button"
               disabled={busy}
               onClick={() => {
-                if (window.confirm(`Delete ${org.name}? Every box must be destroyed and hosted billing must be inactive.`)) deleteTeam.mutate();
+                if (window.confirm(`Delete ${org.name}? Every box in the team must be destroyed first.`)) deleteTeam.mutate();
               }}
             >
               <Trash2 size={16} />
