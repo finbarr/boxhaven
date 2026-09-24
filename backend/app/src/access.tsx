@@ -1,7 +1,7 @@
 import { useMutation, useQuery, type UseMutationResult } from "@tanstack/react-query";
 import { Copy, KeyRound, MailCheck, Play, RotateCw, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { clearEmailVerificationResult } from "../../src/browser-session";
+import { clearEmailVerificationResult, githubCallbackURL } from "../../src/browser-session";
 import { apiFetch, AuthProvidersResponse, BoxHavenAPIError, formatUserCode, LoginResponse } from "./api";
 import { GitHubMark, isHostedService, privacyURL, termsURL } from "./shell";
 
@@ -41,7 +41,8 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
     mutationFn: async () => {
       const data = await apiFetch<{ url?: string }>("/v1/auth/sign-in/social", "", {
         method: "POST",
-        body: { provider: "github", callbackURL: `${window.location.origin}/auth/github` },
+        credentials: "include",
+        body: { provider: "github", callbackURL: githubCallbackURL(window.location.href) },
       });
       if (!data.url) throw new Error("GitHub sign-in did not return a redirect.");
       return data;

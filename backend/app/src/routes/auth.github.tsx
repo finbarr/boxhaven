@@ -1,6 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { githubReturnPath } from "../../../src/browser-session";
 import { apiFetch, tokenKey } from "../api";
 import { GitHubMark, TopBar } from "../shell";
 
@@ -17,7 +18,6 @@ type SessionResponse = {
 };
 
 function GitHubCallback() {
-  const navigate = useNavigate();
   const session = useQuery({
     queryKey: ["github-callback-session"],
     retry: 1,
@@ -28,9 +28,9 @@ function GitHubCallback() {
   useEffect(() => {
     if (token) {
       localStorage.setItem(tokenKey, token);
-      void navigate({ to: "/", replace: true });
+      window.location.replace(githubReturnPath(window.location.href));
     }
-  }, [token, navigate]);
+  }, [token]);
 
   return (
     <>
@@ -47,7 +47,7 @@ function GitHubCallback() {
           </div>
           {session.error ? <p className="error">{(session.error as Error).message}</p> : null}
           {!session.isLoading && !token ? (
-            <a className="primary-button" href="/signup">Back to sign-in</a>
+            <a className="primary-button" href="/signup?mode=signin">Back to sign-in</a>
           ) : null}
         </div>
       </section>

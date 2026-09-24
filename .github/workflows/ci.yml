@@ -84,6 +84,9 @@ jobs:
       - name: Test password recovery in the browser
         run: npm --prefix backend run smoke:password-recovery
 
+      - name: Test OAuth CLI approval and invitation return paths
+        run: npm --prefix backend run smoke:oauth-return
+
   backup:
     name: Backup Integrity
     runs-on: ubuntu-latest
