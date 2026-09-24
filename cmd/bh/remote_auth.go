@@ -128,8 +128,12 @@ func loginBackendURL(value string, input io.Reader, output io.Writer, interactiv
 		if !interactive {
 			return "", fmt.Errorf("backend URL is required on first login; pass --backend-url <url> or set %s", remoteBackendURLEnv)
 		}
-		fmt.Fprintln(output, "Choose your backend API URL. Press Enter to use hosted BoxHaven.")
-		fmt.Fprintf(output, "Backend URL [%s]: ", suggestedHostedBackendURL)
+		if _, err := fmt.Fprintln(output, "Choose your backend API URL. Press Enter to use hosted BoxHaven."); err != nil {
+			return "", err
+		}
+		if _, err := fmt.Fprintf(output, "Backend URL [%s]: ", suggestedHostedBackendURL); err != nil {
+			return "", err
+		}
 		answer, err := bufio.NewReader(input).ReadString('\n')
 		if err != nil {
 			return "", fmt.Errorf("read backend URL: %w", err)

@@ -79,7 +79,7 @@ func TestLoginUsesSelectedBackendAndReusesSavedURL(t *testing.T) {
 			t.Errorf("unexpected selected-backend request: %s, authorization matches=%t", r.URL.Path, r.Header.Get("Authorization") == "Bearer selected-token")
 		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"team":{"slug":"test-team"}}`)
+		_, _ = fmt.Fprint(w, `{"team":{"slug":"test-team"}}`)
 	}))
 	defer selected.Close()
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -18,6 +18,10 @@ GO
 cat > "$fixture/bin/docker" <<'SH'
 #!/usr/bin/env bash
 case " $* " in
+  *" config --environment "*) printf '%s\n' \
+    'BOXHAVEN_API_URL=https://api.version-test.example' \
+    'BOXHAVEN_APP_URL=https://app.version-test.example' \
+    'BOXHAVEN_DOCS_URL=https://docs.version-test.example' ;;
   *" exec -T backend node -e "*) printf '%s' "${BOXHAVEN_VERSION:?}" ;;
 esac
 SH
