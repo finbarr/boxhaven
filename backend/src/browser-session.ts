@@ -18,6 +18,10 @@ export function githubReturnPath(callbackURL: string): string {
 
 function localAuthDestination(destination: URL, origin: string): string {
   if (destination.origin !== origin || ["/auth/github", "/signup", "/reset-password"].includes(destination.pathname.replace(/\/+$/, ""))) return "/";
+  // Replaying an email-verification return would sign out the new OAuth session.
+  destination.searchParams.delete("verified");
+  destination.searchParams.delete("error");
+  destination.searchParams.delete("mode");
   return `${destination.pathname}${destination.search}${destination.hash}`;
 }
 

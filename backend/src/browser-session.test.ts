@@ -20,3 +20,9 @@ test("OAuth return parameters cannot send a browser off-site or back into an aut
   assert.equal(githubReturnPath("https://app.example.com/auth/github"), "/");
   assert.equal(githubReturnPath(githubCallbackURL("https://app.example.com/signup")), "/");
 });
+
+test("OAuth consumes email-verification markers without losing the original destination", () => {
+  const callback = githubCallbackURL("https://app.example.com/device?user_code=ABCD-EFGH&verified=true&error=TOKEN_EXPIRED&mode=signin");
+  assert.equal(githubReturnPath(callback), "/device?user_code=ABCD-EFGH");
+  assert.equal(githubReturnPath("https://app.example.com/auth/github?returnTo=%2F%3Fverified%3Dtrue"), "/");
+});

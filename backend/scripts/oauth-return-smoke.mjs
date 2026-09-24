@@ -95,7 +95,9 @@ try {
       assert.ok(state);
       await route.fulfill({ status: 302, headers: { location: `${apiURL}/v1/auth/callback/github?code=fixture-code&state=${encodeURIComponent(state)}` }, body: "" });
     });
-    await page.goto(`${appURL}${destination}`);
+    // Starting from an email-verification return must not sign out the new
+    // GitHub session when OAuth brings the user back to the original request.
+    await page.goto(`${appURL}${destination}${scenario === "device" ? "&verified=true" : ""}`);
     await page.getByRole("button", { name: "Sign in", exact: true }).first().click();
     await page.getByRole("button", { name: "Continue with GitHub" }).click();
     await page.getByRole("button", { name: action, exact: true }).waitFor();
