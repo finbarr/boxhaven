@@ -66,7 +66,10 @@ jobs:
         run: npm --prefix backend run build
 
       - name: Test backend
-        run: npm --prefix backend test
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3
+          npm --prefix backend test
 
       - name: Install browser for auth regression
         run: npx playwright-core install --with-deps chromium

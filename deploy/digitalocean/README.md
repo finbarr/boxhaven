@@ -164,7 +164,8 @@ Run only the production container and health checks with:
 npm run deploy:production:verify
 ```
 
-Install and start the backup timer:
+Install and start the backup timer after the backend is healthy. Startup
+creates the SSH CA keypair, so the first backup does not require an existing box:
 
 ```bash
 sudo deploy/digitalocean/install-backups.sh

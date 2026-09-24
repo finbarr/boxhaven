@@ -161,7 +161,8 @@ required for password-account verification in every self-hosted deployment.
 Configure a Resend-verified `BOXHAVEN_EMAIL_FROM` before startup. The backend also needs
 `DIGITALOCEAN_ACCESS_TOKEN` so it can create remote VMs for users. The
 backend SSH user CA is stored at `/opt/boxhaven/data/backend/ssh_ca_ed25519`
-and is included in the backend data backups. Set
+and is included in the backend data backups. Startup creates this keypair
+before serving requests, so backups work before the first box is created. Set
 `BOXHAVEN_DOCS_HOST` to the documentation hostname, `BOXHAVEN_DOCS_URL` to
 the public URL the console should link to, and `BOXHAVEN_PREVIEW_BASE_DOMAIN`
 to the wildcard domain above.

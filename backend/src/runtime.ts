@@ -73,6 +73,9 @@ export async function startBackendFromEnv(runtime: BackendRuntimeOptions = {}) {
     version: process.env.BOXHAVEN_VERSION || "dev",
   });
 
+  // Backups require the CA even before the first box is created. Finish
+  // initializing it before this installation can report itself healthy.
+  await sshCA.publicKey();
   await app.listen({ host, port });
   console.error(`boxhaven backend listening on ${host}:${port} with providers ${providers.names().join(", ")} (default ${providers.defaultName})`);
   return app;

@@ -147,8 +147,11 @@ in `docs/`, then served by the same Caddy file server as the HTML pages.
 Enable DigitalOcean Droplet backups for machine-level recovery, then install the
 repo backup timer for application state recovery. The backend data backup uses
 SQLite's online backup command and requires `boxhaven.sqlite` and the SSH CA
-keypair. It validates the copied database before atomically publishing the
-archive and includes Caddy data when present.
+keypair. Startup creates the SSH CA before serving requests, so backups work
+before the first box is created. It validates the copied database before
+atomically publishing the archive and includes Caddy data when present.
+The startup regression in `npm test` also exercises the backup script and
+requires `sqlite3` and OpenSSH's `ssh-keygen` on the test machine.
 
 Deploy the public self-hosted stack from the repository root:
 
