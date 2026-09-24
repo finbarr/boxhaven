@@ -78,6 +78,9 @@ jobs:
       - name: Test email verification with an existing browser session
         run: npm --prefix backend run smoke:email-verification
 
+      - name: Test configured authentication options in the browser
+        run: npm --prefix backend run smoke:auth-providers
+
   backup:
     name: Backup Integrity
     runs-on: ubuntu-latest

@@ -290,6 +290,12 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     return "ok\n";
   });
 
+  app.get("/v1/auth/providers", async (_request, reply) => {
+    const { socialProviders } = await options.auth.$context;
+    reply.header("Cache-Control", "no-store");
+    return { social_providers: socialProviders.map((provider) => provider.id) };
+  });
+
   app.get("/v1/auth/whoami", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;

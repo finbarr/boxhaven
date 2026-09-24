@@ -4,6 +4,7 @@ export { BoxHavenAPIError };
 
 export type {
   AccountSummary,
+  AuthProvidersResponse,
   AuthUser,
   ImagesResponse,
   LoginResponse,

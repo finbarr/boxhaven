@@ -1954,6 +1954,20 @@ test("backend moves boxes between the owner's teams", async () => {
   assert.deepEqual(teamView.json().machines.map((machine: { name: string }) => machine.name), ["wanderer"]);
 });
 
+test("auth provider discovery exposes only configured provider IDs without requiring a session", async () => {
+  for (const github of [false, true]) {
+    const { app } = await createTestBackend("providers@example.com", "password123", { github });
+    try {
+      const response = await app.inject({ method: "GET", url: "/v1/auth/providers" });
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.headers["cache-control"], "no-store");
+      assert.deepEqual(response.json(), { social_providers: github ? ["github"] : [] });
+    } finally {
+      await app.close();
+    }
+  }
+});
+
 test("GitHub provider-verified email creates a usable account without redundant verification", async () => {
   const { app } = await createTestBackend("gh@example.com", "password123", { github: true });
   const verificationEmailsBefore = backendEmails.get(app)?.messages.length;

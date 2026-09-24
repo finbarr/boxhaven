@@ -229,6 +229,7 @@ Environment:
 - `BOXHAVEN_MAX_TEAMS_PER_USER`: optional positive cap on teams a user owns. Pending creates reserve a slot so concurrent requests cannot exceed it.
 - `BOXHAVEN_MAX_MACHINES_PER_USER`: optional positive cap on existing and provisioning boxes owned by a user across all teams. Durable provisioning records count toward the cap and are removed after definitive create failures or successful destroys.
 - `RESEND_API_KEY`: required Resend API key for password-account verification, password resets, and team invitations.
+- `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: optional GitHub OAuth credentials. The console shows GitHub sign-in only when both are configured; email sign-in remains available.
 - `BOXHAVEN_EMAIL_FROM`: From address for transactional email, default `BoxHaven <noreply@boxhaven.dev>`.
 - `BOXHAVEN_EMAIL_VERIFICATION_EXPIRES_SECONDS`: positive verification-link lifetime, default `3600` (one hour).
 - `BOXHAVEN_RESEND_API_URL`: Resend API base URL override for tests.
@@ -276,6 +277,7 @@ Authorization: Bearer <token>
 Routes:
 
 - `GET /healthz`
+- `GET /v1/auth/providers` (public; returns configured social provider IDs as `social_providers`, never credentials)
 - `POST /v1/auth/sign-up/email`
 - `POST /v1/auth/sign-in/email`
 - `POST /v1/auth/sign-out`

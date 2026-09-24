@@ -61,6 +61,11 @@ const headers = { authorization: `Bearer ${token}` };
 const out = resolve(process.env.BOXHAVEN_SMOKE_OUT || `backend/.artifacts/self-hosted-smoke/${Date.now()}`);
 mkdirSync(out, { recursive: true });
 const facts = { appURL, apiURL, checks: [] };
+const providersResponse = await fetch(`${apiURL}/v1/auth/providers`);
+assert.equal(providersResponse.status, 200);
+const { social_providers } = await providersResponse.json();
+assert.ok(Array.isArray(social_providers));
+facts.checks.push("public auth provider discovery");
 for (const path of ["/healthz", "/v1/version", "/v1/auth/whoami", "/v1/machines", "/v1/sizes", "/v1/images"]) {
   const response = await fetch(`${apiURL}${path}`, { headers });
   assert.equal(response.status, 200, path);
@@ -86,6 +91,8 @@ try {
     const page = await context.newPage();
     await page.goto(appURL, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Create a BoxHaven account" }).waitFor();
+    assert.equal(await page.locator(".github-button").count(), social_providers.includes("github") ? 1 : 0);
+    assert.equal(await page.locator(".divider").count(), social_providers.includes("github") ? 1 : 0);
     const favicon = await page.locator('link[rel="icon"]').getAttribute("href");
     const icon = await context.request.get(new URL(favicon, appURL).href);
     assert.equal(icon.status(), 200);

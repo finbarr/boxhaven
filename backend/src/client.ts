@@ -1,3 +1,7 @@
+export type AuthProvidersResponse = {
+  social_providers: string[];
+};
+
 export type AuthUser = {
   id: string;
   email: string;

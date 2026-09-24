@@ -1,8 +1,8 @@
-import { useMutation, type UseMutationResult } from "@tanstack/react-query";
+import { useMutation, useQuery, type UseMutationResult } from "@tanstack/react-query";
 import { Copy, KeyRound, MailCheck, Play, RotateCw, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { clearEmailVerificationResult } from "../../src/browser-session";
-import { apiFetch, BoxHavenAPIError, formatUserCode, LoginResponse } from "./api";
+import { apiFetch, AuthProvidersResponse, BoxHavenAPIError, formatUserCode, LoginResponse } from "./api";
 import { GitHubMark, isHostedService, privacyURL, termsURL } from "./shell";
 
 export const installCommand = "curl -fsSL https://raw.githubusercontent.com/finbarr/boxhaven/master/install.sh | sh";
@@ -31,11 +31,21 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
   const [forgot, setForgot] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const requiresTerms = isHostedService && mode === "signup";
+  const providers = useQuery({
+    queryKey: ["auth-providers"],
+    queryFn: () => apiFetch<AuthProvidersResponse>("/v1/auth/providers"),
+    retry: false,
+  });
+  const githubEnabled = providers.data?.social_providers.includes("github") === true;
   const github = useMutation({
-    mutationFn: () => apiFetch<{ url?: string }>("/v1/auth/sign-in/social", "", {
-      method: "POST",
-      body: { provider: "github", callbackURL: `${window.location.origin}/auth/github` },
-    }),
+    mutationFn: async () => {
+      const data = await apiFetch<{ url?: string }>("/v1/auth/sign-in/social", "", {
+        method: "POST",
+        body: { provider: "github", callbackURL: `${window.location.origin}/auth/github` },
+      });
+      if (!data.url) throw new Error("GitHub sign-in did not return a redirect.");
+      return data;
+    },
     onSuccess: (data) => {
       if (data.url) window.location.href = data.url;
     },
@@ -135,12 +145,14 @@ export function AuthFormPanel({ onToken, deviceUserCode, notice, initialMode }: 
               </span>
             </label>
           ) : null}
-          <button className="github-button" type="button" disabled={github.isPending || (requiresTerms && !acceptedTerms)} onClick={() => github.mutate()}>
-            <GitHubMark size={16} />
-            {github.isPending ? "Redirecting" : "Continue with GitHub"}
-          </button>
-          {github.error ? <p className="error">{(github.error as Error).message}</p> : null}
-          <div className="divider"><span>or with email</span></div>
+          {githubEnabled ? <>
+            <button className="github-button" type="button" disabled={github.isPending || (requiresTerms && !acceptedTerms)} onClick={() => github.mutate()}>
+              <GitHubMark size={16} />
+              {github.isPending ? "Redirecting" : "Continue with GitHub"}
+            </button>
+            {github.error ? <p className="error">{(github.error as Error).message}</p> : null}
+            <div className="divider"><span>or with email</span></div>
+          </> : null}
           <label>
             Email
             <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" required />
