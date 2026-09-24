@@ -79,6 +79,12 @@ try {
     assert.doesNotMatch(deploymentText, /boxhaven-hosted|app\.boxhaven\.dev|authenticated billing|paid-service/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: join(out, `deployment-${size}.png`) });
+    await page.goto(`${target}/providers#digitalocean`, { waitUntil: "networkidle" });
+    const recovery = page.locator(".vp-doc p").filter({ hasText: "If DigitalOcean rejects" });
+    await recovery.scrollIntoViewIfNeeded();
+    assert.match(await recovery.innerText(), /definitive create rejection[\s\S]*Timeouts and server errors retain/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.screenshot({ path: join(out, `provider-recovery-${size}.png`) });
     await page.goto(target, { waitUntil: "networkidle" });
     await page.locator('.vp-doc a[href="/agent-skill"]').waitFor();
     await page.screenshot({ path: join(out, `home-${size}.png`) });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { agentCloudInitUserData } from "./cloudinit.js";
 import { digitalOceanImageForCreate, digitalOceanImageIsBoxHavenRemote, digitalOceanPlanForDefaultSize, digitalOceanProviderFromEnv } from "./digitalocean.js";
-import { defaultSSHUser } from "./types.js";
+import { MachineCreateError, defaultSSHUser } from "./types.js";
 
 test("DigitalOcean provider prefers generic BoxHaven image override", () => {
   const provider = digitalOceanProviderFromEnv({
@@ -108,6 +108,67 @@ test("DigitalOcean creates machines with a throwaway no-login SSH key", async ()
     assert.equal(requests.some((request) => request.method === "DELETE" && request.url.endsWith("/v2/account/keys/321")), true);
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("DigitalOcean retries only a rejected newly created SSH key and cleans it up after success", async () => {
+  const calls: string[] = [];
+  let attempts = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const method = init?.method || "GET";
+    calls.push(`${method} ${url.pathname}`);
+    if (url.pathname === "/v2/account/keys" && method === "POST") return jsonResponse({ ssh_key: { id: 321 } });
+    if (url.pathname === "/v2/account/keys/321" && method === "DELETE") return new Response(null, { status: 204 });
+    if (url.pathname === "/v2/droplets" && method === "GET") return jsonResponse({ droplets: [] });
+    if (url.pathname === "/v2/droplets" && method === "POST") {
+      assert.deepEqual(JSON.parse(String(init?.body)).ssh_keys, [321]);
+      attempts++;
+      if (attempts === 1) return new Response(JSON.stringify({ id: "unprocessable_entity", message: "321 are invalid key identifiers for Droplet creation." }), { status: 422 });
+      return jsonResponse({ droplet: { id: 123, name: "boxhaven-foo", networks: { v4: [{ type: "public", ip_address: "203.0.113.10" }] } } });
+    }
+    throw new Error(`unexpected request ${method} ${url.pathname}`);
+  }) as typeof fetch;
+  try {
+    const provider = digitalOceanProviderFromEnv({ DIGITALOCEAN_ACCESS_TOKEN: "fixture" });
+    const result = await provider.createMachine({ name: "foo" });
+    assert.equal(result.machine.provider_id, "123");
+    assert.equal(attempts, 2);
+    assert.equal(calls.filter((call) => call === "POST /v2/account/keys").length, 1);
+    assert.equal(calls.at(-1), "DELETE /v2/account/keys/321", "key must survive every create attempt");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("DigitalOcean classifies explicit create rejections without retrying ambiguous failures", async () => {
+  for (const scenario of ["invalid-key", "quota", "forbidden", "server-error", "timeout"]) {
+    const originalFetch = globalThis.fetch;
+    let attempts = 0;
+    let removedKey = false;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      const method = init?.method || "GET";
+      if (url.pathname === "/v2/account/keys" && method === "POST") return jsonResponse({ ssh_key: { id: 321 } });
+      if (url.pathname === "/v2/account/keys/321" && method === "DELETE") { removedKey = true; return new Response(null, { status: 204 }); }
+      if (url.pathname === "/v2/droplets" && method === "GET") return jsonResponse({ droplets: [] });
+      if (url.pathname === "/v2/droplets" && method === "POST") {
+        attempts++;
+        if (scenario === "timeout") throw new TypeError("fetch failed");
+        const status = scenario === "forbidden" ? 403 : scenario === "server-error" ? 500 : 422;
+        return new Response(JSON.stringify({ id: "unprocessable_entity", message: scenario === "quota" ? "Droplet limit reached" : "321 are invalid key identifiers for Droplet creation." }), { status });
+      }
+      throw new Error(`unexpected request ${method} ${url.pathname}`);
+    }) as typeof fetch;
+    try {
+      const provider = digitalOceanProviderFromEnv({ DIGITALOCEAN_ACCESS_TOKEN: "fixture" });
+      await assert.rejects(() => provider.createMachine({ name: "foo" }), (error: unknown) => {
+        if (scenario === "server-error" || scenario === "timeout") assert.ok(!(error instanceof MachineCreateError), "ambiguous failures must keep recovery state");
+        else { assert.ok(error instanceof MachineCreateError); assert.equal(error.outcome, "not_created"); }
+        return true;
+      });
+      assert.equal(attempts, scenario === "invalid-key" ? 4 : 1, scenario);
+      assert.equal(removedKey, true);
+    } finally { globalThis.fetch = originalFetch; }
   }
 });
 

@@ -37,6 +37,12 @@ Built-in sizes map to DigitalOcean standard plans: `small` is 2 vCPU / 4 GB,
 lists every currently available Droplet plan, including GPU plans. Numeric
 DigitalOcean snapshot ids are sent as image IDs when creating Droplets.
 
+If DigitalOcean rejects a newly registered temporary SSH key, BoxHaven briefly
+retries that rejected request. A definitive create rejection removes the failed
+provisioning record so you can try again. Timeouts and server errors retain a
+recovery record because a Droplet might exist; destroy that record before
+recreating the box.
+
 ## Hetzner Cloud
 
 | Variable | Description |

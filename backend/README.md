@@ -243,6 +243,11 @@ provider password emails, then deletes the account key. SSH access still goes
 through short-lived backend-signed certificates and VM trust of the matching
 user CA.
 
+DigitalOcean create requests retry a rejection of the newly registered key up
+to three times before failing. Explicit validation, authentication, and rate
+limit rejections remove the provisioning placeholder. Network failures and
+server errors retain it for recovery because the create outcome is uncertain.
+
 Use `npm run deploy:runtime` to build, activate, and verify a DigitalOcean
 golden snapshot after changing the VM runtime or image-builder code. The normal
 runtime release flow is: commit the runtime change, run the runtime deploy from

@@ -116,20 +116,38 @@ export class DigitalOceanProvider implements MachineProvider {
       } catch (error) {
         throw definitelyNotCreated(error);
       }
-      const droplet = await this.request<{ droplet: Droplet }>("/v2/droplets", {
-        method: "POST",
-        body: {
-          name: machineResourceName(providerName),
-          region: request.region?.trim() || this.config.region,
-          size: request.provider_size || this.config.size || digitalOceanDefaultSize,
-          image: digitalOceanImageForCreate(image),
-          ssh_keys: [throwawaySSHKeyID],
-          tags: this.machineTags(providerName),
-          monitoring: true,
-          ...(agentUserData ? { user_data: agentUserData } : {}),
-          ...(this.config.vpcUUID ? { vpc_uuid: this.config.vpcUUID } : {}),
-        },
-      });
+      const body = {
+        name: machineResourceName(providerName),
+        region: request.region?.trim() || this.config.region,
+        size: request.provider_size || this.config.size || digitalOceanDefaultSize,
+        image: digitalOceanImageForCreate(image),
+        ssh_keys: [throwawaySSHKeyID],
+        tags: this.machineTags(providerName),
+        monitoring: true,
+        ...(agentUserData ? { user_data: agentUserData } : {}),
+        ...(this.config.vpcUUID ? { vpc_uuid: this.config.vpcUUID } : {}),
+      };
+      let droplet: { droplet: Droplet };
+      const keyRetryDelays = [250, 750, 1500];
+      for (let attempt = 0; ; attempt++) {
+        try {
+          droplet = await this.request<{ droplet: Droplet }>("/v2/droplets", { method: "POST", body });
+          break;
+        } catch (error) {
+          // The key was just registered. Retry only an explicit rejection of
+          // that ID, never a timeout or 5xx with an uncertain create outcome.
+          if (error instanceof DigitalOceanAPIError && error.status === 422
+            && error.detail.includes(`${throwawaySSHKeyID} are invalid key identifiers for Droplet creation`)
+            && attempt < keyRetryDelays.length) {
+            await new Promise((resolve) => setTimeout(resolve, keyRetryDelays[attempt]));
+            continue;
+          }
+          if (error instanceof DigitalOceanAPIError && [400, 401, 403, 404, 422, 429].includes(error.status)) {
+            throw definitelyNotCreated(error);
+          }
+          throw error;
+        }
+      }
       const ready = publicIPv4(droplet.droplet) ? droplet.droplet : await this.waitForAddress(droplet.droplet.id);
       const machine = this.machineFromDroplet(request.name, providerName, request.ssh_user, ready);
       if (request.image_bootstrapped) machine.bootstrap_complete = true;
@@ -343,10 +361,16 @@ export class DigitalOceanProvider implements MachineProvider {
     if (response.status === 404 && init.notFoundOK) return undefined as T;
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`DigitalOcean ${init.method || "GET"} ${path} failed: ${detail || response.statusText}`);
+      throw new DigitalOceanAPIError(init.method || "GET", path, response.status, detail || response.statusText);
     }
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
+  }
+}
+
+class DigitalOceanAPIError extends Error {
+  constructor(method: string, path: string, readonly status: number, readonly detail: string) {
+    super(`DigitalOcean ${method} ${path} failed: ${detail}`);
   }
 }
 
