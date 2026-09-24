@@ -7,6 +7,7 @@ import {
   apiFetch,
   formatDate,
   ImagesResponse,
+  loginCommand,
   Machine,
   MachineImage,
   MachinePlan,
@@ -359,7 +360,7 @@ function GettingStarted({ onCreate }: { onCreate: () => void }) {
           <span className="step-num">2</span>
           <div>
             <strong>Sign in and enable direct SSH</strong>
-            <CommandBlock label="Login" value="bh login" />
+            <CommandBlock label="Login" value={loginCommand} />
             <CommandBlock label="SSH setup" value="bh ssh-config install" />
           </div>
         </li>

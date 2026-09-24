@@ -27,6 +27,7 @@ export type {
 const configuredAPIURL = (import.meta.env.VITE_BOXHAVEN_API_URL || "").replace(/\/+$/, "");
 export const apiBaseURL = configuredAPIURL || (window.location.hostname === "app.boxhaven.dev" ? "https://api.boxhaven.dev" : "");
 export const tokenKey = "boxhaven.backend.token";
+export const loginCommand = `bh login --backend-url '${(apiBaseURL || window.location.origin).replaceAll("'", "'\\''")}'`;
 
 export function apiFetch<T = unknown>(path: string, token = "", init: APIRequestInit = {}): Promise<T> {
   return apiRequest<T>(apiBaseURL, path, token, init);

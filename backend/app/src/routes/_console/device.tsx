@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Check, ShieldCheck, XCircle } from "lucide-react";
-import { apiFetch, AuthUser, formatUserCode } from "../../api";
+import { apiFetch, AuthUser, formatUserCode, loginCommand } from "../../api";
 import { useConsole } from "../../console-context";
 
 type DeviceStatusResponse = {
@@ -32,7 +32,7 @@ function DeviceRoute() {
           <div className="panel-heading">
             <span>CLI access request</span>
             <h1>Missing device code</h1>
-            <p>This link has no device code. Run <code>bh login</code> again and follow the link it prints.</p>
+            <p>This link has no device code. Run <code>{loginCommand}</code> again and follow the link it prints.</p>
           </div>
           <Link className="primary-button" to="/">Back to the console</Link>
         </div>

@@ -431,6 +431,10 @@ async function checkDevicePage(page, userCode) {
   assert.equal(facts.updateBannerPresent, false);
   assert.equal(facts.scrollY, 0);
   assert.ok(facts.allowButtonBottom !== null && facts.allowButtonBottom <= facts.viewportHeight, `Allow button below fold: ${facts.allowButtonBottom} > ${facts.viewportHeight}`);
+  await page.goto(`${appURL}/device`);
+  await page.getByRole("heading", { name: "Missing device code" }).waitFor();
+  await page.getByText(`bh login --backend-url '${apiURL}'`, { exact: true }).waitFor();
+  await page.screenshot({ path: join(outDir, "device-missing-code.png"), fullPage: true });
   return facts;
 }
 
@@ -453,7 +457,7 @@ async function checkGettingStarted(page) {
     updateLabel: document.querySelector(".update-banner")?.getAttribute("aria-label"),
     updateRel: document.querySelector(".update-banner a")?.getAttribute("rel"),
   }));
-  for (const command of ["bh login", "bh ssh-config install", "bh create work", "bh run work claude", "bh connect work"]) {
+  for (const command of [`bh login --backend-url '${apiURL}'`, "bh ssh-config install", "bh create work", "bh run work claude", "bh connect work"]) {
     assert.ok(desktop.commands.includes(command), `getting started missing ${command}`);
   }
   assert.ok(desktop.bodyScrollWidth <= desktop.viewport, `desktop boxes page overflows: ${desktop.bodyScrollWidth} > ${desktop.viewport}`);

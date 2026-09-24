@@ -103,6 +103,7 @@ try {
     }, { value: token, origin: new URL(appURL).origin });
     await page.reload({ waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Boxes", exact: true }).waitFor();
+    await page.getByText(`bh login --backend-url '${apiURL}'`, { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: join(out, `boxes-${size}.png`), fullPage: true });
     facts.checks.push(`authenticated console and favicon at ${size}`);
