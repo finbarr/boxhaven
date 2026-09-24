@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
-import { createServer } from "node:net";
+import { availableSmokeURLs } from "./smoke-ports.mjs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,8 +20,7 @@ const appDir = flag < 0 ? backendDir : resolve(process.argv[flag + 1]);
 const dir = mkdtempSync(join(tmpdir(), "boxhaven-auth-providers-"));
 const out = join(backendDir, ".artifacts", "auth-providers", new Date().toISOString().replace(/[:.]/g, "-"));
 mkdirSync(out, { recursive: true });
-const apiURL = `http://127.0.0.1:${await availablePort()}`;
-const appURL = `http://127.0.0.1:${await availablePort()}`;
+const [apiURL, appURL] = await availableSmokeURLs();
 const provider = { name: "fixture", async listMachines() { return []; }, async listPlans() { return []; } };
 let app, vite, browser;
 try {
@@ -106,15 +105,4 @@ try {
   await vite?.close();
   await app?.close();
   rmSync(dir, { recursive: true, force: true });
-}
-
-function availablePort() {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const port = server.address().port;
-      server.close((error) => error ? reject(error) : resolve(port));
-    });
-  });
 }
