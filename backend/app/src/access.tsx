@@ -258,7 +258,6 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         </button>
       )}
       {request.error ? <p className="error">{(request.error as Error).message}</p> : null}
-      <p className="hint">Reset emails only arrive if the operator has configured email delivery on this backend.</p>
       <button className="link-button" type="button" onClick={onBack}>Back to sign in</button>
     </form>
   );

@@ -81,6 +81,9 @@ jobs:
       - name: Test configured authentication options in the browser
         run: npm --prefix backend run smoke:auth-providers
 
+      - name: Test password recovery in the browser
+        run: npm --prefix backend run smoke:password-recovery
+
   backup:
     name: Backup Integrity
     runs-on: ubuntu-latest

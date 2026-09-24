@@ -32,6 +32,7 @@
     "app:build": "vite build",
     "smoke:console": "tsx scripts/console-smoke.mjs",
     "smoke:auth-providers": "tsx scripts/auth-providers-smoke.mjs",
+    "smoke:password-recovery": "tsx scripts/password-recovery-smoke.mjs",
     "smoke:email-verification": "tsx scripts/email-verification-smoke.mjs",
     "smoke:images": "tsx scripts/console-smoke.mjs --image-cli",
     "smoke:image-docs": "node scripts/docs-images-smoke.mjs",
