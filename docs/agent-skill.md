@@ -70,10 +70,10 @@ instructions and `metadata.minimum-bh-version` identifies the required CLI.
 The installer does not enforce that CLI requirement; the skill tells the agent
 to check `bh version`.
 
-To pin skill **1.0.0** to its Git tag:
+To pin skill **1.0.1** to its Git tag:
 
 ```bash
-npx skills add 'finbarr/boxhaven#boxhaven-skill-v1.0.0' \
+npx skills add 'finbarr/boxhaven#boxhaven-skill-v1.0.1' \
   --skill boxhaven -g -a codex claude-code
 ```
 

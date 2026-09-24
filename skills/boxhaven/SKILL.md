@@ -5,7 +5,7 @@ license: AGPL-3.0-only
 compatibility: Requires bh 0.2.0 or later, an authenticated BoxHaven account, and network access to the backend. The optional parallel launcher requires Python 3.
 metadata:
   author: finbarr
-  version: "1.0.0"
+  version: "1.0.1"
   minimum-bh-version: "0.2.0"
 ---
 
@@ -23,9 +23,13 @@ for ordinary machine operations; cloud-provider credentials are not needed.
   Compare the CLI version with `metadata.minimum-bh-version` above. Resolve
   an older CLI before using this workflow; current website docs may describe
   commands that an older binary does not support.
-- If authentication is missing, use `bh login` (or `bh login --no-open` for a
-  printed browser URL). Let the user finish browser authentication. Never
-  print or embed the saved token in prompts, manifests, or logs.
+- If authentication is missing, check `bh config` for the backend URL. Reuse
+  the configured backend with `bh login --no-open` for a printed browser URL.
+  If no backend is configured, ask the user which backend to use and pass
+  `--backend-url <url>`; noninteractive first login requires an explicit URL.
+  In a terminal, `bh login` prompts for the URL and offers hosted BoxHaven on
+  Enter. Let the user finish browser authentication. Never print or embed the
+  saved token in prompts, manifests, or logs.
 - Honor the configured backend, requested team/provider/size, agent, and model.
   `bh team list`, `bh size list`, and `bh config` help resolve configuration.
   Do not switch the user's active team merely to launch a task; use `--team`.
