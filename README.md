@@ -1,39 +1,58 @@
 # BoxHaven
 
-BoxHaven gives development teams a standard way to run AI coding agents and
-developer shells on named remote Linux boxes. Try the [hosted version](https://app.boxhaven.dev/)
-or self-host it with your own cloud credentials. Each box keeps running after a
-laptop disconnects, has a managed tmux session for long-running Codex, Claude,
-Gemini, or shell work, and can sync the current project to and from the remote
-machine.
+BoxHaven gives your coding agents separate Linux VMs to work in parallel.
+Try the [hosted version](https://app.boxhaven.dev/) or self-host it with your
+own cloud credentials. Each agent gets its own project copy, compute, and
+persistent session, so independent tasks can run at once without competing
+for your laptop's resources. Agents keep working after you disconnect, too.
 
-BoxHaven is built for the workflow many teams are assembling by hand today:
-remote dev boxes for individual developers, persistent agent sessions, direct
-SSH access, project sync, GitHub pushes from the box, and a self-hostable
-control plane.
+## Start With The Agent Skill
 
-The web console, API, and documentation are separate surfaces. The backend
-serves the console and API, while [docs](docs) builds as a static site. Set
-`BOXHAVEN_DOCS_URL` when building the console if its footer should link to a
-different documentation site. Backend distributions can add in-process
-modules through the published `@boxhaven/backend` contract.
+Install the [BoxHaven skill](skills/boxhaven/SKILL.md) for your local Codex or
+Claude agent using [Vercel's Skills CLI](https://skills.sh/)
+(Node.js 22.20 or later):
 
-The self-hosted console checks the public BoxHaven GitHub release through its
-backend and shows a compact release banner when the installation is behind.
-Release checks are cached and disappear silently when GitHub is unreachable.
+```bash
+npx skills add finbarr/boxhaven --skill boxhaven -g -a codex claude-code
+```
 
-The CLI is intentionally small, and the workflow is agent-first: copy your
-project to a box once, start Claude or Codex inside the box's tmux session —
-resuming your local conversation if you like — then disconnect and let it
-work:
+The skill uses `bh` 0.2.0 or later and your BoxHaven login. Complete the
+[one-time CLI setup](https://docs.boxhaven.dev/getting-started#install-the-cli)
+before your first task. Open a new agent session if the skill is not visible,
+then invoke `$boxhaven` in Codex or `/boxhaven` in Claude with a request:
+
+**Work in parallel**
+
+> Use BoxHaven to run a code review and a test coverage audit on two separate
+> VMs in parallel. Check both agents' progress and bring back their findings.
+
+**Keep working while you're away**
+
+> Use BoxHaven to continue this task on a remote VM so I can close my laptop.
+> Check that the agent is working and give me the command to reconnect.
+
+The skill teaches box creation, persistent sessions, parallel launches,
+progress and preview checks, `.boxhavenignore`, and retrieving results. Your
+local agent manages the boxes while you review the work. Each VM is billed
+while it exists; ask your agent to retrieve the results and destroy finished
+boxes when you're done.
+
+Update with `npx skills update boxhaven -g`. See the
+[skill guide](https://docs.boxhaven.dev/agent-skill) for project installation,
+version pins, and batch examples. Inside a remote box, a separate
+image-installed `boxhaven-web-preview` skill describes its web preview setup.
+
+## Use The CLI Directly
+
+From your project directory, after [installing `bh`](https://docs.boxhaven.dev/getting-started#install-the-cli):
 
 ```bash
 bh login
 bh ssh-config install # one-time setup for normal ssh/scp aliases
 bh create work        # provisions a box and syncs this project once
-bh run work claude    # claude starts working in the box's tmux session
-# close the laptop — the agent keeps going. Reattach any time:
-bh connect work
+bh run work claude    # starts Claude in a persistent session
+# Ctrl-b, then d disconnects; the agent keeps running.
+bh connect work       # reattach whenever you like
 ```
 
 On first login, enter your backend API URL, or press Enter to choose hosted
@@ -41,49 +60,14 @@ BoxHaven. Later logins reuse the saved URL. For scripts or a noninteractive
 terminal, pass `--backend-url` or set `BOXHAVEN_BACKEND_URL`.
 
 Mid-conversation with Claude locally? `bh run work claude --continue` resumes
-that exact session on the box.
+your forwarded conversation on the box.
 
 Sign up with email and password, then follow the one-hour verification link.
 The link verifies your email and signs you in automatically, replacing any
-other account open in that browser.
-The "Continue with GitHub" button appears only when the operator configures a GitHub OAuth app
-(`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`). GitHub's provider-verified email
-does not need a second verification step; `bh login` then works the same either
-way.
+other account open in that browser. GitHub sign-in is available when the
+operator configures a GitHub OAuth app; `bh login` works the same either way.
 
-Run agents in parallel, each on its own box. Redirecting input and output makes
-these launches detached even when you run this example in a terminal:
-
-```bash
-launch_logs=$(mktemp -d)
-(bh create work-2 && bh run work-2 codex 'Review the project and report improvements.') </dev/null >"$launch_logs/work-2.log" 2>&1 &
-codex_pid=$!
-(bh create work-3 && bh run work-3 claude 'Run the project checks and report failures.') </dev/null >"$launch_logs/work-3.log" 2>&1 &
-claude_pid=$!
-wait "$codex_pid" || cat "$launch_logs/work-2.log"
-wait "$claude_pid" || cat "$launch_logs/work-3.log"
-bh connect work-2
-```
-
-Teach your local Codex or Claude agent to operate BoxHaven with the public
-[BoxHaven skill](skills/boxhaven/SKILL.md). Install it using
-[Vercel's Skills CLI](https://github.com/vercel-labs/skills), the installer behind
-[skills.sh](https://skills.sh/) (Node.js 22.20 or later):
-
-```bash
-npx skills add finbarr/boxhaven --skill boxhaven -g -a codex claude-code
-```
-
-Invoke `$boxhaven` in Codex or `/boxhaven` in Claude. The skill teaches box
-creation, persistent sessions, parallel launches, progress and preview checks,
-`.boxhavenignore`, and retrieving results. It bundles a parallel launcher and
-sync reference, and links to current docs for details. It requires `bh` 0.2.0
-or later and your existing login.
-
-Update it with `npx skills update boxhaven -g`.
-[Installation, project scope, and version pins](https://docs.boxhaven.dev/agent-skill)
-are documented on the site. Inside a remote box, a separate image-installed
-`boxhaven-web-preview` skill describes its web preview setup.
+For manual parallel launches, see the [agent skill guide](https://docs.boxhaven.dev/agent-skill#launch-a-batch).
 
 `bh create` asks the backend for a machine, waits for it to be reachable, and
 syncs the current project into `/opt/boxhaven/project`. After that the box
@@ -156,6 +140,16 @@ BoxHaven is open source under the GNU Affero General Public License v3.0 only
 copyright notice and full license text.
 
 ## Self-Hosting
+
+The web console, API, and documentation are separate surfaces. The backend
+serves the console and API, while [docs](docs) builds as a static site. Set
+`BOXHAVEN_DOCS_URL` when building the console if its footer should link to a
+different documentation site. Backend distributions can add in-process
+modules through the published `@boxhaven/backend` contract.
+
+The self-hosted console checks the public BoxHaven GitHub release through its
+backend and shows a compact release banner when the installation is behind.
+Release checks are cached and disappear silently when GitHub is unreachable.
 
 Run the complete open-source backend with your own provider credentials and
 no built-in limits. No BoxHaven subscription or company account is required.

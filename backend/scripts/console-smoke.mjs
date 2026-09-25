@@ -450,6 +450,10 @@ async function checkGettingStarted(page) {
   await page.getByRole("link", { name: "BoxHaven home" }).locator("img").click();
   await page.waitForURL(`${appURL}/`);
   await page.locator(".getting-started").waitFor();
+  await page.getByRole("heading", { name: "Give your agents room to work" }).waitFor();
+  assert.equal(await page.locator(".agent-examples > div").count(), 2);
+  assert.equal(await page.locator(".manual-setup").getAttribute("open"), null);
+  await page.getByRole("button", { name: "Copy Skill", exact: true }).waitFor();
   await page.screenshot({ path: join(outDir, "boxes.png"), fullPage: true });
   const desktop = await page.evaluate(() => ({
     commands: [...document.querySelectorAll(".getting-started .command-block code")].map((node) => node.textContent?.trim()),
@@ -459,13 +463,17 @@ async function checkGettingStarted(page) {
     updateLabel: document.querySelector(".update-banner")?.getAttribute("aria-label"),
     updateRel: document.querySelector(".update-banner a")?.getAttribute("rel"),
   }));
-  for (const command of [`bh login --backend-url '${apiURL}'`, "bh ssh-config install", "bh create work", "bh run work claude", "bh connect work"]) {
+  for (const command of ["npx skills add finbarr/boxhaven --skill boxhaven -g -a codex claude-code", `bh login --backend-url '${apiURL}'`, "bh ssh-config install", "bh create work", "bh run work claude", "bh connect work"]) {
     assert.ok(desktop.commands.includes(command), `getting started missing ${command}`);
   }
   assert.ok(desktop.bodyScrollWidth <= desktop.viewport, `desktop boxes page overflows: ${desktop.bodyScrollWidth} > ${desktop.viewport}`);
   assert.equal(desktop.updateRole, "status");
   assert.equal(desktop.updateLabel, "BoxHaven update available");
   assert.equal(desktop.updateRel, "noopener noreferrer");
+
+  await page.locator(".manual-setup summary").click();
+  await page.getByRole("button", { name: "Copy Login", exact: true }).waitFor();
+  await page.screenshot({ path: join(outDir, "boxes-manual.png"), fullPage: true });
 
   await page.setViewportSize({ width: 390, height: 900 });
   await page.getByRole("link", { name: "Images", exact: true }).click();
@@ -475,6 +483,8 @@ async function checkGettingStarted(page) {
   await page.waitForURL(`${appURL}/`);
   await page.locator(".getting-started").waitFor();
   await page.screenshot({ path: join(outDir, "mobile-boxes.png"), fullPage: true });
+  await page.locator(".manual-setup summary").click();
+  await page.screenshot({ path: join(outDir, "mobile-boxes-manual.png"), fullPage: true });
   const mobile = await page.evaluate(() => ({
     bodyScrollWidth: document.documentElement.scrollWidth,
     viewport: window.innerWidth,

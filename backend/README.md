@@ -403,7 +403,10 @@ agent sessions through `BOXHAVEN_PREVIEW_URL`, `BOXHAVEN_PREVIEW_HOSTNAME`,
 `boxhaven-web-preview` that describes how web apps should bind and report their
 public URL.
 
-For the CLI workflow on the user's computer, the public
+The console recommends installing the agent skill before operating boxes
+manually, with examples for parallel work and continuing after disconnecting.
+It also includes one-time CLI setup and the manual create/run/reattach workflow.
+For the workflow on the user's computer, the public
 [`skills/boxhaven`](../skills/boxhaven/SKILL.md) package supports Codex and Claude
 with box creation, parallel launch, progress inspection, preview verification,
 `.boxhavenignore` guidance, and retrieval. Install it globally with Vercel's

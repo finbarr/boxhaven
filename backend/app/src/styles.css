@@ -1706,6 +1706,30 @@ a.secondary-button {
   padding: 18px 16px;
 }
 
+.getting-started .command-block code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.agent-examples {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+}
+
+.agent-examples > div {
+  padding: 16px;
+  border: 1px solid rgba(47, 111, 92, 0.18);
+  border-radius: 8px;
+  background: #f8fbf5;
+}
+
+.agent-examples h3 { margin: 0 0 8px; font-size: 15px; }
+.agent-examples p { margin: 0; line-height: 1.6; color: #4f625a; }
+.manual-setup { border-top: 1px solid rgba(47, 111, 92, 0.18); padding-top: 14px; }
+.manual-setup summary { cursor: pointer; color: #2f6f5c; font-weight: 700; }
+.manual-setup[open] summary { margin-bottom: 14px; }
+
 .steps {
   display: grid;
   gap: 14px;

@@ -38,11 +38,17 @@ npx skills add finbarr/boxhaven --list
 
 Open a new agent session after installing if the skill is not yet visible.
 Invoke **`$boxhaven`** in Codex or **`/boxhaven`** in Claude, followed by your
-request. For example:
+request.
 
-> Use BoxHaven to create three boxes for these three prototypes. Give each
-> agent its own task directory, verify that it starts working, and return the
-> preview URLs and reattach commands. Leave the boxes running for the demo.
+**Work in parallel**
+
+> Use BoxHaven to run a code review and a test coverage audit on two separate
+> VMs in parallel. Check both agents' progress and bring back their findings.
+
+**Keep working while you're away**
+
+> Use BoxHaven to continue this task on a remote VM so I can close my laptop.
+> Check that the agent is working and give me the command to reconnect.
 
 The skill can also be selected automatically for relevant BoxHaven tasks.
 It requires `bh` 0.2.0 or later and your existing BoxHaven login. It does not

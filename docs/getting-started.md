@@ -1,7 +1,41 @@
 # Getting Started
 
-This guide installs the `bh` CLI, logs in to a backend, creates your first
-box, and resumes an agent session on it.
+Install the BoxHaven skill, then ask your local agent to run independent tasks
+on separate remote VMs. Each agent gets its own project copy and compute;
+sessions keep running after you disconnect.
+
+## Install The Agent Skill
+
+This is the recommended way to use BoxHaven. With Node.js 22.20 or later:
+
+```bash
+npx skills add finbarr/boxhaven \
+  --skill boxhaven -g \
+  -a codex claude-code
+```
+
+The skill uses `bh` 0.2.0 or later and your BoxHaven login. Complete the
+[CLI installation](#install-the-cli) and [login](#log-in) below before your
+first task. Open a new agent session if the skill is not visible, then invoke
+`$boxhaven` in Codex or `/boxhaven` in Claude and try either request:
+
+**Work in parallel**
+
+> Use BoxHaven to run a code review and a test coverage audit on two separate
+> VMs in parallel. Check both agents' progress and bring back their findings.
+
+**Keep working while you're away**
+
+> Use BoxHaven to continue this task on a remote VM so I can close my laptop.
+> Check that the agent is working and give me the command to reconnect.
+
+Your agent can create boxes, launch tasks, inspect progress, open previews,
+and retrieve the results. Ask it to destroy finished boxes once you've
+retrieved the work; VMs are billed while they exist. See the
+[agent skill guide](/agent-skill) for updates, version pins, and batch examples.
+
+Prefer to operate boxes directly? The steps below cover the same workflow
+with the CLI: create, run an agent, disconnect, and reconnect.
 
 ## Install The CLI
 
@@ -213,27 +247,6 @@ Disconnect whenever you like — the agent keeps running in the box's tmux
 session. Press **Ctrl-b**, then **d** to detach. `bh connect work` reattaches,
 and `bh list` shows which boxes are online.
 
-## Install The Agent Skill
-
-Let Codex or Claude on your laptop operate the CLI for you. With Node.js 22.20
-or later, use [Vercel's Skills CLI](https://github.com/vercel-labs/skills), the
-installer behind [skills.sh](https://skills.sh/):
-
-```bash
-npx skills add finbarr/boxhaven \
-  --skill boxhaven -g \
-  -a codex claude-code
-```
-
-Invoke `$boxhaven` in Codex or `/boxhaven` in Claude. The skill teaches box
-creation, persistent agents, `.boxhavenignore`, sync, previews, and retrieving
-results. It includes a launcher for independent tasks in parallel and links to
-current docs when your agent needs more detail.
-
-Update it with `npx skills update boxhaven -g`. See the
-[agent skill guide](/agent-skill) for project installation, version pins, and
-batch examples. The skill requires `bh` 0.2.0 or later and the login you set up
-above.
 
 ## Open A Web Preview
 

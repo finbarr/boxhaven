@@ -4,18 +4,18 @@ import { dirname, join } from 'node:path'
 
 const SITE_URL = 'https://docs.boxhaven.dev'
 const SITE_NAME = 'BoxHaven Docs'
-const SITE_DESCRIPTION = 'Documentation for installing BoxHaven, running remote boxes, operating teams and images, and self-hosting the backend.'
+const SITE_DESCRIPTION = 'Install the BoxHaven skill and run coding agents in parallel on separate remote VMs.'
 const SOCIAL_IMAGE_URL = `${SITE_URL}/logo.png`
 const SOCIAL_IMAGE_ALT = 'The BoxHaven logo: a cozy wooden house sheltering three friendly server boxes.'
 
 const pageSeo: Record<string, { title: string, description: string, noindex?: boolean }> = {
   '/': {
     title: 'Documentation',
-    description: 'Install BoxHaven, run remote boxes, manage teams and images, and self-host the backend.',
+    description: 'Install the BoxHaven skill and ask your coding agent to run work in parallel on separate remote VMs.',
   },
   '/getting-started': {
-    title: 'Installation and First Box',
-    description: 'Install the bh CLI, log in to your backend, create your first remote box, and resume your local agent session on it.',
+    title: 'Skill Setup and First Tasks',
+    description: 'Install the BoxHaven skill, complete CLI setup, and ask your agent to work in parallel or keep a task running after you disconnect.',
   },
   '/commands': {
     title: 'CLI Reference',

@@ -345,40 +345,44 @@ function GettingStarted({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="getting-started">
       <div className="panel-heading small">
-        <span>getting started</span>
-        <h2>Your first box</h2>
+        <span>recommended · agent skill</span>
+        <h2>Give your agents room to work</h2>
+        <p>Ask your agent to split independent tasks across BoxHaven VMs. Each gets its own project copy and compute, and keeps working after you disconnect.</p>
       </div>
       <ol className="steps">
         <li>
           <span className="step-num">1</span>
           <div>
-            <strong>Install the CLI</strong>
-            <CommandBlock label="Install" value={installCommand} />
+            <strong>Install the BoxHaven skill</strong>
+            <CommandBlock label="Skill" value="npx skills add finbarr/boxhaven --skill boxhaven -g -a codex claude-code" />
+            <p className="hint">Run locally with Node.js 22.20+. Open a new agent session if the skill is not visible.</p>
           </div>
         </li>
         <li>
           <span className="step-num">2</span>
           <div>
-            <strong>Sign in and enable direct SSH</strong>
-            <CommandBlock label="Login" value={loginCommand} />
-            <CommandBlock label="SSH setup" value="bh ssh-config install" />
-          </div>
-        </li>
-        <li>
-          <span className="step-num">3</span>
-          <div>
-            <strong>Create a box and hand it to your agent</strong>
-            <CommandBlock label="Create" value="bh create work" />
-            <CommandBlock label="Run" value="bh run work claude" />
-            <CommandBlock label="Reattach" value="bh connect work" />
+            <strong>Ask your agent to put it to work</strong>
+            <p className="hint">Invoke <code>$boxhaven</code> in Codex or <code>/boxhaven</code> in Claude, then try either request:</p>
+            <div className="agent-examples">
+              <div><h3>Work in parallel</h3><p>Use BoxHaven to run a code review and a test coverage audit on two separate VMs in parallel. Check both agents’ progress and bring back their findings.</p></div>
+              <div><h3>Keep working while you’re away</h3><p>Use BoxHaven to continue this task on a remote VM so I can close my laptop. Check that the agent is working and give me the command to reconnect.</p></div>
+            </div>
           </div>
         </li>
       </ol>
-      <p className="hint">Press <kbd>Ctrl-b</kbd> then <kbd>d</kbd> to disconnect. <code>bh connect work</code> reattaches to the running session.</p>
-      <p className="hint">
-        Prefer clicking?{" "}
-        <button className="link-button" type="button" onClick={onCreate}>Create a box from the console</button>.
-      </p>
+      <p className="hint">First time? The skill uses <code>bh</code> 0.2.0+ and your BoxHaven login. Complete the one-time setup below before your first task.</p>
+      <details className="manual-setup">
+        <summary>One-time CLI setup &amp; manual workflow</summary>
+        <CommandBlock label="Install" value={installCommand} />
+        <CommandBlock label="Login" value={loginCommand} />
+        <CommandBlock label="SSH setup" value="bh ssh-config install" />
+        <p className="hint">To operate a box yourself, run these from your project directory:</p>
+        <CommandBlock label="Create" value="bh create work" />
+        <CommandBlock label="Run" value="bh run work claude" />
+        <p className="hint">Press <kbd>Ctrl-b</kbd> then <kbd>d</kbd> to disconnect. The agent keeps running.</p>
+        <CommandBlock label="Reattach" value="bh connect work" />
+      </details>
+      <p className="hint">Already set up? Your agent can create the boxes for you. You can also <button className="link-button" type="button" onClick={onCreate}>create a box from the console</button>.</p>
     </div>
   );
 }

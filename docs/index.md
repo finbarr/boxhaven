@@ -1,20 +1,42 @@
 ---
 title: Documentation
-description: Install BoxHaven, run remote boxes, manage teams and images, and self-host the backend.
+description: Install the BoxHaven skill and ask your coding agent to run work in parallel on separate remote VMs.
 ---
 
 # BoxHaven Documentation
 
-BoxHaven runs remote development boxes for AI coding agents. Use these docs to
-install the CLI, connect to your backend, create boxes, run
-agents inside persistent sessions, and operate the backend.
+Run coding agents in parallel on separate Linux VMs, each with its own project
+copy and compute. Install the BoxHaven skill so your local agent can create
+boxes, check progress, and bring back the results. Sessions keep running after
+you disconnect.
 
-## Start here
+## Start with the agent skill
 
-- [Getting started](/getting-started): install `bh`, log in, create a box, run an agent, disconnect, reattach, and use normal SSH clients.
-- [Agent skill](/agent-skill): install with Vercel's Skills CLI to teach Codex or Claude box creation, persistent agents, parallel tasks, project sync, and previews.
-- [CLI reference](/commands): every command and flag for boxes, direct SSH, sync, teams, images, auth, and config.
-- [Self-hosting](/self-hosting): run the Fastify/Better Auth control plane with your own provider credentials.
+With Node.js 22.20 or later:
+
+```bash
+npx skills add finbarr/boxhaven \
+  --skill boxhaven -g \
+  -a codex claude-code
+```
+
+Complete the [one-time CLI installation and login](/getting-started#install-the-cli),
+then invoke `$boxhaven` in Codex or `/boxhaven` in Claude.
+
+**Work in parallel**
+
+> Use BoxHaven to run a code review and a test coverage audit on two separate
+> VMs in parallel. Check both agents' progress and bring back their findings.
+
+**Keep working while you're away**
+
+> Use BoxHaven to continue this task on a remote VM so I can close my laptop.
+> Check that the agent is working and give me the command to reconnect.
+
+- [Agent skill](/agent-skill): installation, updates, version pins, and parallel tasks.
+- [Getting started](/getting-started): skill setup and the manual CLI workflow from create to reconnect.
+- [CLI reference](/commands): every command and flag for boxes, SSH, sync, teams, images, auth, and config.
+- [Self-hosting](/self-hosting): run the control plane with your own provider credentials.
 
 ## Operate boxes
 

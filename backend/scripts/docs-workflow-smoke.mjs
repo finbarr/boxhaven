@@ -44,6 +44,8 @@ try {
     await page.screenshot({ path: join(out, `preview-${size}.png`) });
     await page.goto(`${target}/getting-started#install-the-agent-skill`, { waitUntil: "networkidle" });
     await page.locator("#install-the-agent-skill").scrollIntoViewIfNeeded();
+    assert.equal(await page.locator(".vp-doc blockquote").count(), 2);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.match(await page.locator(".vp-doc").innerText(), /npx skills add finbarr\/boxhaven/);
     await page.screenshot({ path: join(out, `getting-started-skill-${size}.png`) });
     await page.goto(`${target}/agent-skill`, { waitUntil: "networkidle" });
@@ -87,7 +89,9 @@ try {
     await page.screenshot({ path: join(out, `provider-recovery-${size}.png`) });
     await page.goto(target, { waitUntil: "networkidle" });
     await page.locator('.vp-doc a[href="/agent-skill"]').waitFor();
-    await page.screenshot({ path: join(out, `home-${size}.png`) });
+    assert.equal(await page.locator(".vp-doc blockquote").count(), 2);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.screenshot({ path: join(out, `home-${size}.png`), fullPage: true });
     await page.close();
   }
   console.log(`Workflow docs verified; screenshots: ${out}`);
