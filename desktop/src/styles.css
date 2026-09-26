@@ -267,14 +267,15 @@ main {
   position: relative;
 }
 #session-header {
-  height: 77px;
+  min-height: 77px;
   flex-shrink: 0;
   border-bottom: 1px solid #292c30;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 25px;
+  padding: 16px 25px;
+  flex-wrap: wrap;
 }
 .session-heading {
   display: flex;
@@ -303,13 +304,17 @@ h2 {
   font-size: 11px;
   color: #858c96;
   margin: 5px 0 0;
+  overflow-wrap: anywhere;
 }
 .session-actions {
   display: flex;
   gap: 10px;
   align-items: center;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
+.danger { color: #e8a097; }
+#action-error { margin: 0; padding: 12px 25px; color: #efb7ac; background: #452e2b; font-size: 12px; overflow-wrap: anywhere; }
 #connection-state {
   color: #a3aaa5;
   font-size: 11px;
@@ -468,7 +473,7 @@ dialog .hint {
     width: 225px;
   }
   #session-header {
-    padding: 0 16px;
+    padding: 12px 16px;
   }
   .session-actions {
     gap: 7px;

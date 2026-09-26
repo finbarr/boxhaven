@@ -22,8 +22,9 @@
     <main>
       <header id="session-header" hidden>
         <div class="session-heading"><span class="box-glyph" aria-hidden="true">⬡</span><div><h2 id="box-name"></h2><p id="box-meta"></p></div></div>
-        <div class="session-actions"><span id="connection-state" role="status"></span><button id="reconnect" hidden>Reconnect</button><button id="detach" class="subtle" hidden>Detach</button></div>
+        <div class="session-actions"><span id="connection-state" role="status"></span><button id="open-preview">Open preview ↗</button><button id="reconnect" hidden>Reconnect</button><button id="detach" class="subtle" hidden>Detach</button><button id="destroy-box" class="subtle danger">Destroy box…</button></div>
       </header>
+      <p id="action-error" role="alert" hidden></p>
       <section id="welcome" class="welcome">
         <img src="icon.png" alt="Three happy boxes at home">
         <p class="eyebrow">A HOME FOR YOUR WORK</p>

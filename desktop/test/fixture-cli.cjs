@@ -15,6 +15,15 @@ if (args[0] === 'list') {
     writeFileSync(file, JSON.stringify(latest));
     console.log('Ready.');
   }, state.createDelay || 100);
+} else if (args[0] === 'destroy') {
+  appendFileSync(`${file}.destructions`, `${JSON.stringify(args)}\n`);
+  setTimeout(() => {
+    if (state.destroyError) { console.error(state.destroyError); process.exit(1); }
+    const latest = JSON.parse(readFileSync(file, 'utf8'));
+    latest.machines = latest.machines.filter(box => box.name !== args[1]);
+    writeFileSync(file, JSON.stringify(latest));
+    console.log('Destroyed.');
+  }, state.destroyDelay || 100);
 } else if (args[0] === 'connect') {
   appendFileSync(`${file}.connections`, `${args[1]}\n`);
   process.stdout.write(`\x1b[2J\x1b[H\x1b[32mboxhaven@${args[1]}\x1b[0m:~/project$ \r\nDesktop PTY fixture — not a remote box.\r\n`);

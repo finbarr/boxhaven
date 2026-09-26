@@ -37,7 +37,19 @@ errors remain accessible in the sidebar. Closing/reopening the window preserves
 an in-progress creation; quitting waits for the creation request to finish.
 Existing names are rejected rather than reused. If creation fails, refresh the
 list before trying another name: the provider may already have allocated a box.
-Project sync and deletion remain available through the CLI.
+Project sync remains available through the CLI.
+
+Use **Open preview** in the selected box's header to open its backend-assigned
+web URL in your default browser. The button is disabled when no preview URL is
+configured. The box still needs a web server listening on its preview port.
+
+Use **Destroy box…** to permanently delete the selected remote VM, its files,
+and running sessions. A native confirmation dialog defaults to Cancel. Save work
+you need before confirming. The app refreshes the list and closes that terminal
+after deletion; other boxes keep running. Closing the window does not cancel an
+accepted deletion, and quitting waits for it to finish. **Detach** only closes
+the local connection. The current backend has no stop/resume operation that
+preserves the VM.
 
 Select any existing box in the desktop sidebar to reattach. For an unused box,
 `bh connect` starts its managed shell session. The app invokes exactly the same
@@ -79,13 +91,19 @@ The first smoke launches real Electron and a real native PTY with a test CLI.
 It checks switching, input/output, reconnection, resizing, delayed readiness,
 refresh failures, empty states, settings, creation and automatic connection,
 duplicate names, provider errors, and window reopening during creation.
+It also checks preview URL validation/opening, missing previews, deletion
+confirmation and cancellation, provider failures, and stale deletion targets.
+Native browser opening and confirmation responses are intercepted at the OS
+boundary in the fixture test; the packaged remote smoke opens a real browser.
 Screenshots go to `.artifacts/`.
 The fixture is only a test entry point and is excluded from packaged builds.
 
 The remote smoke uses your configured backend and login, provisions one billable
 temporary box through the app's **New box** dialog (using `--no-sync`), verifies
 automatic connection, real SSH/tmux input and persistent shell
-state across app restarts, then destroys that exact box and checks its absence.
+state across app restarts, opens its live preview, then destroys that exact box
+through the app and checks its absence. The remote test supplies the native
+confirmation response for its own disposable box; failure cleanup uses the CLI.
 It does not sync your checkout or run a model. Standard `bh connect` credential
 forwarding still applies.
 

@@ -1,5 +1,5 @@
 import { _electron as electron, expect } from 'playwright/test';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,12 +9,24 @@ const temp = mkdtempSync(join(tmpdir(), 'boxhaven-desktop-smoke-'));
 const stateFile = join(temp, 'boxes.json');
 const out = join(root, '.artifacts'); mkdirSync(out, { recursive: true });
 const fixture = join(root, 'test/fixture-cli.cjs'); chmodSync(fixture, 0o755);
-const machine = (name, status, ready = true) => ({ name, status, bootstrap_complete: ready, team_slug: 'Personal', provider: 'digitalocean', region: 'nyc3', size: 'small' });
+const machine = (name, status, ready = true) => ({ name, status, provider_id: name, preview_url: name === 'api-cleanup' ? 'https://api-cleanup.example.com/' : '', bootstrap_complete: ready, team_slug: 'Personal', provider: 'digitalocean', region: 'nyc3', size: 'small' });
 let state = { machines: [machine('api-cleanup', 'online'), machine('dashboard-redesign', 'online'), machine('docs-refresh', 'creating', false), machine('nightly-tests', 'offline')] };
 const save = () => writeFileSync(stateFile, JSON.stringify(state)); save();
 let app;
 try {
   app = await electron.launch({ args: [join(root, 'test/fixture-main.cjs')], env: { ...process.env, TEST_BH_CLI: fixture, TEST_USER_DATA: join(temp, 'profile'), TEST_BH_STATE: stateFile } });
+  // Stub only the OS boundary; exercise the real IPC, validation and CLI paths.
+  await app.evaluate(({ shell, dialog }) => {
+    global.desktopSmoke = { opened: [], confirmations: [], response: 0 };
+    shell.openExternal = async url => {
+      if (global.desktopSmoke.openError) throw new Error('Browser could not be opened.');
+      global.desktopSmoke.opened.push(url);
+    };
+    dialog.showMessageBox = async (_owner, options) => {
+      global.desktopSmoke.confirmations.push(options);
+      return { response: global.desktopSmoke.response };
+    };
+  });
   let page = await app.firstWindow();
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await expect(page.locator('.box-row')).toHaveCount(4);
@@ -22,10 +34,19 @@ try {
   await page.getByRole('button', { name: 'api-cleanup, online', exact: true }).click();
   let terminal = page.locator('.terminal-pane:not([hidden])');
   await expect(terminal).toContainText('Desktop PTY fixture');
+  await page.getByRole('button', { name: 'Open preview' }).click();
+  assert.deepEqual(await app.evaluate(() => global.desktopSmoke.opened), ['https://api-cleanup.example.com/']);
+  await assert.rejects(page.evaluate(() => window.boxhaven.openPreview('https://attacker.example')), /no web preview/);
+  await app.evaluate(() => { global.desktopSmoke.openError = true; });
+  await page.getByRole('button', { name: 'Open preview' }).click();
+  await expect(page.locator('#action-error')).toContainText('Browser could not be opened');
+  await app.evaluate(() => { global.desktopSmoke.openError = false; });
+  await terminal.locator('textarea').focus();
   await page.keyboard.type('first-session-marker'); await page.keyboard.press('Enter');
   await expect(terminal).toContainText('Received: first-session-marker');
   await page.getByRole('button', { name: 'dashboard-redesign, online', exact: true }).click();
   await expect(terminal).toContainText('dashboard-redesign');
+  await expect(page.getByRole('button', { name: 'Open preview' })).toBeDisabled();
   await page.getByRole('button', { name: 'api-cleanup, online', exact: true }).click();
   await expect(terminal).toContainText('Received: first-session-marker');
   assert.equal(readFileSync(`${stateFile}.connections`, 'utf8').trim().split('\n').length, 2, 'switching boxes must reuse the PTY');
@@ -128,6 +149,42 @@ try {
   await expect(page.locator('#create-dialog')).not.toBeVisible({ timeout: 15000 });
   await expect(page.locator('.terminal-pane:not([hidden])')).toContainText('boxhaven@background-box');
   assert.equal(JSON.parse(readFileSync(stateFile, 'utf8')).machines.length, 2);
+  await page.getByRole('button', { name: 'Destroy box…', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Destroy box…', exact: true })).toBeEnabled();
+  assert.equal(existsSync(`${stateFile}.destructions`), false, 'Cancel must not invoke the CLI');
+  const prompt = await app.evaluate(() => global.desktopSmoke.confirmations.at(-1));
+  assert.match(prompt.message, /background-box/);
+  assert.match(prompt.detail, /permanently deletes.*files/);
+  assert.equal(prompt.defaultId, 0); assert.equal(prompt.cancelId, 0);
+  await assert.rejects(page.evaluate(() => window.boxhaven.destroy('--help', '')), /changed/);
+  await assert.rejects(page.evaluate(() => window.boxhaven.destroy('background-box', 'stale identity')), /changed/);
+  await app.evaluate(() => { global.desktopSmoke.response = 1; });
+  state = JSON.parse(readFileSync(stateFile, 'utf8'));
+  state.destroyError = 'Provider refused deletion.'; save();
+  await page.getByRole('button', { name: 'Destroy box…', exact: true }).click();
+  await expect(page.locator('#action-error')).toContainText('Provider refused deletion');
+  await expect(page.locator('.box-row')).toHaveCount(2);
+  await expect(page.locator('.terminal-pane:not([hidden])')).toContainText('boxhaven@background-box');
+  await page.screenshot({ path: join(out, 'desktop-destroy-error.png') });
+  delete state.destroyError; state.destroyDelay = 1200; save();
+  await page.getByRole('button', { name: 'Destroy box…', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Destroying…', exact: true })).toBeDisabled();
+  await expect(page.locator('.box-row')).toHaveCount(1);
+  await expect(page.locator('#session-header')).toBeHidden();
+  assert.deepEqual(JSON.parse(readFileSync(stateFile, 'utf8')).machines.map(box => box.name), ['my-next-idea']);
+  assert.deepEqual(readFileSync(`${stateFile}.destructions`, 'utf8').trim().split('\n').map(JSON.parse), [['destroy', 'background-box', '--force'], ['destroy', 'background-box', '--force']]);
+  // A same-name replacement while confirmation is open must not be destroyed.
+  await page.getByRole('button', { name: 'my-next-idea, online', exact: true }).click();
+  await app.evaluate(({ dialog }) => {
+    dialog.showMessageBox = () => new Promise(resolve => { global.desktopSmoke.confirm = resolve; });
+  });
+  await page.getByRole('button', { name: 'Destroy box…', exact: true }).click();
+  await expect.poll(() => app.evaluate(() => typeof global.desktopSmoke.confirm)).toBe('function');
+  state = JSON.parse(readFileSync(stateFile, 'utf8'));
+  state.machines[0].provider_id = 'replacement'; save();
+  await app.evaluate(() => global.desktopSmoke.confirm({ response: 1 }));
+  await expect(page.locator('#action-error')).toContainText('box has changed');
+  assert.equal(readFileSync(`${stateFile}.destructions`, 'utf8').trim().split('\n').length, 2);
   assert.deepEqual(errors, []);
-  console.log('Desktop smoke passed: native PTY, switching, reconnect, resize, empty state, create/auto-connect, duplicate protection, provider errors, concurrent creation guards, window reopening during creation.');
+  console.log('Desktop smoke passed: terminal lifecycle, creation, preview opening/validation/errors, missing preview, destruction confirmation/cancel/failure/success, and stale target protection.');
 } finally { if (app) await app.close(); rmSync(temp, { recursive: true, force: true }); }

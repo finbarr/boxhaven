@@ -33,11 +33,21 @@ function parseMachines(output) {
     // Send only display data to the renderer; credentials stay with the CLI.
     return {
       name: machine.name, status: machine.status,
+      identity: JSON.stringify([machine.provider, machine.provider_id, machine.created_at]),
+      previewURL: previewURL(machine.preview_url),
       team: machine.team_slug || machine.team_name || 'Personal',
       provider: machine.provider || '', region: machine.region || '', size: machine.size || '',
       ready: machine.bootstrap_complete === true && machine.create_state !== 'recovery_required',
     };
   });
+}
+
+function previewURL(value) {
+  if (typeof value !== 'string' || !value || /[\u0000-\u0020\u007f]/.test(value)) return '';
+  try {
+    const url = new URL(value);
+    return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : '';
+  } catch { return ''; }
 }
 
 function validName(name) {
@@ -49,4 +59,4 @@ function terminalSize(cols, rows) {
   return { cols, rows };
 }
 
-module.exports = { cliEnvironment, runCLI, parseMachines, validName, terminalSize };
+module.exports = { cliEnvironment, runCLI, parseMachines, validName, terminalSize, previewURL };

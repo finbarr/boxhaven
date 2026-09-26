@@ -30,7 +30,8 @@ try {
   await page.getByLabel('Box name', { exact: true }).fill(name);
   await page.getByRole('button', { name: 'Create box', exact: true }).click();
   await page.screenshot({ path: join(out, 'desktop-real-creating.png') });
-  await expect(page.locator('#create-dialog')).not.toBeVisible({ timeout: 10 * 60 * 1000 });
+  await page.waitForFunction(() => !document.querySelector('#create-dialog').open || (document.querySelector('#create-status').textContent && !document.querySelector('#create-box').disabled), null, { timeout: 10 * 60 * 1000 });
+  assert.equal(await page.locator('#create-dialog').isVisible(), false, await page.locator('#create-status').textContent());
   // Wait for the actual remote shell, not merely successful PTY allocation.
   await expect(terminal).toContainText('boxhaven@', { timeout: 90000 });
   await page.keyboard.type("printf 'BOXHAVEN_DESKTOP_%s\\n' VERIFIED; export BOXHAVEN_DESKTOP_SMOKE=persisted");
@@ -46,7 +47,30 @@ try {
   await reopened.keyboard.press('Enter');
   await expect(reopened.locator('.terminal-pane:not([hidden])')).toContainText('PERSISTENCE_persisted', { timeout: 15000 });
   await reopened.screenshot({ path: join(out, 'desktop-real-reconnected.png') });
-  console.log('Real remote smoke passed: in-app creation, automatic selection/connection, certificate SSH, tmux input/output, app close, session persistence, app reopen.');
+  await bh('run', name, 'bash', '-lc', 'preview_dir=$(mktemp -d /tmp/boxhaven-desktop-preview.XXXXXX); printf "<h1>BoxHaven desktop preview verified</h1>" > "$preview_dir/index.html"; tmux new-session -d -s desktop-preview sudo python3 -m http.server "${BOXHAVEN_WEB_PORT:-80}" --bind "${BOXHAVEN_WEB_BIND:-0.0.0.0}" --directory "$preview_dir"');
+  const box = JSON.parse((await bh('list', '--json')).stdout).machines.find(box => box.name === name);
+  assert.ok(box.preview_url, 'Remote smoke requires a backend with web previews configured.');
+  await expect.poll(async () => {
+    try { return await (await fetch(box.preview_url, { signal: AbortSignal.timeout(10000) })).text(); }
+    catch { return ''; }
+  }, { timeout: 90000 }).toContain('BoxHaven desktop preview verified');
+  await expect(reopened.locator('#open-preview')).toHaveAttribute('title', new URL(box.preview_url).href);
+  await reopened.getByRole('button', { name: 'Open preview' }).click();
+  await expect(reopened.locator('#action-error')).toBeHidden();
+  // Supply the native confirmation only for this smoke's disposable machine.
+  // Main-process revalidation and the real CLI destruction still execute.
+  await app.evaluate(({ dialog }, name) => {
+    dialog.showMessageBox = async (_window, options) => {
+      if (options.message !== `Destroy “${name}”?` || options.defaultId !== 0) throw new Error('Unexpected destruction confirmation');
+      return { response: 1 };
+    };
+  }, name);
+  await reopened.getByRole('button', { name: 'Destroy box…', exact: true }).click();
+  await expect(reopened.locator(`.box-row[data-name="${name}"]`)).toHaveCount(0, { timeout: 120000 });
+  await expect(reopened.locator('#session-header')).toBeHidden();
+  assert.equal(JSON.parse((await bh('list', '--json')).stdout).machines.some(box => box.name === name), false);
+  await reopened.screenshot({ path: join(out, 'desktop-real-destroyed.png') });
+  console.log('Real remote smoke passed: in-app creation, SSH/tmux persistence, live preview/browser opening, and in-app destruction confirmed absent from backend.');
 } finally {
   if (app) await app.close();
   if (attempted) {

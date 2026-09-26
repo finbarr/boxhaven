@@ -13,6 +13,8 @@ let listError = '';
 let creation = null;
 let createdSelection = null;
 let refreshAgain = false;
+const destroying = new Set();
+const openingPreview = new Set();
 const cleanError = error => error.message.replace(/^Error invoking remote method '[^']+': Error: /, '');
 
 function renderList() {
@@ -63,12 +65,16 @@ function renderHeader() {
   }
   $('box-name').textContent = box.name;
   $('box-meta').textContent = [box.team, box.provider, box.region, box.size].filter(Boolean).join('  /  ');
-  $('connection-state').textContent = session?.status || (box.ready ? 'Ready to connect' : box.status === 'creating' ? 'Preparing box' : 'Recovery required');
+  $('open-preview').disabled = !box.previewURL || box.status === 'destroying' || openingPreview.has(box.name);
+  $('open-preview').title = box.previewURL || 'No preview URL is configured for this box.';
+  $('destroy-box').disabled = destroying.has(box.name) || box.status === 'destroying' || (creation?.status === 'creating' && creation.name === box.name);
+  $('destroy-box').textContent = destroying.has(box.name) || box.status === 'destroying' ? 'Destroying…' : 'Destroy box…';
+  $('connection-state').textContent = box.status === 'destroying' ? 'Destroying box' : session?.status || (box.ready ? 'Ready to connect' : box.status === 'creating' ? 'Preparing box' : 'Recovery required');
   $('detach').hidden = !session?.live;
   $('reconnect').hidden = !box.ready || Boolean(session?.live);
   if (!session) {
-    $('welcome-title').textContent = box.status === 'creating' ? 'Your box is getting ready.' : 'This box needs attention.';
-    $('welcome-copy').textContent = box.status === 'creating' ? 'We’ll connect once setup finishes. You can keep working in another box.' : 'Run bh status for this box to inspect its recovery state.';
+    $('welcome-title').textContent = box.status === 'destroying' ? 'Your box is shutting down.' : box.status === 'creating' ? 'Your box is getting ready.' : 'This box needs attention.';
+    $('welcome-copy').textContent = box.status === 'destroying' ? 'Deleting the remote machine and its files. You can keep working in another box.' : box.status === 'creating' ? 'We’ll connect once setup finishes. You can keep working in another box.' : 'Run bh status for this box to inspect its recovery state.';
   }
 }
 
@@ -111,6 +117,7 @@ async function connectBox(name) {
 }
 
 function selectBox(name) {
+  if (selected !== name) $('action-error').hidden = true;
   selected = name;
   localStorage.setItem('boxhaven.selected-box', name);
   for (const [key, session] of terminals) session.element.hidden = key !== name;
@@ -209,6 +216,32 @@ api.onExit(({ name, exitCode }) => {
 api.onRefresh(refresh);
 api.onSearch(() => $('search').focus());
 $('refresh').onclick = refresh;
+$('open-preview').onclick = async () => {
+  const name = selected;
+  openingPreview.add(name); $('action-error').hidden = true; renderHeader();
+  try { await api.openPreview(name); }
+  catch (error) { showActionError(name, error); }
+  finally { openingPreview.delete(name); renderHeader(); }
+};
+function showActionError(name, error) {
+  if (selected !== name) return;
+  $('action-error').textContent = cleanError(error); $('action-error').hidden = false;
+}
+$('destroy-box').onclick = async () => {
+  const box = boxes.find(box => box.name === selected);
+  if (!box) return;
+  const name = box.name;
+  destroying.add(name); $('action-error').hidden = true; renderHeader();
+  try {
+    if (await api.destroy(name, box.identity)) {
+      const session = terminals.get(name);
+      session?.terminal.dispose(); session?.element.remove(); terminals.delete(name);
+      boxes = boxes.filter(box => box.name !== name);
+      if (selected === name) { selected = null; localStorage.removeItem('boxhaven.selected-box'); }
+    }
+  } catch (error) { showActionError(name, error); }
+  finally { destroying.delete(name); renderList(); renderHeader(); void refresh(); }
+};
 $('search').oninput = renderList;
 $('detach').onclick = () => { if (selected) void api.detach(selected).catch(error => { $('connection-state').textContent = cleanError(error); }); };
 $('reconnect').onclick = () => { if (selected) void connectBox(selected); };

@@ -4,8 +4,9 @@ This is the open-source remote control plane. The CLI always talks to a backend;
 it does not provision cloud machines locally. Self-hosters can run this package
 with their own provider credentials and no external commercial service.
 
-The [desktop app](../desktop/README.md) uses the existing machine creation, list, and
-connection APIs through its bundled CLI. It needs no additional backend routes
+The [desktop app](../desktop/README.md) uses the existing machine creation, list,
+connection, and destruction APIs through its bundled CLI, including the assigned
+preview URLs. It needs no additional backend routes
 or services and shares the user's CLI login.
 
 The browser app is built with TanStack Router and TanStack Query. It is the

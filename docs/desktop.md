@@ -60,9 +60,28 @@ Select an existing box to reattach to its session. The sidebar refreshes every
 to find a box. **Detach** closes that terminal connection, and **Reconnect**
 reattaches to the remote session.
 
+## Open a preview
+
+Click **Open preview** in the selected box's header to open its web URL in your
+default browser. The app uses the URL assigned by your backend. If your backend
+has no preview domain configured, the button is disabled. Run a web server on
+the box's preview port to serve your application; see [web previews](./getting-started#open-a-web-preview).
+
+## Shut down a box
+
+Click **Destroy box…** and confirm the named box in the dialog. This permanently
+deletes its VM and files and stops every running session. Save any work you want
+to keep first. Cancel is selected by default.
+
+After deletion, the box disappears from the sidebar and its terminal closes.
+Other boxes remain running. Closing the window does not cancel a confirmed
+deletion; quitting waits for it to finish. **Detach** just disconnects your
+terminal and keeps the box running. There is currently no stop/resume operation
+that preserves the VM.
+
 The sidebar's `online`, `offline`, and `creating` labels describe the machine's
 heartbeat and setup state. They do not indicate agent progress or completion.
-Project sync and deletion are available through the CLI.
+Project sync is available through the CLI.
 
 Connections use `bh connect`, including its existing credential forwarding,
 short-lived SSH certificates, and pinned host keys. See the [security model](./security).

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, nativeImage, shell, dialog } = require('electron');
 const { join } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { homedir } = require('node:os');
@@ -25,6 +25,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   let quitting = false;
   let commands = new AbortController();
   const sessions = new Map();
+  const destructions = new Map();
 
   function send(channel, message) {
     if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send(channel, message);
@@ -45,6 +46,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
       const list = parseMachines(output);
       for (const box of list) {
         if (creation?.status === 'creating' && creation.name === box.name) { box.ready = false; box.status = 'creating'; }
+        if (destructions.get(box.name)?.confirmed) { box.ready = false; box.status = 'destroying'; }
       }
       machines = new Map(list.map(box => [box.name, box]));
       for (const [name, session] of sessions) {
@@ -55,10 +57,48 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     return listing;
   });
   handle('boxes:creation', () => creation);
+  handle('boxes:open-preview', async name => {
+    const box = machines.get(name);
+    if (!box?.previewURL) throw new Error('This box has no web preview URL.');
+    if (destructions.get(name)?.confirmed) throw new Error('This box is being destroyed.');
+    await shell.openExternal(box.previewURL);
+  });
+  handle('boxes:destroy', (name, identity) => {
+    const box = machines.get(name);
+    if (!box || box.identity !== identity) throw new Error('This box has changed. Refresh and select it again.');
+    if (signingIn) throw new Error('Finish signing in before destroying a box.');
+    if (creation?.status === 'creating' && creation.name === name) throw new Error('Wait for this box to finish being created.');
+    if (destructions.has(name)) return destructions.get(name).promise;
+    const owner = window;
+    const operation = { confirmed: false };
+    operation.promise = (async () => {
+      const result = await dialog.showMessageBox(owner, {
+        type: 'warning', title: 'Destroy box', message: `Destroy “${name}”?`,
+        detail: 'This permanently deletes the remote VM and its files, and stops all running sessions. Save any work you want to keep first. This cannot be undone.',
+        buttons: ['Cancel', 'Destroy box'], defaultId: 0, cancelId: 0, noLink: true,
+      });
+      if (result.response !== 1 || owner.isDestroyed()) return false;
+      // Recheck after confirmation so an old selection cannot delete a box
+      // that has since been replaced under the same name.
+      const current = parseMachines(await runCLI(cliPath, ['list', '--json'], { cwd, env }));
+      const target = current.find(machine => machine.name === name);
+      if (!target || target.identity !== identity) throw new Error('This box has changed. Refresh and select it again.');
+      operation.confirmed = true;
+      send('app:refresh');
+      await runCLI(cliPath, ['destroy', name, '--force'], { cwd, env, timeout: 5 * 60 * 1000 });
+      sessions.get(name)?.process.kill();
+      sessions.delete(name);
+      machines.delete(name);
+      return true;
+    })().finally(() => { destructions.delete(name); send('app:refresh'); });
+    destructions.set(name, operation);
+    return operation.promise;
+  });
   handle('boxes:create', name => {
     if (!validName(name) || name.length > 63) throw new Error('Use up to 63 lowercase letters, numbers, and single hyphens between words.');
     if (creating) throw new Error('A box is already being created. Wait for it to finish.');
     if (signingIn) throw new Error('Finish signing in before creating a box.');
+    if (destructions.has(name)) throw new Error('Wait for this box to finish being destroyed.');
     creation = { name, status: 'creating', message: `Creating ${name}… You can keep working while it gets ready.` };
     const started = creation;
     creating = (async () => {
@@ -80,6 +120,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   handle('session:connect', (name, cols, rows) => {
     const box = machines.get(name);
     if (creation?.status === 'creating' && creation.name === name) throw new Error('This box is still being created.');
+    if (destructions.get(name)?.confirmed) throw new Error('This box is being destroyed.');
     if (!box?.ready) throw new Error('This box is not ready to connect. Refresh its status and try again.');
     const size = terminalSize(cols, rows);
     if (sessions.has(name)) return;
@@ -116,6 +157,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   handle('account:login', backend => {
     if (signingIn) return signingIn;
     if (creating) throw new Error('Wait for your new box to finish before changing accounts.');
+    if (destructions.size) throw new Error('Wait for box destruction to finish before changing accounts.');
     if (sessions.size) throw new Error('Detach your open sessions before signing in to another account.');
     if (typeof backend !== 'string') throw new Error('Invalid backend URL.');
     const args = ['login'];
@@ -158,11 +200,14 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   app.on('second-instance', () => { if (!window) createWindow(); window.show(); window.focus(); });
   app.on('activate', () => { if (!window) createWindow(); });
   app.on('before-quit', event => {
-    if (creating) {
-      // Finish provisioning before exit so quitting cannot abandon an in-flight
+    if (creating || destructions.size) {
+      // Finish mutations before exit so quitting cannot abandon an in-flight
       // request. Closing a window still leaves other remote sessions running.
       event.preventDefault();
-      if (!quitting) { quitting = true; void creating.finally(() => app.quit()); }
+      if (!quitting) {
+        quitting = true;
+        void Promise.allSettled([creating, ...[...destructions.values()].map(operation => operation.promise)]).then(() => { quitting = false; app.quit(); });
+      }
       return;
     }
     disposeSessions();

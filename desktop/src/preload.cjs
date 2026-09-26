@@ -6,6 +6,8 @@ function subscribe(channel, callback) {
 }
 contextBridge.exposeInMainWorld('boxhaven', {
   list: () => ipcRenderer.invoke('boxes:list'),
+  openPreview: name => ipcRenderer.invoke('boxes:open-preview', name),
+  destroy: (name, identity) => ipcRenderer.invoke('boxes:destroy', name, identity),
   create: name => ipcRenderer.invoke('boxes:create', name),
   creation: () => ipcRenderer.invoke('boxes:creation'),
   onCreation: callback => subscribe('boxes:creation', callback),
