@@ -2,9 +2,10 @@
 
 Review concepts only. No application code or production assets were changed.
 
-Open `index.html` for seven imagegen studies: desktop, website, web console,
-creation, box details, interaction details, and the Dock icon. Click a screen
-to enlarge it. Exact prompts are in `prompts.json`.
+Open `index.html` for eight imagegen studies: desktop, website, web console,
+creation, box details, 24 box identities, lifecycle expressions, and the Dock
+icon. Click a screen to enlarge it. Revision 2 exact prompts are in
+`prompts-v2.json`; earlier images and `prompts.json` remain as review history.
 
 ## Direction
 
@@ -17,23 +18,47 @@ to enlarge it. Exact prompts are in `prompts.json`.
   a generated reconstruction.
 - Distinct box portraits in the desktop sidebar and console rows. Sprouts,
   glasses, antennas, and cat ears make them recognizable without competing with
-  names. Portrait identity stays stable through renames, status, and team moves.
+  names. Base identity stays stable through renames and team moves, while
+  expressions and lights evolve with the machine state.
 - Reduce in-app logo and portrait dimensions roughly 35% from the first pass.
   Target 26–30 px list portraits, 32–36 px header portraits, and a 36 px brand mark
   at ordinary desktop scale. Keep interaction targets at least 32 px.
-- Status remains a separate labelled dot. A character's appearance does not
-  imply agent progress, readiness, or completion.
+- Status remains a separate labelled dot. Expressions reflect verified machine
+  lifecycle state, never inferred agent progress or task completion.
 - Creation keeps visible size/spec/price rows. Support all actual backend sizes,
   including team-defined sizes; the three mockup rows are illustrative.
 - Team context and member access should be visible; this is not a promise of
   shared storage or collaborative text editing. Desktop team selection is a
   proposed interaction, not a claim about the currently implemented app.
+- Show who created each box consistently in the homepage preview, desktop rows,
+  console table, and details sidebar. Creator is not current operator or owner.
+- Keep rename in the desktop sidebar row menu and the console details sidebar.
+  Remove inline rename from the table and main terminal header.
+- Remove the toolbar Disconnect action. Destroy box lives in the overflow menu
+  and opens confirmation before deleting the remote machine. Closing a local
+  connection and destroying a machine are different actions.
+- Keep Members in navigation; remove the redundant shortcut by the team selector.
+
+## Character family and state
+
+The 24 identities explore accessories, silhouette, and subtle body variations:
+sprout, spectacles, antenna, cat ears, beanie, daisy, mushroom, headphones, bow
+tie, sailor, moon, comet, cactus, acorn, goggles, crown, duck, bunny, pixel,
+stripe, freckles, snail, beret, and Saturn. The reference boards enlarge them
+for inspection; product portrait sizes remain unchanged.
+
+Each identity supports creating (curious, amber), online (awake, green), offline
+(subdued, dim), recovery required (concerned, amber), and destroying (brief fade).
+The state sheet is the expression reference; screen mockups illustrate placement.
+Offline means unavailable, not necessarily powered off or free of charges.
+Destroying appears only after confirmed deletion starts; remove the row only
+after verified deletion. Preserve recognizable accessories in every state.
 
 ## Small moments
 
 Use a quiet sage hover wash and a persistent selected-row indicator. A portrait
 may rise 1 px on hover, but does not continually bob or animate. A copied command
-briefly shows a check. Rename opens a compact anchored popover. A new box can
+briefly shows a check. Sidebar rename opens a compact anchored input. A new box can
 settle into its row with a short fade; never manufacture provisioning progress.
 Honor reduced-motion settings and do not encode status in animation alone.
 

@@ -1,0 +1,60 @@
+{
+  "mode": "built-in imagegen",
+  "scope": "Design review only",
+  "revision": 2,
+  "images": [
+    {
+      "key": "01-desktop-v2",
+      "title": "Desktop · Creator context and simpler actions",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/01-desktop.png",
+      "prompt": "Use case: precise-object-edit. Revise the attached BoxHaven design for review. Preserve light-paper ivory surfaces, evergreen type, forest-green buttons, sage selection, exact original cabin logo artwork, small portrait scale, same window size and legible typography. Fully opaque screenshot, no transparency. Independent boxes and team sharing, no pipeline. Apply the requested controls precisely, do not preserve rejected controls. Remove the entire Disconnect button and its plug icon from the top-right toolbar. Toolbar has ONLY Open preview and ellipsis. Remove pencil rename icon from the main content header. Add an ellipsis action to each left sidebar box row, subtle on selected/hover row. Show a compact context menu anchored to api-cleanup's SIDEBAR ellipsis containing 'Rename…' and below a divider 'Destroy box…' in muted red. This menu belongs to the selected sidebar box; do not put a floating rename input beside the header. Add creator information in every sidebar row in a quiet second line alongside status: api-cleanup 'Online · Jamie', dashboard 'Online · Morgan', docs-refresh 'Creating · Devon', nightly-tests 'Offline · Jamie'. Creator is text not another huge icon. Add small 'Created by Jamie' to selected box metadata. Keep sidebar portraits 26–30 logical px, green sprout for api-cleanup, blue glasses for dashboard, antenna for docs-refresh, lilac cat ears for nightly-tests. Express lifecycle subtly: creating antenna amber and eyes curious, online bright eyes, offline cat-ear box dim eyes and lights. Preserve each accessory identity. Terminal remains a real ivory monospaced terminal with existing test content. No extra member shortcut by team selector.",
+      "output": "01-desktop-v2.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-6d75cc84-2961-4b7a-9af1-aefecb6d8c3b.png"
+    },
+    {
+      "key": "03-console-v2",
+      "title": "Web console · Created by",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/03-console.png",
+      "prompt": "Use case: precise-object-edit. Revise the attached BoxHaven design for review. Preserve light-paper ivory surfaces, evergreen type, forest-green buttons, sage selection, exact original cabin logo artwork, small portrait scale, same window size and legible typography. Fully opaque screenshot, no transparency. Independent boxes and team sharing, no pipeline. Apply the requested controls precisely, do not preserve rejected controls. Remove pencil icon next to api-cleanup in the table; no inline renaming in rows. Remove the EXTRA square two-person icon button immediately to the right of Product lab selector. Product lab selector remains and Members navigation remains below Images; there is only ONE Members navigation entry, no redundant shortcut. Add an explicit table column labelled 'Created by' between Box and Status: api-cleanup has small circular JT initials plus Jamie; dashboard MK plus Morgan; docs-refresh DS plus Devon; nightly-tests JT plus Jamie. Reduce other column widths slightly so Box, Created by, Status, Location, Size, Rate, Preview, ellipsis fit comfortably. The creator is who created the machine, not its owner or current operator. Keep machine avatars SMALL existing reduced size. Creating avatar curious with amber light; online awake; offline dim/closed eyes but recognizable cat ears. Keep all pricing text. No destructive or disconnect button outside overflow. Table rows open a box-details SIDEBAR for editing name, no pencil in table.",
+      "output": "03-console-v2.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-897b652f-019a-4690-9d0f-410900c00c95.png",
+      "correctionPrompt": "Precise localized edit to attached opaque BoxHaven console screenshot. Add missing Billing navigation item with small credit-card outline icon immediately below Members and above the separator. Shift Teams Settings Security slightly down to make room. Left navigation must read Boxes, Images, Members, Billing, separator, Teams, Settings, Security. Keep entire rest of screenshot EXACTLY as is: creator column, no pencils in rows, compact portraits, Product lab dropdown without extra button, all table content and light paper palette. No other changes."
+    },
+    {
+      "key": "08-box-family",
+      "title": "Box family · 24 distinct identities",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/06-delight-details.png",
+      "prompt": "Use case: ui-mockup / character design reference board. Use the attached sheet ONLY for the existing small happy graphite server-box character style and light ivory/forest-green palette. Make an entirely NEW high-quality character family contact sheet with exactly 24 different small friendly server boxes in a 6-column by 4-row grid. One quiet heading 'A box of your own'. Each cell has ample white space, one tactile rounded server-box portrait and ONE small name label. All are clearly servers with vents, tiny LED lights and expressive simple faces, a cohesive premium tiny-icon family. Each has a distinctly different silhouette/accessory, not merely recoloring. Names and features row1: Sprout (two leaves), Spectacles (round blue glasses), Antenna (amber antenna), Cat ears (lilac ears), Beanie (rust knit cap), Daisy (small daisy on top). Row2: Mushroom (mushroom cap), Headphones (teal phones), Bow tie (ochre tie), Sailor (tiny navy cap), Moon (crescent antenna), Comet (small star trailing from top). Row3: Cactus (small cactus sprout), Acorn (acorn cap), Goggles (aviator goggles), Crown (small copper crown), Duck (tiny rubber duck on head), Bunny (two short rabbit ears). Row4: Pixel (tiny pixel hair tuft), Stripe (single cream side stripe), Freckles (cheek specks plus stubby feet), Snail (little shell on top), Beret (sage beret), Saturn (ring around top antenna). Bodies graphite, pewter, cream with muted restrained accent colors. Do NOT change body into human, animal or monster: each remains a little server. No backgrounds or props extending far from the icon. No logo redesign. Opaque warm ivory rectangular board, readable labels, delicate grid rules, no marketing paragraphs. NOT a product screenshot; this sheet deliberately enlarges small production portraits for inspection.",
+      "output": "08-box-family.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-9d3bacf1-950c-4709-9575-c2c13fa49a23.png"
+    },
+    {
+      "key": "02-website-v2",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/02-website.png",
+      "prompt": "Precisely edit the attached BoxHaven light-paper design. Preserve original cabin logo, warm ivory, evergreen, sage selection, compact box avatars, independent boxes and team sharing. Fully opaque screenshot. No workflow pipeline. Keep headline and copy unchanged. In the embedded desktop screenshot remove Disconnect button completely; toolbar only Open preview and ellipsis. Add 'Created by Jamie' below selected name. Add Jamie/Morgan/Devon alongside status in sidebar. In top-right Product lab card show explicit quiet creator names beside small initials: Created by Jamie, Created by Morgan, Created by Devon. Keep all box portraits small. All other layout stays.",
+      "output": "02-website-v2.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-72bb6d55-b363-4aa3-92cc-4f9c82118b32.png"
+    },
+    {
+      "key": "04-creation-v2",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/04-creation.png",
+      "prompt": "Precisely edit the attached BoxHaven light-paper design. Preserve original cabin logo, warm ivory, evergreen, sage selection, compact box avatars, independent boxes and team sharing. Fully opaque screenshot. No workflow pipeline. Keep improved creation dialog and all its fields/specs/prices exactly. In background remove pencil beside api-cleanup and entire Disconnect button: ONLY Open preview and ellipsis remain in toolbar. Add Created by Jamie to selected metadata. Sidebar status lines Online · Jamie, Online · Morgan, Creating · Devon, Offline · Jamie. Offline cat ears box has closed eyes/dim lights; creating antenna curious amber. No other changes.",
+      "output": "04-creation-v2.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-061a3d92-91d6-4d50-87fe-17e426596459.png"
+    },
+    {
+      "key": "05-box-detail-v2",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/05-box-detail.png",
+      "prompt": "Precisely edit the attached BoxHaven light-paper design. Preserve original cabin logo, warm ivory, evergreen, sage selection, compact box avatars, independent boxes and team sharing. Fully opaque screenshot. No workflow pipeline. Remove pencil beside api-cleanup in center TABLE. Renaming is ONLY the pencil in right details sidebar by box name, keep that pencil. Add creator names under each table name: Created by Jamie, Created by Morgan, Created by Devon, Created by Jamie respectively. Add Created by Jamie to right detail metadata. Remove standalone red Destroy box at bottom. Add a small ellipsis beside close icon at top of RIGHT details pane, and show its anchored open menu with single red 'Destroy box…' item. No Disconnect. Preserve all 7 navigation items Boxes Images Members Billing / Teams Settings Security. No extra Members shortcut near team dropdown. Reduce right details portrait by another 15 percent. Keep everything else.",
+      "output": "05-box-detail-v2.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-e3406f28-5237-4573-a9fe-d70baa6ac5b7.png"
+    },
+    {
+      "key": "09-box-states",
+      "reference": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-9d3bacf1-950c-4709-9575-c2c13fa49a23.png",
+      "prompt": "Make a new premium UI avatar state reference board using attached BoxHaven character style. Opaque warm ivory, dark evergreen typography, delicate grid lines, tactile little rounded graphite server characters. Title 'Same box. Different states.' Exactly THREE rows and FIVE columns. Row identities Sprout (two leaves), Spectacles (blue round glasses), Beanie (rust knit cap). Column headings Creating, Online, Offline, Recovery required, Destroying. Repeat EXACT same character body/accessory across each row; only expressions, LED brightness and pose change. Creating: curious expectant eyes, amber LED; Online: awake subtle smile and green LED; Offline: subdued eyes and dim LED, retain accessory; Recovery required: concerned expression and amber warning dot, no damage; Destroying: same character partially faded with a small goodbye pose, no explosion. Every cell also has small legible state label underneath. All characters have vents and server lights, not humans. No arrows and no workflow pipeline, this is a matrix of independent lifecycle appearances. Tasteful playful detail, not huge emoji. Footer tiny 'Identity stays stable; appearance follows machine state.'",
+      "output": "09-box-states.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-c965843e-b663-41f4-864a-75e4cf944611.png"
+    }
+  ]
+}
