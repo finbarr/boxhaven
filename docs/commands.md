@@ -50,11 +50,15 @@ certificate trust are ready, then syncs the current directory to
 ## bh size
 
 ```bash
-bh size list [--provider <name>] [--region <region>] [--team <team>]
-bh size plans [--provider <name>] [--region <region>] [--team <team>]
+bh size list [--provider <name>] [--region <region>] [--team <team>] [--json]
+bh size plans [--provider <name>] [--region <region>] [--team <team>] [--json]
 bh size create <name> --provider <name> --plan <slug> [--team <team>]
 bh size rm <name> [--team <team>]
 ```
+
+Both listing commands default to your configured provider, or the backend default.
+Add `--json` to return the selected provider, configured providers, sizes, plans,
+regions, and prices as JSON. Explicit provider, region, and team filters apply.
 
 `list` shows the three built-in sizes plus the selected team's shortcuts.
 `plans` shows available provider plans, including hardware, GPUs, and the

@@ -272,6 +272,9 @@ Hetzner Cloud:
 ## Sizes
 
 Every provider supplies the built-in `small`, `medium`, and `large` sizes.
+Add `--json` to `bh size list` or `bh size plans` for machine-readable provider,
+size, region, and pricing data. Both default to your configured provider.
+
 Use `bh size list` to see their exact CPU, memory, disk, provider plan, and
 effective hourly price with day and month estimates. `bh size plans` shows the
 same price context before an owner or admin gives a provider plan a team-owned

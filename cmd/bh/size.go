@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -47,8 +48,17 @@ type remoteMachineSizeOption struct {
 }
 
 type remoteSizesResponse struct {
-	Plans []remoteMachinePlan       `json:"plans"`
-	Sizes []remoteMachineSizeOption `json:"sizes"`
+	Provider  remoteProviderInfo        `json:"provider"`
+	Providers []remoteProviderInfo      `json:"providers,omitempty"`
+	Plans     []remoteMachinePlan       `json:"plans"`
+	Sizes     []remoteMachineSizeOption `json:"sizes"`
+}
+
+type remoteProviderInfo struct {
+	Name          string `json:"name"`
+	Label         string `json:"label"`
+	DefaultRegion string `json:"default_region,omitempty"`
+	Default       bool   `json:"default,omitempty"`
 }
 
 type remoteSizeShortcutRequest struct {
@@ -79,8 +89,8 @@ func runSize(args []string, projectDir string) error {
 
 func printSizeUsage() {
 	fmt.Fprintln(os.Stderr, "USAGE:")
-	fmt.Fprintln(os.Stderr, "  bh size list [--provider <name>] [--region <region>] [--team <team>]")
-	fmt.Fprintln(os.Stderr, "  bh size plans [--provider <name>] [--region <region>] [--team <team>]")
+	fmt.Fprintln(os.Stderr, "  bh size list [--provider <name>] [--region <region>] [--team <team>] [--json]")
+	fmt.Fprintln(os.Stderr, "  bh size plans [--provider <name>] [--region <region>] [--team <team>] [--json]")
 	fmt.Fprintln(os.Stderr, "  bh size create <name> --provider <name> --plan <slug> [--team <team>]")
 	fmt.Fprintln(os.Stderr, "  bh size rm <name> [--team <team>]")
 }
@@ -90,11 +100,23 @@ func runSizeList(args []string, projectDir string, plans bool) error {
 	if err != nil {
 		return err
 	}
-	values, err := parseSizeFlags(args)
+	jsonOutput := false
+	filtered := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--json" {
+			jsonOutput = true
+		} else {
+			filtered = append(filtered, arg)
+		}
+	}
+	values, err := parseSizeFlags(filtered)
 	if err != nil {
 		return err
 	}
 	query := url.Values{}
+	if values["provider"] == "" {
+		values["provider"] = cfg.Remote.Provider
+	}
 	for _, key := range []string{"provider", "region", "team"} {
 		if values[key] != "" {
 			query.Set(key, values[key])
@@ -107,6 +129,16 @@ func runSizeList(args []string, projectDir string, plans bool) error {
 	var response remoteSizesResponse
 	if err := remoteBackendRequest(cfg, http.MethodGet, path, nil, &response); err != nil {
 		return err
+	}
+	if jsonOutput {
+		var providers struct {
+			Providers []remoteProviderInfo `json:"providers"`
+		}
+		if err := remoteBackendRequest(cfg, http.MethodGet, "/v1/providers", nil, &providers); err != nil {
+			return err
+		}
+		response.Providers = providers.Providers
+		return json.NewEncoder(os.Stdout).Encode(response)
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	if plans {

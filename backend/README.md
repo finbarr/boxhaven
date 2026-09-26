@@ -6,7 +6,8 @@ with their own provider credentials and no external commercial service.
 
 The [desktop app](../desktop/README.md) uses the existing machine creation, list,
 connection, and destruction APIs through its bundled CLI, including the assigned
-preview URLs. It needs no additional backend routes
+preview URLs. `bh size list --json` exposes the existing provider and size
+catalog for desktop creation settings. It needs no additional backend routes
 or services and shares the user's CLI login.
 
 The browser app is built with TanStack Router and TanStack Query. It is the
