@@ -238,26 +238,10 @@ h1 span {
   padding: 15px 0;
   margin-top: 10px;
 }
-.sidebar-footer img {
-  width: 35px;
-  height: 35px;
-  object-fit: contain;
-}
-.sidebar-footer div {
-  flex: 1;
-  min-width: 0;
-}
-.sidebar-footer strong {
-  display: block;
-  font-size: 12px;
-  font-weight: 550;
-  color: #c7c9ce;
-}
 .sidebar-footer span {
-  display: block;
+  flex: 1;
   color: #828891;
-  font-size: 10px;
-  margin-top: 4px;
+  font-size: 11px;
 }
 main {
   min-width: 0;
@@ -334,30 +318,15 @@ h2 {
   text-align: center;
 }
 .welcome > img {
-  width: 170px;
-  height: 170px;
+  width: 96px;
+  height: 96px;
   object-fit: contain;
-  margin-bottom: 18px;
-}
-.eyebrow {
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: #bd955f;
-  margin: 0 0 14px;
+  margin-bottom: 16px;
 }
 .welcome h2 {
-  font-size: 26px;
-  font-weight: 550;
-  letter-spacing: -.8px;
-}
-.welcome > p:not(.eyebrow) {
   font-size: 13px;
-  line-height: 1.9;
+  font-weight: 400;
   color: #959ba4;
-  margin-top: 14px;
-}
-#empty-guide {
-  margin-top: 15px;
 }
 .new-box {
   text-align: left;
@@ -391,25 +360,6 @@ h2 {
   background-color: #151719;
   scrollbar-width: thin;
   scrollbar-color: #42474f #151719;
-}
-#session-footer {
-  height: 34px;
-  padding: 0 22px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-  border-top: 1px solid #292c30;
-  font-size: 10px;
-  color: #767f89;
-}
-#session-footer i {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  background: #8eaf84;
-  border-radius: 50%;
-  margin-right: 6px;
 }
 dialog {
   width: 460px;
@@ -449,10 +399,6 @@ dialog input {
   color: #e7e9eb;
   font-size: 12px;
 }
-dialog .hint {
-  font-size: 10px;
-  color: #8c929c;
-}
 .primary {
   background: #ce9f60;
   color: #17191b;
@@ -464,6 +410,7 @@ dialog .hint {
 .primary:hover {
   background: #e3b778;
 }
+#login-status:empty, #create-status:empty { display: none; }
 #login-status, #create-status {
   color: #eac087;
   overflow-wrap: anywhere;

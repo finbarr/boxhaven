@@ -17,7 +17,7 @@
       <div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find a box…" aria-label="Find a box" autocomplete="off"><kbd>⌘K</kbd></div>
       <div id="list-error" class="list-error" role="alert" hidden></div>
       <nav id="boxes" aria-label="Your boxes"></nav>
-      <div class="sidebar-footer"><img src="icon.png" alt="Happy BoxHaven boxes"><div><strong>BoxHaven</strong><span id="fleet-status">Connecting to your backend</span></div><button id="settings" class="icon-button" aria-label="Connection settings" title="Connection settings">⚙</button></div>
+      <div class="sidebar-footer"><span id="fleet-status" role="status">Connecting…</span><button id="settings" class="icon-button" aria-label="Connection settings" title="Connection settings">⚙</button></div>
     </aside>
     <main>
       <header id="session-header" hidden>
@@ -27,33 +27,26 @@
       <p id="action-error" role="alert" hidden></p>
       <section id="welcome" class="welcome">
         <img src="icon.png" alt="Three happy boxes at home">
-        <p class="eyebrow">A HOME FOR YOUR WORK</p>
-        <h2 id="welcome-title">Your boxes. One place.</h2>
-        <p id="welcome-copy">Select a box to pick up where you left off.<br>Your sessions keep running when you step away.</p>
-        <div id="empty-guide" hidden><button id="create-first-box" class="primary">Create your first box</button></div>
+        <h2 id="welcome-title">Loading…</h2>
+        <div id="empty-guide" hidden><button id="create-first-box" class="primary">Create box</button></div>
       </section>
       <div id="terminals" hidden></div>
-      <footer id="session-footer" hidden><span><i></i> Persistent tmux session</span><span>Ctrl B, then D to detach</span></footer>
     </main>
   </div>
   <dialog id="create-dialog" aria-labelledby="create-title">
     <form id="create-form">
       <div class="dialog-heading"><h2 id="create-title">New box</h2><button type="button" id="close-create" class="icon-button" aria-label="Close new box">×</button></div>
-      <p>A fresh remote workspace. We’ll open its terminal as soon as it’s ready.</p>
-      <label for="new-box-name">Box name</label><input id="new-box-name" placeholder="my-next-idea" required maxlength="63" pattern="[a-z0-9]+(-[a-z0-9]+)*" title="Lowercase letters, numbers, and single hyphens between words" autocomplete="off" spellcheck="false" autofocus>
-      <p class="hint">Uses your configured provider and backend’s default size and region. Starts empty; no local project files are uploaded.</p>
+      <label for="new-box-name">Box name</label><input id="new-box-name" placeholder="work" required maxlength="63" pattern="[a-z0-9]+(-[a-z0-9]+)*" title="Lowercase letters, numbers, and single hyphens between words" autocomplete="off" spellcheck="false" autofocus>
       <p id="create-status" role="status" aria-live="polite"></p>
       <button id="create-box" class="primary" type="submit">Create box</button>
     </form>
   </dialog>
   <dialog id="settings-dialog">
     <form id="login-form">
-      <div class="dialog-heading"><h2>Connect to BoxHaven</h2><button type="button" id="close-settings" class="icon-button" aria-label="Close settings">×</button></div>
-      <p>BoxHaven uses the same account and backend as your CLI. Sign in here to connect a new account or server.</p>
-      <label for="backend-url">Backend API URL</label><input id="backend-url" type="url" placeholder="Leave blank to use your CLI configuration">
-      <p class="hint">First time? Use https://api.boxhaven.dev or your self-hosted backend.</p>
+      <div class="dialog-heading"><h2>Connection</h2><button type="button" id="close-settings" class="icon-button" aria-label="Close settings">×</button></div>
+      <label for="backend-url">Backend URL</label><input id="backend-url" type="url" placeholder="Configured backend" title="Leave blank to keep your backend. For a new connection, enter https://api.boxhaven.dev or your server URL.">
       <p id="login-status" role="status"></p>
-      <button id="login" class="primary" type="submit">Sign in with your browser</button>
+      <button id="login" class="primary" type="submit">Sign in</button>
     </form>
   </dialog>
   <script src="renderer.js"></script>

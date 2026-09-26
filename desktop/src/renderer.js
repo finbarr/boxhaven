@@ -42,9 +42,9 @@ function renderList() {
     row.onclick = () => selectBox(box.name);
     $('boxes').append(row);
   }
-  if (!visible.length) {
+  if (!visible.length && (query || !loaded)) {
     const note = document.createElement('p'); note.className = 'list-note';
-    note.textContent = query ? 'No matching boxes.' : loaded ? 'Your boxes will appear here.' : 'Loading your boxes…';
+    note.textContent = query ? 'No results' : 'Loading…';
     $('boxes').append(note);
   }
 }
@@ -54,13 +54,12 @@ function renderHeader() {
   const session = terminals.get(selected);
   const showTerminal = Boolean(box && session);
   $('session-header').hidden = !box;
-  $('session-footer').hidden = !showTerminal;
   $('terminals').hidden = !showTerminal;
   $('welcome').hidden = showTerminal;
   $('empty-guide').hidden = Boolean(box) || !loaded || boxes.length > 0 || Boolean(listError);
+  $('welcome-title').hidden = !$('empty-guide').hidden;
   if (!box) {
-    $('welcome-title').textContent = listError ? 'Let’s get you connected.' : loaded && !boxes.length ? 'Make room for your next idea.' : 'Your boxes. One place.';
-    $('welcome-copy').textContent = listError ? 'Check your connection or open settings to sign in.' : loaded && !boxes.length ? 'Your remote machines will appear here as soon as you create them.' : 'Select a box to pick up where you left off. Your sessions keep running when you step away.';
+    $('welcome-title').textContent = listError ? 'Not connected' : loaded ? 'Select a box' : 'Loading…';
     return;
   }
   $('box-name').textContent = box.name;
@@ -73,8 +72,7 @@ function renderHeader() {
   $('detach').hidden = !session?.live;
   $('reconnect').hidden = !box.ready || Boolean(session?.live);
   if (!session) {
-    $('welcome-title').textContent = box.status === 'destroying' ? 'Your box is shutting down.' : box.status === 'creating' ? 'Your box is getting ready.' : 'This box needs attention.';
-    $('welcome-copy').textContent = box.status === 'destroying' ? 'Deleting the remote machine and its files. You can keep working in another box.' : box.status === 'creating' ? 'We’ll connect once setup finishes. You can keep working in another box.' : 'Run bh status for this box to inspect its recovery state.';
+    $('welcome-title').textContent = box.status === 'destroying' ? 'Destroying…' : box.status === 'creating' ? 'Creating…' : 'Recovery required';
   }
 }
 
@@ -133,7 +131,7 @@ async function refresh() {
   try {
     boxes = await api.list(); loaded = true; listError = '';
     $('list-error').hidden = true;
-    $('fleet-status').textContent = `${boxes.filter(box => box.status === 'online').length} online · Updated just now`;
+    $('fleet-status').textContent = `${boxes.filter(box => box.status === 'online').length} online`;
     for (const [name, session] of terminals) {
       if (!boxes.some(box => box.name === name)) { session.terminal.dispose(); session.element.remove(); terminals.delete(name); }
     }
@@ -149,7 +147,7 @@ async function refresh() {
   } catch (error) {
     listError = cleanError(error);
     $('list-error').textContent = listError; $('list-error').hidden = false;
-    $('fleet-status').textContent = loaded ? 'Refresh failed · Status may be stale' : 'Not connected';
+    $('fleet-status').textContent = loaded ? 'Refresh failed' : 'Not connected';
   } finally {
     loading = false; $('refresh').disabled = false;
     renderList(); renderHeader();
@@ -164,9 +162,9 @@ function renderCreation() {
   $('create-box').disabled = busy;
   $('create-box').textContent = busy ? 'Creating box…' : 'Create box';
   $('create-form').setAttribute('aria-busy', String(busy));
-  $('create-status').textContent = creation?.message || '';
+  $('create-status').textContent = busy ? '' : creation?.message || '';
   $('creation-notice').hidden = !creation || creation.status === 'complete';
-  $('creation-notice').textContent = busy ? `Creating ${creation.name}…` : creation ? `Couldn’t finish creating ${creation.name}. View details.` : '';
+  $('creation-notice').textContent = busy ? `Creating ${creation.name}…` : creation ? `${creation.name}: creation failed` : '';
 }
 function showCreate() {
   if (creation?.status !== 'creating') {
@@ -210,7 +208,7 @@ api.onExit(({ name, exitCode }) => {
   const session = terminals.get(name);
   if (!session) return;
   session.live = false; session.status = exitCode === 0 ? 'Detached' : 'Disconnected';
-  session.terminal.writeln('\r\n\x1b[90mConnection closed. Reconnect to return to your box.\x1b[0m');
+  session.terminal.writeln('\r\n\x1b[90mConnection closed.\x1b[0m');
   renderList(); renderHeader();
 });
 api.onRefresh(refresh);
@@ -249,7 +247,7 @@ $('settings').onclick = () => $('settings-dialog').showModal();
 $('close-settings').onclick = () => $('settings-dialog').close();
 $('login-form').onsubmit = async event => {
   event.preventDefault(); $('login').disabled = true;
-  $('login-status').textContent = 'Finish signing in in your browser. This can take a moment.';
+  $('login-status').textContent = 'Waiting for browser sign-in…';
   try {
     await api.login($('backend-url').value);
     selected = null;

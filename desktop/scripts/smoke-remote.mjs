@@ -28,7 +28,7 @@ try {
   const terminal = page.locator('.terminal-pane:not([hidden])');
   await page.getByRole('button', { name: 'New box', exact: true }).click();
   await page.getByLabel('Box name', { exact: true }).fill(name);
-  await page.getByRole('button', { name: 'Create box', exact: true }).click();
+  await page.locator('#create-box').click();
   await page.screenshot({ path: join(out, 'desktop-real-creating.png') });
   await page.waitForFunction(() => !document.querySelector('#create-dialog').open || (document.querySelector('#create-status').textContent && !document.querySelector('#create-box').disabled), null, { timeout: 10 * 60 * 1000 });
   assert.equal(await page.locator('#create-dialog').isVisible(), false, await page.locator('#create-status').textContent());

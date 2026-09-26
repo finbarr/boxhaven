@@ -99,7 +99,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     if (creating) throw new Error('A box is already being created. Wait for it to finish.');
     if (signingIn) throw new Error('Finish signing in before creating a box.');
     if (destructions.has(name)) throw new Error('Wait for this box to finish being destroyed.');
-    creation = { name, status: 'creating', message: `Creating ${name}… You can keep working while it gets ready.` };
+    creation = { name, status: 'creating', message: `Creating ${name}…` };
     const started = creation;
     creating = (async () => {
       // Check fresh state: create can resume an existing box, which is not what

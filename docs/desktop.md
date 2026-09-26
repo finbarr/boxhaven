@@ -42,7 +42,7 @@ The desktop app needs no additional backend services or deployment changes.
 ## Start some work
 
 Click **New box** in the sidebar, name it, and click **Create box**. On an empty
-account, you can also click **Create your first box**. BoxHaven creates the box
+account, you can also click **Create box** in the empty pane. BoxHaven creates the box
 and opens its terminal automatically when it is ready.
 
 New boxes use your configured provider and the backend's default size and region.
