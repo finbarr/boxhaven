@@ -4,6 +4,7 @@ const { pathToFileURL } = require('node:url');
 const { homedir } = require('node:os');
 const pty = require('node-pty');
 const { cliEnvironment, runCLI, parseMachines, terminalSize, validName } = require('./cli.cjs');
+const { filterArgs, parseCatalog, createArgs } = require('./catalog.cjs');
 
 async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   app.setName('BoxHaven');
@@ -21,6 +22,9 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   let listing;
   let signingIn;
   let creating;
+  let renaming;
+  let renameEpoch = 0;
+  const catalogs = new Map();
   let creation = null;
   let quitting = false;
   let commands = new AbortController();
@@ -42,8 +46,15 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     });
   }
   handle('boxes:list', () => {
-    listing ||= runCLI(cliPath, ['list', '--json'], { cwd, env, signal: commands.signal }).then(output => {
-      const list = parseMachines(output);
+    listing ||= (async () => {
+      let list;
+      // A list begun before a rename must not remove its still-live terminal.
+      for (;;) {
+        if (renaming) await renaming.catch(() => {});
+        const epoch = renameEpoch;
+        list = parseMachines(await runCLI(cliPath, ['list', '--json'], { cwd, env, signal: commands.signal }));
+        if (!renaming && epoch === renameEpoch) break;
+      }
       for (const box of list) {
         if (creation?.status === 'creating' && creation.name === box.name) { box.ready = false; box.status = 'creating'; }
         if (destructions.get(box.name)?.confirmed) { box.ready = false; box.status = 'destroying'; }
@@ -53,10 +64,36 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
         if (!machines.has(name)) { session.process.kill(); sessions.delete(name); }
       }
       return list;
-    }).finally(() => { listing = null; });
+    })().finally(() => { listing = null; });
     return listing;
   });
   handle('boxes:creation', () => creation);
+  handle('boxes:catalog', async (provider, region) => {
+    const output = await runCLI(cliPath, filterArgs(provider, region), { cwd, env, timeout: 90000, signal: commands.signal });
+    const catalog = parseCatalog(output, region);
+    if (catalogs.size > 20) catalogs.clear();
+    catalogs.set(`${catalog.provider}/${catalog.region}`, catalog);
+    return catalog;
+  });
+  handle('boxes:rename', (name, identity, next) => {
+    if (!validName(next) || next.length > 63) throw new Error('Use up to 63 lowercase letters, numbers, and hyphens.');
+    const box = machines.get(name);
+    if (!box || box.identity !== identity) throw new Error('This box has changed. Refresh and select it again.');
+    if (renaming || signingIn || destructions.size || creating) throw new Error('Wait for the current box operation to finish.');
+    if (next === name) return;
+    renameEpoch++;
+    renaming = (async () => {
+      const current = parseMachines(await runCLI(cliPath, ['list', '--json'], { cwd, env }));
+      if (current.find(box => box.name === name)?.identity !== identity) throw new Error('This box has changed. Refresh and select it again.');
+      if (current.some(box => box.name === next)) throw new Error(`A box named ${next} already exists.`);
+      await runCLI(cliPath, ['rename', name, next], { cwd, env, timeout: 90000 });
+      const session = sessions.get(name);
+      if (session) { sessions.delete(name); session.name = next; sessions.set(next, session); }
+      machines.delete(name); machines.set(next, { ...box, name: next });
+      send('boxes:renamed', { name, next });
+    })().finally(() => { renameEpoch++; renaming = null; send('app:refresh'); });
+    return renaming;
+  });
   handle('boxes:open-preview', async name => {
     const box = machines.get(name);
     if (!box?.previewURL) throw new Error('This box has no web preview URL.');
@@ -64,6 +101,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     await shell.openExternal(box.previewURL);
   });
   handle('boxes:destroy', (name, identity) => {
+    if (renaming) throw new Error('Wait for the rename to finish.');
     const box = machines.get(name);
     if (!box || box.identity !== identity) throw new Error('This box has changed. Refresh and select it again.');
     if (signingIn) throw new Error('Finish signing in before destroying a box.');
@@ -94,19 +132,21 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     destructions.set(name, operation);
     return operation.promise;
   });
-  handle('boxes:create', name => {
+  handle('boxes:create', (name, settings) => {
     if (!validName(name) || name.length > 63) throw new Error('Use up to 63 lowercase letters, numbers, and single hyphens between words.');
     if (creating) throw new Error('A box is already being created. Wait for it to finish.');
     if (signingIn) throw new Error('Finish signing in before creating a box.');
     if (destructions.has(name)) throw new Error('Wait for this box to finish being destroyed.');
-    creation = { name, status: 'creating', message: `Creating ${name}…` };
+    if (renaming) throw new Error('Wait for the rename to finish.');
+    const args = createArgs(name, settings, catalogs.get(`${settings?.provider}/${settings?.region}`));
+    creation = { name, settings, status: 'creating', message: `Creating ${name}…` };
     const started = creation;
     creating = (async () => {
       // Check fresh state: create can resume an existing box, which is not what
       // the New box action promises. Never sync the desktop's home directory.
       const current = parseMachines(await runCLI(cliPath, ['list', '--json'], { cwd, env }));
       if (current.some(box => box.name === name)) throw new Error(`A box named ${name} already exists. Choose another name or select it in the sidebar.`);
-      await runCLI(cliPath, ['create', name, '--no-sync'], { cwd, env, timeout: 10 * 60 * 1000 });
+      await runCLI(cliPath, args, { cwd, env, timeout: 10 * 60 * 1000 });
       creation = { name, status: 'complete', message: `${name} is ready.` };
     })().catch(error => {
       creation = { name, status: 'error', message: error.message };
@@ -118,6 +158,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     return started;
   });
   handle('session:connect', (name, cols, rows) => {
+    if (renaming) throw new Error('Wait for the rename to finish.');
     const box = machines.get(name);
     if (creation?.status === 'creating' && creation.name === name) throw new Error('This box is still being created.');
     if (destructions.get(name)?.confirmed) throw new Error('This box is being destroyed.');
@@ -125,18 +166,18 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     const size = terminalSize(cols, rows);
     if (sessions.has(name)) return;
     const process = pty.spawn(cliPath, ['connect', name], { name: 'xterm-256color', ...size, cwd, env });
-    const session = { process, pending: 0 };
+    const session = { name, process, pending: 0 };
     sessions.set(name, session);
     process.onData(data => {
-      if (sessions.get(name) !== session) return;
+      if (sessions.get(session.name) !== session) return;
       session.pending += data.length;
       if (session.pending > 256 * 1024) process.pause();
-      send('session:data', { name, data });
+      send('session:data', { name: session.name, data });
     });
     process.onExit(({ exitCode }) => {
-      if (sessions.get(name) !== session) return;
-      sessions.delete(name);
-      send('session:exit', { name, exitCode });
+      if (sessions.get(session.name) !== session) return;
+      sessions.delete(session.name);
+      send('session:exit', { name: session.name, exitCode });
     });
   });
   handle('session:write', (name, data) => {
@@ -155,6 +196,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   });
   handle('session:detach', name => { sessions.get(name)?.process.kill(); });
   handle('account:login', backend => {
+    if (renaming) throw new Error('Wait for the rename to finish.');
     if (signingIn) return signingIn;
     if (creating) throw new Error('Wait for your new box to finish before changing accounts.');
     if (destructions.size) throw new Error('Wait for box destruction to finish before changing accounts.');
@@ -166,7 +208,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
       if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('Enter an HTTP or HTTPS backend URL.');
       args.push('--backend-url', url.href.replace(/\/$/, ''));
     }
-    signingIn = runCLI(cliPath, args, { cwd, env, timeout: 10 * 60 * 1000, signal: commands.signal }).then(() => { machines.clear(); }).finally(() => { signingIn = null; });
+    signingIn = runCLI(cliPath, args, { cwd, env, timeout: 10 * 60 * 1000, signal: commands.signal }).then(() => { machines.clear(); catalogs.clear(); }).finally(() => { signingIn = null; });
     return signingIn;
   });
 
@@ -200,13 +242,13 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   app.on('second-instance', () => { if (!window) createWindow(); window.show(); window.focus(); });
   app.on('activate', () => { if (!window) createWindow(); });
   app.on('before-quit', event => {
-    if (creating || destructions.size) {
+    if (creating || renaming || destructions.size) {
       // Finish mutations before exit so quitting cannot abandon an in-flight
       // request. Closing a window still leaves other remote sessions running.
       event.preventDefault();
       if (!quitting) {
         quitting = true;
-        void Promise.allSettled([creating, ...[...destructions.values()].map(operation => operation.promise)]).then(() => { quitting = false; app.quit(); });
+        void Promise.allSettled([creating, renaming, ...[...destructions.values()].map(operation => operation.promise)]).then(() => { quitting = false; app.quit(); });
       }
       return;
     }

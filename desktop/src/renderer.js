@@ -13,6 +13,11 @@ let listError = '';
 let creation = null;
 let createdSelection = null;
 let refreshAgain = false;
+let catalog = null;
+let catalogLoading = false;
+let catalogRequest = 0;
+let renameTarget = null;
+let renameBusy = false;
 const destroying = new Set();
 const openingPreview = new Set();
 const cleanError = error => error.message.replace(/^Error invoking remote method '[^']+': Error: /, '');
@@ -63,6 +68,7 @@ function renderHeader() {
     return;
   }
   $('box-name').textContent = box.name;
+  $('rename-box').disabled = renameBusy || destroying.has(box.name) || box.status === 'destroying' || creation?.status === 'creating';
   $('box-meta').textContent = [box.team, box.provider, box.region, box.size].filter(Boolean).join('  /  ');
   $('open-preview').disabled = !box.previewURL || box.status === 'destroying' || openingPreview.has(box.name);
   $('open-preview').title = box.previewURL || 'No preview URL is configured for this box.';
@@ -96,10 +102,10 @@ async function connectBox(name) {
       theme: { background: '#151719', foreground: '#d3d7df', cursor: '#e4b477', selectionBackground: '#74604488', black: '#292e35', red: '#e78e87', green: '#a1c58d', yellow: '#e4bb7d', blue: '#8cb4de', magenta: '#bd9edc', cyan: '#87c8c8', white: '#dde1e6', brightBlack: '#757f8b' },
     });
     const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open(element);
-    session = { terminal, fit, element, live: false, status: 'Opening session…' };
+    session = { name, terminal, fit, element, live: false, status: 'Opening session…' };
     terminals.set(name, session);
-    terminal.onData(data => { if (session.live) api.write(name, data).catch(error => terminal.writeln(`\r\n${cleanError(error)}`)); });
-    terminal.onResize(({ cols, rows }) => { if (session.live) api.resize(name, cols, rows).catch(() => {}); });
+    terminal.onData(data => { if (session.live) api.write(session.name, data).catch(error => terminal.writeln(`\r\n${cleanError(error)}`)); });
+    terminal.onResize(({ cols, rows }) => { if (session.live) api.resize(session.name, cols, rows).catch(() => {}); });
   } else session.terminal.write('\r\n\x1b[90mReconnecting…\x1b[0m\r\n');
   session.live = true; session.status = 'Opening session…';
   renderHeader(); fitSession(name); renderList();
@@ -157,9 +163,20 @@ async function refresh() {
 
 function renderCreation() {
   const busy = creation?.status === 'creating';
-  if (busy) $('new-box-name').value = creation.name;
+  if (busy) {
+    $('new-box-name').value = creation.name;
+    for (const key of ['provider', 'size']) {
+      const field = $(`create-${key}`);
+      if (![...field.options].some(option => option.value === creation.settings[key])) field.add(new Option(creation.settings[key], creation.settings[key]));
+      field.value = creation.settings[key];
+    }
+    $('create-region').value = creation.settings.region;
+  }
   $('new-box-name').disabled = busy;
-  $('create-box').disabled = busy;
+  $('create-box').disabled = busy || catalogLoading || !catalog || !$('create-size').value;
+  $('create-provider').disabled = busy || !$('create-provider').options.length;
+  $('create-region').disabled = busy || catalogLoading;
+  $('create-size').disabled = busy || catalogLoading || !catalog;
   $('create-box').textContent = busy ? 'Creating box…' : 'Create box';
   $('create-form').setAttribute('aria-busy', String(busy));
   $('create-status').textContent = busy ? '' : creation?.message || '';
@@ -170,6 +187,7 @@ function showCreate() {
   if (creation?.status !== 'creating') {
     creation = null;
     $('create-form').reset();
+    void loadCatalog('', '');
   }
   renderCreation();
   $('create-dialog').showModal();
@@ -191,7 +209,7 @@ $('create-form').onsubmit = async event => {
   event.preventDefault();
   $('create-box').disabled = true;
   try {
-    creation = await api.create($('new-box-name').value);
+    creation = await api.create($('new-box-name').value, { provider: $('create-provider').value, region: $('create-region').value.trim(), size: $('create-size').value });
   } catch (error) {
     creation = { name: $('new-box-name').value, status: 'error', message: cleanError(error) };
   }
@@ -199,9 +217,75 @@ $('create-form').onsubmit = async event => {
 };
 void api.creation().then(state => { if (!creation) { creation = state; renderCreation(); } }).catch(() => {});
 
+
+function selectedSize() {
+  const choice = catalog?.choices.find(choice => choice.value === $('create-size').value);
+  $('size-summary').hidden = !choice;
+  if (choice) {
+    $('size-hardware').textContent = [choice.cpus == null ? '' : `${choice.cpus} vCPU`, choice.memoryGB == null ? '' : `${choice.memoryGB} GB RAM`, choice.diskGB == null ? '' : `${choice.diskGB} GB disk`].filter(Boolean).join(' · ');
+    const money = (value, digits) => new Intl.NumberFormat(undefined, { style: 'currency', currency: choice.currency, minimumFractionDigits: 2, maximumFractionDigits: digits }).format(value);
+    $('size-price').textContent = choice.hourly === null ? 'Price unavailable' : `${money(choice.hourly, 4)}/hr · ~${money(choice.monthly, 2)}/mo`;
+  }
+  renderCreation();
+}
+async function loadCatalog(provider, region) {
+  const request = ++catalogRequest;
+  const previous = $('create-size').value || 'small';
+  catalog = null; catalogLoading = true;
+  $('catalog-status').textContent = 'Loading settings…'; $('retry-catalog').hidden = true;
+  $('size-summary').hidden = true; renderCreation();
+  try {
+    const result = await api.catalog(provider, region);
+    if (request !== catalogRequest) return;
+    catalog = result;
+    $('create-provider').replaceChildren(...result.providers.map(provider => new Option(provider.label, provider.name)));
+    $('create-provider').value = result.provider;
+    $('create-region').value = result.region;
+    $('create-regions').replaceChildren(...result.regions.map(region => new Option(region, region)));
+    $('create-size').replaceChildren(new Option('Select size', ''));
+    for (const choice of result.choices) $('create-size').append(new Option(choice.value, choice.value));
+    $('create-size').value = result.choices.some(choice => choice.value === previous) ? previous : '';
+    $('catalog-status').textContent = result.choices.length ? '' : 'No sizes available';
+  } catch (error) {
+    if (request !== catalogRequest) return;
+    $('catalog-status').textContent = cleanError(error); $('retry-catalog').hidden = false;
+  } finally {
+    if (request === catalogRequest) { catalogLoading = false; selectedSize(); }
+  }
+}
+$('create-provider').onchange = () => loadCatalog($('create-provider').value, '');
+$('create-region').oninput = () => { catalogRequest++; catalog = null; catalogLoading = false; $('size-summary').hidden = true; renderCreation(); };
+$('create-region').onchange = () => loadCatalog($('create-provider').value, $('create-region').value.trim());
+$('create-size').onchange = selectedSize;
+$('retry-catalog').onclick = () => loadCatalog($('create-provider').value, $('create-region').value.trim());
+
+api.onRenamed(({ name, next }) => {
+  const session = terminals.get(name);
+  if (session) { terminals.delete(name); session.name = next; session.element.dataset.name = next; terminals.set(next, session); }
+  boxes = boxes.map(box => box.name === name ? { ...box, name: next } : box);
+  if (selected === name) { selected = next; localStorage.setItem('boxhaven.selected-box', next); }
+  renderList(); renderHeader();
+});
+$('rename-box').onclick = () => {
+  renameTarget = boxes.find(box => box.name === selected);
+  if (!renameTarget) return;
+  $('rename-name').value = renameTarget.name; $('rename-status').textContent = '';
+  $('rename-dialog').showModal(); $('rename-name').select();
+};
+$('close-rename').onclick = () => $('rename-dialog').close();
+$('rename-form').onsubmit = async event => {
+  event.preventDefault();
+  if (!renameTarget || renameBusy) return;
+  renameBusy = true; $('save-name').disabled = true; $('rename-name').disabled = true;
+  $('rename-status').textContent = ''; $('save-name').textContent = 'Saving…'; renderHeader();
+  try { await api.rename(renameTarget.name, renameTarget.identity, $('rename-name').value); $('rename-dialog').close(); }
+  catch (error) { $('rename-status').textContent = cleanError(error); }
+  finally { renameBusy = false; $('save-name').disabled = false; $('rename-name').disabled = false; $('save-name').textContent = 'Save'; renderHeader(); void refresh(); }
+};
+
 api.onData(({ name, data }) => {
   const session = terminals.get(name);
-  if (session) session.terminal.write(data, () => { void api.ack(name, data.length).catch(() => {}); });
+  if (session) session.terminal.write(data, () => { void api.ack(session.name, data.length).catch(() => {}); });
   else void api.ack(name, data.length).catch(() => {});
 });
 api.onExit(({ name, exitCode }) => {

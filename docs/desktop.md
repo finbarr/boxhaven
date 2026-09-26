@@ -41,12 +41,17 @@ The desktop app needs no additional backend services or deployment changes.
 
 ## Start some work
 
-Click **New box** in the sidebar, name it, and click **Create box**. On an empty
+Click **New box** in the sidebar, name it, choose a provider, region, and size,
+and click **Create box**. On an empty
 account, you can also click **Create box** in the empty pane. BoxHaven creates the box
 and opens its terminal automatically when it is ready.
 
-New boxes use your configured provider and the backend's default size and region.
-They start empty; creating a box does not upload local project files. Clone your
+The size picker shows CPU, memory, disk, and hourly/monthly price estimates from
+your backend for the CLI's active team. Backend billing quotes take precedence
+over provider prices. Monthly estimates assume 730 hours when no monthly price
+is supplied.
+
+New boxes start empty; creating a box does not upload local project files. Clone your
 repository and start an agent directly in the box's terminal.
 
 You can close the dialog and work in another box while provisioning continues.
@@ -59,6 +64,12 @@ Select an existing box to reattach to its session. The sidebar refreshes every
 15 seconds; use the refresh button or **⌘R** for an immediate update. Use **⌘K**
 to find a box. **Detach** closes that terminal connection, and **Reconnect**
 reattaches to the remote session.
+
+## Rename a box
+
+Click the pencil beside the selected box’s name, enter a new name, and click
+**Save**. Names use lowercase letters, numbers, and hyphens, up to 63 characters.
+The current terminal stays connected and the sidebar updates automatically.
 
 ## Open a preview
 

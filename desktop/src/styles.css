@@ -18,7 +18,7 @@ body {
   overflow: hidden;
 }
 button,
-input {
+input, select {
   font: inherit;
 }
 button {
@@ -37,7 +37,7 @@ button:disabled {
   cursor: default;
 }
 button:focus-visible,
-input:focus-visible {
+input:focus-visible, select:focus-visible {
   outline: 2px solid #dda65d;
   outline-offset: 2px;
 }
@@ -284,6 +284,12 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.box-title { display: flex; align-items: center; gap: 6px; }
+.box-title .icon-button { font-size: 16px; line-height: 20px; flex-shrink: 0; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.field-row > div { min-width: 0; }
+#size-summary { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; font-size: 12px; color: #aaaeb6; }
+#size-price { color: #eac087; font-weight: 500; }
 #box-meta {
   font-size: 11px;
   color: #858c96;
@@ -390,7 +396,7 @@ dialog label {
   font-size: 12px;
   margin: 22px 0 9px;
 }
-dialog input {
+dialog input, dialog select {
   width: 100%;
   padding: 10px;
   border: 1px solid #484e57;
@@ -410,8 +416,8 @@ dialog input {
 .primary:hover {
   background: #e3b778;
 }
-#login-status:empty, #create-status:empty { display: none; }
-#login-status, #create-status {
+#login-status:empty, #create-status:empty, #catalog-status:empty, #rename-status:empty { display: none; }
+#login-status, #create-status, #catalog-status, #rename-status {
   color: #eac087;
   overflow-wrap: anywhere;
 }

@@ -26,8 +26,11 @@ sets them. Commands run from your home directory, not a project checkout; projec
 with `bh login --backend-url https://api.example.com`, or use Connection settings
 inside the app. First-time in-app login requires a backend URL.
 
-Click **New box** in the sidebar, enter a name, and click **Create box**. The app
-uses your configured provider and the backend's default size and region. New
+Click **New box** in the sidebar, enter a name, and choose a provider, region,
+and size. Available sizes include hardware details and hourly/monthly estimates
+from your backend's catalog for the CLI's active team. Backend billing quotes
+take precedence over provider prices; monthly estimates use 730 hours when no
+monthly price is supplied. Click **Create box** to provision it. New
 boxes start empty: no local project directory is synced. When provisioning
 finishes, the app selects the box and opens its terminal automatically. Clone a
 repository and start your agent directly in that terminal.
@@ -38,6 +41,9 @@ an in-progress creation; quitting waits for the creation request to finish.
 Existing names are rejected rather than reused. If creation fails, refresh the
 list before trying another name: the provider may already have allocated a box.
 Project sync remains available through the CLI.
+
+Click the pencil beside a box’s name to rename it. The active terminal stays
+connected, and the sidebar and selected box update to the new name.
 
 Use **Open preview** in the selected box's header to open its backend-assigned
 web URL in your default browser. The button is disabled when no preview URL is
@@ -90,7 +96,9 @@ guide in headless Chrome at desktop and mobile widths.
 The first smoke launches real Electron and a real native PTY with a test CLI.
 It checks switching, input/output, reconnection, resizing, delayed readiness,
 refresh failures, empty states, settings, creation and automatic connection,
-duplicate names, provider errors, and window reopening during creation.
+provider/region/size selection and pricing, catalog failures and retry, duplicate
+names, provider errors, and window reopening during creation. Renaming checks
+duplicate names, stale targets, failures, and input through the existing PTY.
 It also checks preview URL validation/opening, missing previews, deletion
 confirmation and cancellation, provider failures, and stale deletion targets.
 Native browser opening and confirmation responses are intercepted at the OS
@@ -100,7 +108,7 @@ The fixture is only a test entry point and is excluded from packaged builds.
 
 The remote smoke uses your configured backend and login, provisions one billable
 temporary box through the app's **New box** dialog (using `--no-sync`), verifies
-automatic connection, real SSH/tmux input and persistent shell
+creation settings, rename with the terminal still connected, real SSH/tmux input and persistent shell
 state across app restarts, opens its live preview, then destroys that exact box
 through the app and checks its absence. The remote test supplies the native
 confirmation response for its own disposable box; failure cleanup uses the CLI.
