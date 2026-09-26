@@ -42,6 +42,20 @@ Update with `npx skills update boxhaven -g`. See the
 version pins, and batch examples. Inside a remote box, a separate
 image-installed `boxhaven-web-preview` skill describes its web preview setup.
 
+## Desktop App
+
+The [BoxHaven desktop app](desktop/README.md) shows your boxes in a sidebar and
+attaches to the selected box's persistent tmux session. It uses your existing
+CLI login and works with hosted or self-hosted backends. The first macOS build
+is available from source:
+
+```bash
+npm --prefix desktop ci
+npm run desktop
+```
+
+See the [desktop guide](docs/desktop.md) for prerequisites and packaging.
+
 ## Use The CLI Directly
 
 From your project directory, after [installing `bh`](https://docs.boxhaven.dev/getting-started#install-the-cli):

@@ -39,3 +39,12 @@ backend/dist/
 backend/dist-app/
 backend/.artifacts/
 deploy/digitalocean/.env.production
+
+# Desktop build products
+desktop/node_modules/
+desktop/dist/
+desktop/bin/
+desktop/release/
+desktop/.artifacts/
+desktop/assets/icon.png
+desktop/assets/BoxHaven.icns

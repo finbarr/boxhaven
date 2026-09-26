@@ -3,6 +3,8 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "scripts": {
+    "desktop": "npm --prefix desktop start",
+    "desktop:package": "npm --prefix desktop run package",
     "deploy:app": "deploy/digitalocean/deploy-production.sh",
     "deploy:production:local": "deploy/digitalocean/deploy-production.sh --local",
     "deploy:production:verify": "deploy/digitalocean/deploy-production.sh --verify-only",

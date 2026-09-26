@@ -8,6 +8,9 @@ docs hostname serves the static `docs/.vitepress/dist` artifact. Backend state
 is stored on the host under `/opt/boxhaven/data/backend` so it can be backed up
 outside Docker. Replace `example.com` with a domain you control.
 
+The [BoxHaven desktop app](../../desktop/README.md) can connect to this deployment
+using the existing CLI login. No desktop-specific deployment changes are needed.
+
 The docs build also generates `llms.txt` and each public page's `.md` source
 alongside its HTML. Caddy serves these from the same artifact; no extra service
 or route configuration is needed.

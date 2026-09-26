@@ -1,0 +1,30 @@
+{
+  "name": "boxhaven-desktop",
+  "productName": "BoxHaven",
+  "version": "0.1.0",
+  "description": "Your BoxHaven machines, together on your desktop.",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "main": "src/main.cjs",
+  "scripts": {
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "build": "node scripts/build.mjs",
+    "start": "npm run build && electron .",
+    "package": "npm run build && node scripts/package.mjs",
+    "test": "node --test test/*.test.cjs",
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "smoke:remote": "npm run build && node scripts/smoke-remote.mjs"
+  },
+  "dependencies": {
+    "node-pty": "1.1.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@electron/rebuild": "4.2.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "electron": "44.4.5",
+    "esbuild": "0.25.12",
+    "playwright": "1.58.2"
+  }
+}

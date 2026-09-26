@@ -21,6 +21,10 @@ const pageSeo: Record<string, { title: string, description: string, noindex?: bo
     title: 'CLI Reference',
     description: 'Reference for every bh command: create, run, connect, sync, list, status, rename, move, destroy, image, team, login, logout, config, and version.',
   },
+  '/desktop': {
+    title: 'Desktop App',
+    description: 'Build BoxHaven Desktop, browse your remote boxes, and attach to persistent tmux sessions using your existing CLI account.',
+  },
   '/agent-skill': {
     title: 'BoxHaven Agent Skill',
     description: 'Install the public BoxHaven skill for Codex or Claude and launch persistent remote agent tasks in parallel.',
@@ -207,6 +211,7 @@ export default defineConfig({
           { text: 'Overview', link: '/' },
           { text: 'Getting Started', link: '/getting-started' },
           { text: 'Agent Skill', link: '/agent-skill' },
+          { text: 'Desktop App', link: '/desktop' },
           { text: 'CLI Reference', link: '/commands' },
         ]
       },

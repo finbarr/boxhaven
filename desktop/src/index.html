@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'none'">
+  <title>BoxHaven</title>
+  <link rel="stylesheet" href="renderer.css">
+</head>
+<body>
+  <header class="titlebar"><span>BoxHaven</span></header>
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="sidebar-heading"><h1>Your boxes <span id="count">0</span></h1><button id="refresh" class="icon-button" aria-label="Refresh boxes" title="Refresh boxes (⌘R)">↻</button></div>
+      <div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find a box…" aria-label="Find a box" autocomplete="off"><kbd>⌘K</kbd></div>
+      <div id="list-error" class="list-error" role="alert" hidden></div>
+      <nav id="boxes" aria-label="Your boxes"></nav>
+      <div class="sidebar-footer"><img src="icon.png" alt="Happy BoxHaven boxes"><div><strong>BoxHaven</strong><span id="fleet-status">Connecting to your backend</span></div><button id="settings" class="icon-button" aria-label="Connection settings" title="Connection settings">⚙</button></div>
+    </aside>
+    <main>
+      <header id="session-header" hidden>
+        <div class="session-heading"><span class="box-glyph" aria-hidden="true">⬡</span><div><h2 id="box-name"></h2><p id="box-meta"></p></div></div>
+        <div class="session-actions"><span id="connection-state" role="status"></span><button id="reconnect" hidden>Reconnect</button><button id="detach" class="subtle" hidden>Detach</button></div>
+      </header>
+      <section id="welcome" class="welcome">
+        <img src="icon.png" alt="Three happy boxes at home">
+        <p class="eyebrow">A HOME FOR YOUR WORK</p>
+        <h2 id="welcome-title">Your boxes. One place.</h2>
+        <p id="welcome-copy">Select a box to pick up where you left off.<br>Your sessions keep running when you step away.</p>
+        <div id="empty-guide" hidden><code>bh create work</code><code>bh run work claude</code><p>Create a box from your project folder, then refresh.</p></div>
+      </section>
+      <div id="terminals" hidden></div>
+      <footer id="session-footer" hidden><span><i></i> Persistent tmux session</span><span>Ctrl B, then D to detach</span></footer>
+    </main>
+  </div>
+  <dialog id="settings-dialog">
+    <form id="login-form">
+      <div class="dialog-heading"><h2>Connect to BoxHaven</h2><button type="button" id="close-settings" class="icon-button" aria-label="Close settings">×</button></div>
+      <p>BoxHaven uses the same account and backend as your CLI. Sign in here to connect a new account or server.</p>
+      <label for="backend-url">Backend API URL</label><input id="backend-url" type="url" placeholder="Leave blank to use your CLI configuration">
+      <p class="hint">First time? Use https://api.boxhaven.dev or your self-hosted backend.</p>
+      <p id="login-status" role="status"></p>
+      <button id="login" class="primary" type="submit">Sign in with your browser</button>
+    </form>
+  </dialog>
+  <script src="renderer.js"></script>
+</body>
+</html>
