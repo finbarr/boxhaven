@@ -22,12 +22,15 @@ const launch = () => electron.launch(process.argv.includes('--packaged') ? {
 try {
   assert.equal(JSON.parse((await bh('list', '--json')).stdout).machines.some(box => box.name === name), false);
   attempted = true;
-  console.log(`Creating disposable box ${name} without syncing any local files.`);
-  await bh('create', name, '--no-sync');
+  console.log(`Creating disposable box ${name} inside the app without syncing any local files.`);
   app = await launch();
   const page = await app.firstWindow();
   const terminal = page.locator('.terminal-pane:not([hidden])');
-  await page.locator(`.box-row[data-name="${name}"]`).click();
+  await page.getByRole('button', { name: 'New box', exact: true }).click();
+  await page.getByLabel('Box name', { exact: true }).fill(name);
+  await page.getByRole('button', { name: 'Create box', exact: true }).click();
+  await page.screenshot({ path: join(out, 'desktop-real-creating.png') });
+  await expect(page.locator('#create-dialog')).not.toBeVisible({ timeout: 10 * 60 * 1000 });
   // Wait for the actual remote shell, not merely successful PTY allocation.
   await expect(terminal).toContainText('boxhaven@', { timeout: 90000 });
   await page.keyboard.type("printf 'BOXHAVEN_DESKTOP_%s\\n' VERIFIED; export BOXHAVEN_DESKTOP_SMOKE=persisted");
@@ -43,7 +46,7 @@ try {
   await reopened.keyboard.press('Enter');
   await expect(reopened.locator('.terminal-pane:not([hidden])')).toContainText('PERSISTENCE_persisted', { timeout: 15000 });
   await reopened.screenshot({ path: join(out, 'desktop-real-reconnected.png') });
-  console.log('Real remote smoke passed: list, certificate SSH, tmux input/output, app close, session persistence, app reopen.');
+  console.log('Real remote smoke passed: in-app creation, automatic selection/connection, certificate SSH, tmux input/output, app close, session persistence, app reopen.');
 } finally {
   if (app) await app.close();
   if (attempted) {

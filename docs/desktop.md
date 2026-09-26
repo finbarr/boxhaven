@@ -41,23 +41,28 @@ The desktop app needs no additional backend services or deployment changes.
 
 ## Start some work
 
-Create a box and start an agent from your local project folder:
+Click **New box** in the sidebar, name it, and click **Create box**. On an empty
+account, you can also click **Create your first box**. BoxHaven creates the box
+and opens its terminal automatically when it is ready.
 
-```sh
-bh create work
-bh run work claude
-# Ctrl-b, then d disconnects without stopping the agent.
-bh connect work
-```
+New boxes use your configured provider and the backend's default size and region.
+They start empty; creating a box does not upload local project files. Clone your
+repository and start an agent directly in the box's terminal.
 
-Select **work** in the app to attach there instead. The sidebar refreshes every
+You can close the dialog and work in another box while provisioning continues.
+Click the progress notice in the sidebar to see its status or any error. Closing
+and reopening the window preserves creation progress; quitting waits for the
+request to finish. If creation fails, check the refreshed sidebar before trying
+another name, since the provider may already have allocated the box.
+
+Select an existing box to reattach to its session. The sidebar refreshes every
 15 seconds; use the refresh button or **⌘R** for an immediate update. Use **⌘K**
 to find a box. **Detach** closes that terminal connection, and **Reconnect**
 reattaches to the remote session.
 
 The sidebar's `online`, `offline`, and `creating` labels describe the machine's
 heartbeat and setup state. They do not indicate agent progress or completion.
-Box creation, sync, and deletion continue to use the CLI.
+Project sync and deletion are available through the CLI.
 
 Connections use `bh connect`, including its existing credential forwarding,
 short-lived SSH certificates, and pinned host keys. See the [security model](./security).

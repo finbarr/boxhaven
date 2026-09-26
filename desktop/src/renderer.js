@@ -10,6 +10,9 @@ let selected = null;
 let loading = false;
 let loaded = false;
 let listError = '';
+let creation = null;
+let createdSelection = null;
+let refreshAgain = false;
 const cleanError = error => error.message.replace(/^Error invoking remote method '[^']+': Error: /, '');
 
 function renderList() {
@@ -118,7 +121,7 @@ function selectBox(name) {
 }
 
 async function refresh() {
-  if (loading) return;
+  if (loading) { refreshAgain = true; return; }
   loading = true; $('refresh').disabled = true;
   try {
     boxes = await api.list(); loaded = true; listError = '';
@@ -128,6 +131,10 @@ async function refresh() {
       if (!boxes.some(box => box.name === name)) { session.terminal.dispose(); session.element.remove(); terminals.delete(name); }
     }
     if (selected && !boxes.some(box => box.name === selected)) selected = null;
+    if (createdSelection && boxes.some(box => box.name === createdSelection)) {
+      const name = createdSelection; createdSelection = null;
+      $('search').value = ''; selectBox(name);
+    }
     if (!selected) {
       const previous = localStorage.getItem('boxhaven.selected-box');
       if (boxes.some(box => box.name === previous)) selectBox(previous);
@@ -139,8 +146,53 @@ async function refresh() {
   } finally {
     loading = false; $('refresh').disabled = false;
     renderList(); renderHeader();
+    if (refreshAgain) { refreshAgain = false; void refresh(); }
   }
 }
+
+function renderCreation() {
+  const busy = creation?.status === 'creating';
+  if (busy) $('new-box-name').value = creation.name;
+  $('new-box-name').disabled = busy;
+  $('create-box').disabled = busy;
+  $('create-box').textContent = busy ? 'Creating box…' : 'Create box';
+  $('create-form').setAttribute('aria-busy', String(busy));
+  $('create-status').textContent = creation?.message || '';
+  $('creation-notice').hidden = !creation || creation.status === 'complete';
+  $('creation-notice').textContent = busy ? `Creating ${creation.name}…` : creation ? `Couldn’t finish creating ${creation.name}. View details.` : '';
+}
+function showCreate() {
+  if (creation?.status !== 'creating') {
+    creation = null;
+    $('create-form').reset();
+  }
+  renderCreation();
+  $('create-dialog').showModal();
+  if (!creation) $('new-box-name').focus();
+}
+api.onCreation(state => {
+  creation = state; renderCreation();
+  if (state.status === 'complete') {
+    createdSelection = state.name;
+    $('create-dialog').close();
+  }
+  void refresh();
+});
+$('new-box').onclick = showCreate;
+$('create-first-box').onclick = showCreate;
+$('creation-notice').onclick = () => { renderCreation(); $('create-dialog').showModal(); };
+$('close-create').onclick = () => $('create-dialog').close();
+$('create-form').onsubmit = async event => {
+  event.preventDefault();
+  $('create-box').disabled = true;
+  try {
+    creation = await api.create($('new-box-name').value);
+  } catch (error) {
+    creation = { name: $('new-box-name').value, status: 'error', message: cleanError(error) };
+  }
+  renderCreation();
+};
+void api.creation().then(state => { if (!creation) { creation = state; renderCreation(); } }).catch(() => {});
 
 api.onData(({ name, data }) => {
   const session = terminals.get(name);

@@ -26,16 +26,20 @@ sets them. Commands run from your home directory, not a project checkout; projec
 with `bh login --backend-url https://api.example.com`, or use Connection settings
 inside the app. First-time in-app login requires a backend URL.
 
-Create machines and start agents with the existing CLI, from your project:
+Click **New box** in the sidebar, enter a name, and click **Create box**. The app
+uses your configured provider and the backend's default size and region. New
+boxes start empty: no local project directory is synced. When provisioning
+finishes, the app selects the box and opens its terminal automatically. Clone a
+repository and start your agent directly in that terminal.
 
-```sh
-bh create work
-bh run work claude
-# Ctrl-b, then d disconnects without stopping Claude.
-bh connect work
-```
+You can close the creation dialog and keep working in another box. Progress and
+errors remain accessible in the sidebar. Closing/reopening the window preserves
+an in-progress creation; quitting waits for the creation request to finish.
+Existing names are rejected rather than reused. If creation fails, refresh the
+list before trying another name: the provider may already have allocated a box.
+Project sync and deletion remain available through the CLI.
 
-Select that box in the desktop sidebar to reattach there. For an unused box,
+Select any existing box in the desktop sidebar to reattach. For an unused box,
 `bh connect` starts its managed shell session. The app invokes exactly the same
 command, including the CLI's existing credential-forwarding behavior, short-lived
 SSH certificates, and host-key pinning.
@@ -73,11 +77,14 @@ guide in headless Chrome at desktop and mobile widths.
 
 The first smoke launches real Electron and a real native PTY with a test CLI.
 It checks switching, input/output, reconnection, resizing, delayed readiness,
-refresh failures, empty states, and settings. Screenshots go to `.artifacts/`.
+refresh failures, empty states, settings, creation and automatic connection,
+duplicate names, provider errors, and window reopening during creation.
+Screenshots go to `.artifacts/`.
 The fixture is only a test entry point and is excluded from packaged builds.
 
 The remote smoke uses your configured backend and login, provisions one billable
-temporary box with `--no-sync`, verifies real SSH/tmux input and persistent shell
+temporary box through the app's **New box** dialog (using `--no-sync`), verifies
+automatic connection, real SSH/tmux input and persistent shell
 state across app restarts, then destroys that exact box and checks its absence.
 It does not sync your checkout or run a model. Standard `bh connect` credential
 forwarding still applies.

@@ -351,23 +351,23 @@ h2 {
   color: #959ba4;
   margin-top: 14px;
 }
-.welcome code {
-  font-size: 12px;
-  display: block;
-  text-align: left;
-  margin: 6px 0;
-  color: #d6c3a9;
-}
 #empty-guide {
   margin-top: 15px;
-  padding: 12px 20px;
-  border: 1px solid #33363a;
-  border-radius: 9px;
-  background: #1b1e21;
 }
-#empty-guide p {
+.new-box {
+  text-align: left;
+  margin: 0 0 14px;
+  color: #dfb57f;
+  background: #2b2723;
+  border-color: #493d30;
+}
+.new-box span { margin-right: 8px; font-size: 17px; }
+.creation-notice {
+  margin: 0 0 12px;
   font-size: 11px;
-  color: #8c939d;
+  text-align: left;
+  color: #eac087;
+  overflow-wrap: anywhere;
 }
 #terminals {
   flex: 1;
@@ -408,6 +408,8 @@ h2 {
 }
 dialog {
   width: 460px;
+  max-height: calc(100vh - 40px);
+  overflow: auto;
   background: #222529;
   color: #e4e5e7;
   border: 1px solid #464b53;
@@ -457,7 +459,7 @@ dialog .hint {
 .primary:hover {
   background: #e3b778;
 }
-#login-status {
+#login-status, #create-status {
   color: #eac087;
   overflow-wrap: anywhere;
 }

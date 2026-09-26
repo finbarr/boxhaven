@@ -6,6 +6,9 @@ function subscribe(channel, callback) {
 }
 contextBridge.exposeInMainWorld('boxhaven', {
   list: () => ipcRenderer.invoke('boxes:list'),
+  create: name => ipcRenderer.invoke('boxes:create', name),
+  creation: () => ipcRenderer.invoke('boxes:creation'),
+  onCreation: callback => subscribe('boxes:creation', callback),
   connect: (name, cols, rows) => ipcRenderer.invoke('session:connect', name, cols, rows),
   write: (name, data) => ipcRenderer.invoke('session:write', name, data),
   resize: (name, cols, rows) => ipcRenderer.invoke('session:resize', name, cols, rows),

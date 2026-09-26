@@ -3,7 +3,7 @@ const { join } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { homedir } = require('node:os');
 const pty = require('node-pty');
-const { cliEnvironment, runCLI, parseMachines, terminalSize } = require('./cli.cjs');
+const { cliEnvironment, runCLI, parseMachines, terminalSize, validName } = require('./cli.cjs');
 
 async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   app.setName('BoxHaven');
@@ -20,6 +20,9 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   let machines = new Map();
   let listing;
   let signingIn;
+  let creating;
+  let creation = null;
+  let quitting = false;
   let commands = new AbortController();
   const sessions = new Map();
 
@@ -40,6 +43,9 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   handle('boxes:list', () => {
     listing ||= runCLI(cliPath, ['list', '--json'], { cwd, env, signal: commands.signal }).then(output => {
       const list = parseMachines(output);
+      for (const box of list) {
+        if (creation?.status === 'creating' && creation.name === box.name) { box.ready = false; box.status = 'creating'; }
+      }
       machines = new Map(list.map(box => [box.name, box]));
       for (const [name, session] of sessions) {
         if (!machines.has(name)) { session.process.kill(); sessions.delete(name); }
@@ -48,8 +54,32 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     }).finally(() => { listing = null; });
     return listing;
   });
+  handle('boxes:creation', () => creation);
+  handle('boxes:create', name => {
+    if (!validName(name) || name.length > 63) throw new Error('Use up to 63 lowercase letters, numbers, and single hyphens between words.');
+    if (creating) throw new Error('A box is already being created. Wait for it to finish.');
+    if (signingIn) throw new Error('Finish signing in before creating a box.');
+    creation = { name, status: 'creating', message: `Creating ${name}… You can keep working while it gets ready.` };
+    const started = creation;
+    creating = (async () => {
+      // Check fresh state: create can resume an existing box, which is not what
+      // the New box action promises. Never sync the desktop's home directory.
+      const current = parseMachines(await runCLI(cliPath, ['list', '--json'], { cwd, env }));
+      if (current.some(box => box.name === name)) throw new Error(`A box named ${name} already exists. Choose another name or select it in the sidebar.`);
+      await runCLI(cliPath, ['create', name, '--no-sync'], { cwd, env, timeout: 10 * 60 * 1000 });
+      creation = { name, status: 'complete', message: `${name} is ready.` };
+    })().catch(error => {
+      creation = { name, status: 'error', message: error.message };
+    }).finally(() => {
+      creating = null;
+      send('boxes:creation', creation);
+    });
+    send('boxes:creation', started);
+    return started;
+  });
   handle('session:connect', (name, cols, rows) => {
     const box = machines.get(name);
+    if (creation?.status === 'creating' && creation.name === name) throw new Error('This box is still being created.');
     if (!box?.ready) throw new Error('This box is not ready to connect. Refresh its status and try again.');
     const size = terminalSize(cols, rows);
     if (sessions.has(name)) return;
@@ -85,6 +115,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   handle('session:detach', name => { sessions.get(name)?.process.kill(); });
   handle('account:login', backend => {
     if (signingIn) return signingIn;
+    if (creating) throw new Error('Wait for your new box to finish before changing accounts.');
     if (sessions.size) throw new Error('Detach your open sessions before signing in to another account.');
     if (typeof backend !== 'string') throw new Error('Invalid backend URL.');
     const args = ['login'];
@@ -126,7 +157,16 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
   ]));
   app.on('second-instance', () => { if (!window) createWindow(); window.show(); window.focus(); });
   app.on('activate', () => { if (!window) createWindow(); });
-  app.on('before-quit', disposeSessions);
+  app.on('before-quit', event => {
+    if (creating) {
+      // Finish provisioning before exit so quitting cannot abandon an in-flight
+      // request. Closing a window still leaves other remote sessions running.
+      event.preventDefault();
+      if (!quitting) { quitting = true; void creating.finally(() => app.quit()); }
+      return;
+    }
+    disposeSessions();
+  });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   createWindow();
 }

@@ -46,7 +46,8 @@ image-installed `boxhaven-web-preview` skill describes its web preview setup.
 
 The [BoxHaven desktop app](desktop/README.md) shows your boxes in a sidebar and
 attaches to the selected box's persistent tmux session. It uses your existing
-CLI login and works with hosted or self-hosted backends. The first macOS build
+CLI login and works with hosted or self-hosted backends. Click **New box** to
+create an empty remote workspace and open its terminal automatically. The first macOS build
 is available from source:
 
 ```bash
