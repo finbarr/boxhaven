@@ -417,7 +417,8 @@ func runRemoteSync(args []string, projectDir string) error {
 }
 
 func runRemoteList(args []string, projectDir string) error {
-	if len(args) != 0 {
+	jsonOutput := len(args) == 1 && args[0] == "--json"
+	if len(args) != 0 && !jsonOutput {
 		return fmt.Errorf("unexpected bh list args: %v", args)
 	}
 	cfg, err := loadConfig(projectDir)
@@ -431,15 +432,18 @@ func runRemoteList(args []string, projectDir string) error {
 	if err := refreshInstalledSSHConfig(cfg, machines); err != nil {
 		warn("Could not refresh direct SSH aliases: %v", err)
 	}
+	sort.Slice(machines, func(i, j int) bool {
+		return machines[i].Name < machines[j].Name
+	})
+	if jsonOutput {
+		return writeRemoteMachineListJSON(os.Stdout, machines, time.Now())
+	}
 	if len(machines) == 0 {
 		if _, err := fmt.Fprintln(os.Stdout, "No remote machines."); err != nil {
 			return err
 		}
 		return nil
 	}
-	sort.Slice(machines, func(i, j int) bool {
-		return machines[i].Name < machines[j].Name
-	})
 	table := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	if _, err := fmt.Fprintln(table, "NAME\tSTATUS\tTEAM\tPROVIDER\tSIZE\tURL"); err != nil {
 		return err

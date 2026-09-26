@@ -171,9 +171,13 @@ and Claude alongside the box creation, agent, and retrieval workflows.
 
 ```bash
 bh list
+bh list --json
 ```
 
 Lists your boxes with name, status, team, provider, size, and preview URL.
+With `--json`, prints a `{ "machines": [...] }` object containing each box's
+backend record and the same `status` label. An empty list is `[]`. Private SSH
+key and certificate paths are never included. Diagnostics remain on stderr.
 Status is reported from the machine agent's last heartbeat: `creating` until
 bootstrap completes, then `online` when the agent has been seen within the
 last five minutes, otherwise `offline`. An interrupted create with an uncertain

@@ -107,7 +107,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "%sBoxHaven%s %s\n\n", colorBold, colorReset, Version)
 	fmt.Fprintf(os.Stderr, "%sUSAGE:%s\n", colorBold, colorReset)
 	fmt.Fprintln(os.Stderr, "  bh create <name> [--provider <name>] [--size <name>] [--region <region>] [--image <image>] [--team <team>] [--no-sync]")
-	fmt.Fprintln(os.Stderr, "  bh list")
+	fmt.Fprintln(os.Stderr, "  bh list [--json]")
 	fmt.Fprintln(os.Stderr, "  bh destroy <name> [--force]")
 	fmt.Fprintln(os.Stderr, "  bh rename <old-name> <new-name>")
 	fmt.Fprintln(os.Stderr, "  bh move <name> <team>")
