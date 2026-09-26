@@ -1,0 +1,55 @@
+{
+  "mode": "built-in imagegen",
+  "scope": "Design review only",
+  "revision": 3,
+  "images": [
+    {
+      "key": "01-desktop-v3",
+      "ref": "01-desktop-v2.png",
+      "prompt": "Use case: precise-object-edit. Attached image is the edit target. Preserve the BoxHaven light-paper design exactly: same layout, typography, cabin logo, compact box portraits, terminal, controls and content except requested edits. Fully opaque output. Creator attribution must use ONLY small pastel circles with initials, no 'Created by' text and no spelled-out creator names. JT for Jamie, MK for Morgan, DS for Devon. Keep status words. In all left sidebar box rows remove names Jamie/Morgan/Devon from status lines; put small initials circle on RIGHT side of row before ellipsis: JT, MK, DS, JT. In header remove 'Created by Jamie' from metadata, put small JT circle immediately beside box name. Keep sidebar Rename/Destroy menu. Make offline cat-ear box peacefully asleep with closed curved eyelids and relaxed tiny mouth, no grumpiness. No other changes.",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/01-desktop-v2.png",
+      "output": "01-desktop-v3.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-2188e277-11f5-4691-ad0f-d646e8955274.png"
+    },
+    {
+      "key": "02-website-v3",
+      "ref": "02-website-v2.png",
+      "prompt": "Use case: precise-object-edit. Attached image is the edit target. Preserve the BoxHaven light-paper design exactly: same layout, typography, cabin logo, compact box portraits, terminal, controls and content except requested edits. Fully opaque output. Creator attribution must use ONLY small pastel circles with initials, no 'Created by' text and no spelled-out creator names. JT for Jamie, MK for Morgan, DS for Devon. Keep status words. In top right Product lab card remove all three 'Created by [name]' lines, keep existing right-side JT/MK/DS circles. In embedded product header remove Created by Jamie line and replace with small JT circle to RIGHT of selected box name. In embedded left sidebar remove Jamie, Morgan, Devon names below status; add small JT/MK/DS circles on RIGHT of respective rows. Sidebar row now has box portrait, box name with status under it, and small circle at right. No extra attribution text. Preserve main marketing headline and body exactly.",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/02-website-v2.png",
+      "output": "02-website-v3.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-a09432af-5115-44ab-bee6-25b10993c227.png"
+    },
+    {
+      "key": "03-console-v3",
+      "ref": "03-console-v2.png",
+      "prompt": "Use case: precise-object-edit. Attached image is the edit target. Preserve the BoxHaven light-paper design exactly: same layout, typography, cabin logo, compact box portraits, terminal, controls and content except requested edits. Fully opaque output. Creator attribution must use ONLY small pastel circles with initials, no 'Created by' text and no spelled-out creator names. JT for Jamie, MK for Morgan, DS for Devon. Keep status words. In table replace 'Created by' column heading with a small person outline icon. Each cell in that column contains ONLY existing initials circle, remove Jamie/Morgan/Devon names. Preserve all seven left navigation entries including Billing. Offline cat-ear portrait peacefully sleeping, curved closed eyes, relaxed little mouth. Keep other table data and columns exactly.",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/03-console-v2.png",
+      "output": "03-console-v3.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-56bffb9b-ff9f-4ee6-913a-0bca8e4519e4.png"
+    },
+    {
+      "key": "04-creation-v3",
+      "ref": "04-creation-v2.png",
+      "prompt": "Use case: precise-object-edit. Attached image is the edit target. Preserve the BoxHaven light-paper design exactly: same layout, typography, cabin logo, compact box portraits, terminal, controls and content except requested edits. Fully opaque output. Creator attribution must use ONLY small pastel circles with initials, no 'Created by' text and no spelled-out creator names. JT for Jamie, MK for Morgan, DS for Devon. Keep status words. In background left sidebar remove creator names from status lines; add small initials circle at RIGHT of every row JT/MK/DS/JT. Header remove Created by Jamie from metadata, add small JT circle to right of box name. Offline cat-ear box peacefully asleep, closed curved eyelids, relaxed mouth. Keep entire creation dialog and all text, fields, prices, layout unchanged.",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/04-creation-v2.png",
+      "output": "04-creation-v3.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-cdbe253f-f254-4356-8026-f04d746b3eca.png"
+    },
+    {
+      "key": "05-box-detail-v3",
+      "ref": "05-box-detail-v2.png",
+      "prompt": "Use case: precise-object-edit. Attached image is the edit target. Preserve the BoxHaven light-paper design exactly: same layout, typography, cabin logo, compact box portraits, terminal, controls and content except requested edits. Fully opaque output. Creator attribution must use ONLY small pastel circles with initials, no 'Created by' text and no spelled-out creator names. JT for Jamie, MK for Morgan, DS for Devon. Keep status words. In central table remove Created by Jamie/Morgan/Devon lines under box names. Place small JT/MK/DS/JT circles on RIGHT of box-name cell before Status column, one per row. In details sidebar REMOVE entire Created by Jamie metadata row; instead put small JT circle adjacent to box name in header, retaining rename pencil. Preserve open Destroy overflow menu and all seven nav items. Offline cat-ear portrait peacefully asleep, closed curved eyes. No other changes.",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/05-box-detail-v2.png",
+      "output": "05-box-detail-v3.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-478c1085-5880-470a-9649-96520c884d0e.png"
+    },
+    {
+      "key": "09-box-states-v3",
+      "ref": "09-box-states.png",
+      "prompt": "Use case: precise-object-edit. Attached state matrix is edit target. Keep entire layout, heading, labels, 3 rows 5 columns, server identity/accessories and render style exactly. Change ONLY: 1. All three Offline characters should look peacefully ASLEEP: fully closed gently curved eyelids, relaxed tiny smile or softly relaxed mouth, no half-open eyes, no straight grumpy mouth. Spectacles retain blue frames with clearly closed eyes behind them. Small subtle zzz above each offline character optional. 2. All three Recovery required characters have unmistakably RED glowing LED, change orange accent warning rays to red too. Creating LEDs/rays remain ORANGE. Online remains GREEN. Offline remains unlit grey. Destroying remains unchanged. Do not change labels, body designs, other columns, or add controls. Fully opaque ivory board.",
+      "reference": "/Users/finbarr/code/boxhaven-workspace/boxhaven/design/light-paper/09-box-states.png",
+      "output": "09-box-states-v3.png",
+      "generatedSource": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-fffcfdaf-9ce9-4e95-9e2a-07318f4ac9d2.png"
+    }
+  ]
+}

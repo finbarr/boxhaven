@@ -4,8 +4,8 @@ Review concepts only. No application code or production assets were changed.
 
 Open `index.html` for eight imagegen studies: desktop, website, web console,
 creation, box details, 24 box identities, lifecycle expressions, and the Dock
-icon. Click a screen to enlarge it. Revision 2 exact prompts are in
-`prompts-v2.json`; earlier images and `prompts.json` remain as review history.
+icon. Click a screen to enlarge it. Revision 3 exact prompts are in
+`prompts-v3.json`; earlier images and prompts remain as review history.
 
 ## Direction
 
@@ -31,7 +31,11 @@ icon. Click a screen to enlarge it. Revision 2 exact prompts are in
   shared storage or collaborative text editing. Desktop team selection is a
   proposed interaction, not a claim about the currently implemented app.
 - Show who created each box consistently in the homepage preview, desktop rows,
-  console table, and details sidebar. Creator is not current operator or owner.
+  console table, and details sidebar using small pastel initials circles only.
+  Place circles at the right of sidebar rows and beside selected box names;
+  omit repeated creator phrases and spelled-out names. Full creator names and
+  attribution belong in accessible labels and hover/focus tooltips. Creator is
+  not current operator or owner.
 - Keep rename in the desktop sidebar row menu and the console details sidebar.
   Remove inline rename from the table and main terminal header.
 - Remove the toolbar Disconnect action. Destroy box lives in the overflow menu
@@ -47,8 +51,10 @@ tie, sailor, moon, comet, cactus, acorn, goggles, crown, duck, bunny, pixel,
 stripe, freckles, snail, beret, and Saturn. The reference boards enlarge them
 for inspection; product portrait sizes remain unchanged.
 
-Each identity supports creating (curious, amber), online (awake, green), offline
-(subdued, dim), recovery required (concerned, amber), and destroying (brief fade).
+Each identity supports creating (curious, orange), online (awake, green), offline
+(peacefully asleep, closed curved eyes, dim light), recovery required (concerned,
+red light and accents), and destroying (brief fade). Offline expressions should
+feel relaxed, never grumpy or annoyed.
 The state sheet is the expression reference; screen mockups illustrate placement.
 Offline means unavailable, not necessarily powered off or free of charges.
 Destroying appears only after confirmed deletion starts; remove the row only
