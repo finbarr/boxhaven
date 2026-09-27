@@ -27,10 +27,10 @@ test("GitHub release checks return and cache an official update", async () => {
       requests += 1;
       requestedURL = String(input);
       requestedInit = init;
-      return new Response(JSON.stringify({
+      return new Response(JSON.stringify([{ tag_name: "desktop-v9.0.0" }, { tag_name: "v8.0.0", prerelease: true }, {
         tag_name: "v0.2.0",
         html_url: "https://github.com/finbarr/boxhaven/releases/tag/v0.2.0",
-      }), { status: 200, headers: { "content-type": "application/json" } });
+      }]), { status: 200, headers: { "content-type": "application/json" } });
     },
   });
 
@@ -75,10 +75,10 @@ test("release checks fail silently and retry later", async () => {
 
 test("release links cannot leave the BoxHaven repository", async () => {
   const checker = new GitHubReleaseChecker("v0.1.0", {
-    fetcher: async () => new Response(JSON.stringify({
+    fetcher: async () => new Response(JSON.stringify([{
       tag_name: "v0.2.0",
       html_url: "https://example.com/not-boxhaven",
-    }), { status: 200, headers: { "content-type": "application/json" } }),
+    }]), { status: 200, headers: { "content-type": "application/json" } }),
   });
   assert.equal(
     (await checker.versionStatus()).release_url,

@@ -80,6 +80,8 @@ func runCmd(args []string) error {
 			return err
 		}
 		return printConfig(cfg)
+	case "upgrade":
+		return runUpgrade(args[1:])
 	case "version":
 		printVersion()
 		return nil
@@ -96,7 +98,7 @@ func shouldCheckForUpdates(args []string) bool {
 		return false
 	}
 	switch args[0] {
-	case "version", "help", "-h", "--help":
+	case "version", "upgrade", "help", "-h", "--help":
 		return false
 	default:
 		return true
@@ -124,6 +126,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  bh logout")
 	fmt.Fprintln(os.Stderr, "  bh config")
 	fmt.Fprintln(os.Stderr, "  bh version")
+	fmt.Fprintln(os.Stderr, "  bh upgrade [--version vX.Y.Z]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintf(os.Stderr, "%sCONFIG:%s\n", colorBold, colorReset)
 	fmt.Fprintln(os.Stderr, "  Global:  ~/.config/boxhaven/config.toml")

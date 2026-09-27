@@ -15,7 +15,7 @@ Use your own domains for the console, API, documentation, and box previews.
 The API can serve the console on the same origin for a simple installation.
 
 The open-source console shows a compact update banner when the backend reports
-a newer public BoxHaven GitHub release. The backend caches successful checks
+a newer stable core BoxHaven GitHub release. Desktop and skill releases are excluded. The backend caches successful checks
 for 24 hours, retries failed checks after an hour, and returns no update when
 offline, so release discovery never prevents the console from loading. Banner
 links open the exact GitHub release in a new tab.

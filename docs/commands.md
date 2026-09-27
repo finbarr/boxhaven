@@ -327,3 +327,15 @@ Environment overrides:
 - `BOXHAVEN_BACKEND_URL`
 - `BOXHAVEN_TOKEN`
 - `GH_TOKEN` or `GITHUB_TOKEN` for GitHub repository access inside remote boxes
+
+## bh upgrade
+
+```bash
+bh upgrade
+# Select an exact published version:
+bh upgrade --version vX.Y.Z
+```
+
+Updates a direct binary installation after verifying its checksum and version.
+Homebrew users should run `brew update && brew upgrade boxhaven`; desktop users
+update the whole app. Existing remote sessions continue running.

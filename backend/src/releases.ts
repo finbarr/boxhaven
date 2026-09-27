@@ -1,4 +1,4 @@
-export const latestReleaseAPIURL = "https://api.github.com/repos/finbarr/boxhaven/releases/latest";
+export const latestReleaseAPIURL = "https://api.github.com/repos/finbarr/boxhaven/releases?per_page=100";
 export const releaseCheckIntervalMs = 24 * 60 * 60 * 1000;
 export const failedReleaseCheckIntervalMs = 60 * 60 * 1000;
 
@@ -7,6 +7,8 @@ const versionPattern = /^v?(\d+)\.(\d+)\.(\d+)/;
 
 type GitHubRelease = {
   tag_name: string;
+  draft?: boolean;
+  prerelease?: boolean;
   html_url?: string;
 };
 
@@ -78,7 +80,10 @@ export class GitHubReleaseChecker implements ReleaseUpdateChecker {
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`latest release request returned HTTP ${response.status}`);
-      const payload = await response.json() as Partial<GitHubRelease>;
+      const releases = await response.json() as GitHubRelease[];
+      const payload = releases.filter(release => !release.draft && !release.prerelease && /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(release.tag_name))
+        .sort((a, b) => compareSemver(b.tag_name, a.tag_name))[0];
+      if (!payload) throw new Error("no stable core release found");
       const version = comparableVersion(payload.tag_name || "");
       if (!version) throw new Error("latest release is missing a semantic version tag");
       this.cachedRelease = {

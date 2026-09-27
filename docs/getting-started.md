@@ -319,3 +319,12 @@ bh destroy work
 Destroy boxes when the work is done so the cloud provider does not keep billing
 for idle machines. The CLI prompts before destroying; pass `--force` only for
 noninteractive cleanup scripts.
+
+## Updating
+
+Homebrew installations use `brew update && brew upgrade boxhaven`. Direct binary
+installations use `bh upgrade`, or `bh upgrade --version vX.Y.Z` to select an
+exact release, including a deliberate downgrade. The upgrader checks the release
+checksum and executable version before atomically replacing the installed CLI.
+It needs write access to its installation directory. The desktop app updates
+its bundled CLI separately; `bh upgrade` never modifies an app bundle.

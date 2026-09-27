@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,10 +16,11 @@ import (
 
 const (
 	backgroundVersionCheckCommand = "__check-for-updates"
-	latestReleaseAPIURL           = "https://api.github.com/repos/finbarr/boxhaven/releases/latest"
+	latestReleaseAPIURL           = "https://api.github.com/repos/finbarr/boxhaven/releases?per_page=100"
 	versionCheckInterval          = 24 * time.Hour
 )
 
+var stableReleasePattern = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 var versionPattern = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)`)
 var startBackgroundVersionCheck = startBackgroundVersionCheckProcess
 
@@ -29,8 +31,10 @@ type versionCache struct {
 }
 
 type githubRelease struct {
-	TagName string `json:"tag_name"`
-	HTMLURL string `json:"html_url"`
+	TagName    string `json:"tag_name"`
+	HTMLURL    string `json:"html_url"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
 }
 
 func versionCachePath() (string, error) {
@@ -122,11 +126,23 @@ func fetchLatestRelease(client *http.Client, apiURL string) (githubRelease, erro
 	if resp.StatusCode != http.StatusOK {
 		return githubRelease{}, fmt.Errorf("latest release request returned HTTP %d", resp.StatusCode)
 	}
-	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	var releases []githubRelease
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&releases); err != nil {
 		return githubRelease{}, err
 	}
-	return release, nil
+	var latest githubRelease
+	for _, release := range releases {
+		if release.Draft || release.Prerelease || !stableReleasePattern.MatchString(release.TagName) {
+			continue
+		}
+		if latest.TagName == "" || isNewerVersion(release.TagName, latest.TagName) {
+			latest = release
+		}
+	}
+	if latest.TagName == "" {
+		return githubRelease{}, fmt.Errorf("no stable CLI release found")
+	}
+	return latest, nil
 }
 
 func readVersionCache(path string) (versionCache, error) {

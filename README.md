@@ -63,6 +63,9 @@ See the [desktop guide](docs/desktop.md) for prerequisites and packaging. A
 Apple-notarized DMG. It remains a draft pending final installation review;
 source builds are available until the installer is published.
 
+Standalone CLI updates: `bh upgrade` for direct installs, or
+`brew update && brew upgrade boxhaven` for Homebrew installs.
+
 ## Use The CLI Directly
 
 From your project directory, after [installing `bh`](https://docs.boxhaven.dev/getting-started#install-the-cli):

@@ -29,8 +29,8 @@ try {
     await expect(page.locator('h1')).toContainText(guide === 'desktop' ? 'BoxHaven Desktop' : 'CLI Reference');
     if (guide === 'commands') {
       await page.waitForLoadState('networkidle');
-      await page.locator('#bh-size').evaluate(element => window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - 110, behavior: 'instant' }));
-      await expect(page.locator('#bh-size')).toBeInViewport();
+      await page.locator(process.argv.includes('--upgrade') ? '#bh-upgrade' : '#bh-size').evaluate(element => window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - 110, behavior: 'instant' }));
+      await expect(page.locator(process.argv.includes('--upgrade') ? '#bh-upgrade' : '#bh-size')).toBeInViewport();
     }
     await page.screenshot({ path: join(out, `docs-${guide}-${width}.png`), fullPage: guide === 'desktop' });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

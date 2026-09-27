@@ -101,7 +101,7 @@ func TestRefreshVersionCacheUsesGitHubReleaseMetadata(t *testing.T) {
 		accept = r.Header.Get("Accept")
 		userAgent = r.Header.Get("User-Agent")
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"tag_name":"v0.2.0","html_url":"https://github.com/finbarr/boxhaven/releases/tag/v0.2.0"}`))
+		_, _ = w.Write([]byte(`[{"tag_name":"desktop-v8.0.0"},{"tag_name":"v9.0.0","prerelease":true},{"tag_name":"v8.0.0","draft":true},{"tag_name":"boxhaven-skill-v9.0.0"},{"tag_name":"v0.2.0","html_url":"https://github.com/finbarr/boxhaven/releases/tag/v0.2.0"},{"tag_name":"v0.1.0"}]`))
 	}))
 	t.Cleanup(server.Close)
 

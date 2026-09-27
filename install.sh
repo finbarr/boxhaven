@@ -138,8 +138,8 @@ resolve_version() {
   )"
   rm -f "$release_json"
 
-  if [ -z "$VERSION" ]; then
-    error "Could not parse the latest release tag from the GitHub API"
+  if ! printf '%s\n' "$VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+    error "GitHub latest is not a stable CLI release; set BOXHAVEN_VERSION=vX.Y.Z"
     exit 1
   fi
 }
