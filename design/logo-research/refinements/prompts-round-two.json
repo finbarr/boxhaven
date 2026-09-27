@@ -1,0 +1,26 @@
+{
+  "tool": "Built-in image_gen",
+  "variants": [
+    {
+      "id": "classic-medium-shadow",
+      "prompt": "Use case: precise-object-edit. Edit this Classic smiling-box logo on a plain warm paper canvas. Change ONLY the crisp sage printed shadow: increase its offset from roughly 2% to 4% of the green body's width, both down and right. It should remain a modest narrow offset, not a second box. Preserve the existing exact forest-green body, rounded square silhouette, round cream eyes, short thick U-shaped cream smile, facial placement, body size and position. Front stays flat, no bevel. Preserve the warm paper background. No Dock tile, no enclosing white rounded plate, no new features, no text.",
+      "refs": [
+        "refinements/classic-shallow-shadow.png"
+      ],
+      "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-9471733e-ef19-4775-94d2-915da7591407.png",
+      "output": "refinements/classic-medium-shadow.png",
+      "transparent_background": false
+    },
+    {
+      "id": "classic-soft-depth",
+      "prompt": "Use case: precise-object-edit. Edit the FIRST image of the Classic smiling-box logo on warm paper. Remove its sage printed offset shadow entirely. Add subtle matte dimensional shading to the dark forest green box itself: a gently illuminated upper-left surface, softly rounded edges, and a narrow darker lower-right edge. SECOND image is a reference for restrained material shading only; keep FIRST image's exact face, green palette, square proportions and facial placement. Cream round eyes and short thick U-shaped smile stay flat and unchanged. Frontal view, normal straight top, no rotation, no shiny highlights, no mottling, no texture, no offset duplicate or shadow silhouette. Preserve the first image's plain warm paper background. No Dock tile, no enclosing plate, no text.",
+      "refs": [
+        "refinements/classic-shallow-shadow.png",
+        "marks/07-matte.png"
+      ],
+      "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-ca40c1bc-97ac-4d9f-bf55-96809ade044b.png",
+      "output": "refinements/classic-soft-depth.png",
+      "transparent_background": false
+    }
+  ]
+}
