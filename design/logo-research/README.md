@@ -2,6 +2,8 @@
 
 Design review · 27 September 2026. Open [the gallery](index.html).
 
+Latest: [Classic refinements](refinements.html) compares the unchanged Classic baseline, Classic with a shallow printed shadow, and Sage with subtle depth. The shadow targets roughly a 2% offset rather than the earlier deep offset. New PNGs and prompts are in `refinements/`. Rebuild with `python3 design/logo-research/build-refinements.py`.
+
 Eight standalone studies refine the normal smiling square. The logo has no white Dock tile; that belongs only to the separately packaged desktop app icon. The original simple mark remains a candidate. No production logo, website, or desktop packaging was changed. These are imagegen concept PNGs, not final vector artwork or Icon Composer exports.
 
 ## Recommendation

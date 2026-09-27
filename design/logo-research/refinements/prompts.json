@@ -1,0 +1,30 @@
+{
+  "tool": "Built-in image_gen",
+  "baseline": "../marks/01-classic.png (reused unchanged)",
+  "variants": [
+    {
+      "id": "classic-shallow-shadow",
+      "prompt": "Use case: precise-object-edit. Input 1 is the Classic logo to preserve. Input 2 is ONLY the printed-shadow treatment reference. Keep the FIRST image's exact forest green rounded square shape, round cream eyes, compact generous U-shaped cream smile, proportions and facial placement. Add a crisp muted sage printed shadow behind it, offset ONLY 2% of the body width down and 2% right (about one sixth the depth of the second reference). A very narrow visible rim at bottom and right, NOT another box, no protrusion above top edge. No blur, no ground shadow. Front face remains flat and fully opaque. Preserve transparent canvas outside the mark. No white Dock tile, no enclosing plate, no text, no extra features.",
+      "refs": [
+        "01-classic.png",
+        "04-shadow.png"
+      ],
+      "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-3e6e2edf-844a-4de1-9883-72a8cd3fc75b.png",
+      "output": "refinements/classic-shallow-shadow.png",
+      "finalPrompt": "Use case: precise-object-edit. Edit the FIRST image, a logo on a plain warm paper canvas. Reduce its printed sage shadow to a very shallow offset: just 2% of body width right and down, about one sixth the current offset. Change the FRONT BOX to precisely match the SECOND image Classic: dark forest green #1d493b, same rounded corners, same round cream eyes, same short thick curved U-shaped smile and face placement. The SECOND image is reference for face/body only. Preserve the FIRST image's uniform opaque warm paper canvas. Whole illustration evenly opaque, clean flat graphic with no texture or distressed patches. The only silhouette is the smiling box and tiny sage rim. No white Dock tile or enclosing plate. Center mark. No text.",
+      "transparent_background": false
+    },
+    {
+      "id": "sage-soft-depth",
+      "prompt": "Use case: style-transfer. Input 1 is Classic: preserve its exact normal rounded-square silhouette, round eyes and compact U-shaped smiling mouth, face size and placement. Input 2 is sage palette: light muted sage body with dark forest green face. Input 3 is ONLY subtle matte depth reference. Create a light sage version of Classic with very restrained matte depth, gently brighter upper left and a narrow darker sage lower-right edge. Keep frontal view, normal straight top, no perspective rotation. Subtle diffuse shading on body, not glossy, no texture or mottling. Face dark forest green and flat. Preserve transparent canvas outside. No white tile, no Dock plate, no enclosing shape, no accessories, no text.",
+      "refs": [
+        "01-classic.png",
+        "06-sage.png",
+        "07-matte.png"
+      ],
+      "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-8bba38e8-01d8-4a8f-91a8-c30a4e6b81d9.png",
+      "output": "refinements/sage-soft-depth.png",
+      "transparent_background": true
+    }
+  ]
+}
