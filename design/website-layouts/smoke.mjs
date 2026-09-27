@@ -43,7 +43,7 @@ try{
   await page.getByRole('link',{name:'Get started',exact:false}).click();
   if(option==='a'){
    assert.equal(await page.locator('#parallel .task-cards').count(),0);
-   assert.equal(await page.locator('.remote-node').count(),3);
+   assert.equal(await page.locator('.product-feature').count(),6);
    assert.equal(await page.locator('.entry-option').count(),2);
    await page.getByRole('button',{name:'Copy CLI install command',exact:true}).click();
    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'brew install finbarr/tap/boxhaven');

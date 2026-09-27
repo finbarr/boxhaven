@@ -41,8 +41,7 @@ work: a desktop interface, separate remote machines, and a self-hostable backend
 
 **A — Product first (selected).** A centered explicit headline, concise remote
 machine explanation, one primary CTA, and a wide selectable desktop illustration.
-Follow with a diagram showing desktop and CLI connecting to the same remote boxes,
-feature callouts, hosting, and two equal setup paths. The optional agent skill
+Follow with six illustrated product features, hosting, and two compact setup paths. The optional agent skill
 lives under the CLI path. Repeated task cards have been removed.
 
 **B — Request first.** A split hero pairs a short outcome headline with a realistic
@@ -55,8 +54,9 @@ subtitle and a range of examples.
 jobs next to the benefit. Visitors switch between feature, exploration, and backlog
 examples, then see the desktop view. Tradeoff: the product is less prominent than A.
 
-A is the selected direction. The latest revision replaces the duplicate task list
-with a shared-box connection diagram and separates desktop and CLI onboarding.
+A is the selected direction. The latest revision replaces the repeated desktop/CLI
+explanation with concrete features verified against the implementation. Setup is
+limited to installation choices rather than repeating the benefits.
 B and C are retained as earlier explorations. These are still review artifacts;
 the live site is unchanged.
 
@@ -91,3 +91,30 @@ The second serves only this repository locally, checks all three concepts at
 1440, 390, and 320 pixels, exercises the example controls and copy action, checks
 images, local links, console errors, and overflow, and refreshes `previews/`.
 Full-page screenshots and diagnostic output are under ignored `.artifacts/`.
+
+## Feature claims checked against code
+
+- **Persistent machines and sessions:** `cmd/bh/assets/remote-vm-install.sh`
+  `prepareSession` creates detached tmux sessions and reattaches existing ones.
+  Disconnect does not destroy the VM. This is not suspend/resume or a durability SLA.
+- **Per-box URLs:** `backend/src/server.ts` `normalizeMachine` derives preview
+  HTTPS URLs when a preview domain is configured. A web service must listen on the
+  preview port. Previews are public, not team-authenticated links.
+- **Local folder sync:** `cmd/bh/remote.go` `syncRemoteProject`,
+  `rsyncPathToRemote`, and `rsyncPathFromRemote` copy the folder, not just committed
+  Git content. Creation syncs once; subsequent up/down operations are explicit
+  mirrors, including deletions. Exclusions apply. Desktop creation starts empty.
+- **Credentials:** `syncRemoteAuthState`, `remoteGitAuthEnv`, and
+  `localRemoteAuthFiles` forward available GitHub tokens, Git author identity, and
+  selected agent files. This does not forward every secret or all OS-keychain
+  credentials (notably Claude OAuth stored in the macOS Keychain).
+- **Teams:** `backend/src/server.ts` team machine routes list shared inventory
+  with owner metadata and roles. This does not promise access to another user's
+  SSH terminal. Team invitations and public preview sharing are separate actions.
+- **Reusable images:** `/v1/images` routes reserve team-owned images and ask the
+  provider to snapshot a machine. These are machine images, not live RAM forks.
+
+Also considered: direct SSH / VS Code Remote SSH (`cmd/bh/ssh_config.go`) and
+forwarding recent Claude/Codex conversations (`cmd/bh/agent_sessions.go`). Useful
+secondary docs topics; omit from this first six-card section to keep it focused.
+No remote behavior changed or live machine was created for this copy revision.
