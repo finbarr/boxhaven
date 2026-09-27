@@ -29,8 +29,8 @@ try {
     await expect(page.locator('h1')).toContainText(guide === 'desktop' ? 'BoxHaven Desktop' : guide === 'self-hosting' ? 'Self-Hosting' : 'CLI Reference');
     if (guide !== 'desktop') {
       await page.waitForLoadState('networkidle');
-      await page.locator(guide === 'self-hosting' ? '#version-compatibility' : process.argv.includes('--upgrade') ? '#bh-upgrade' : '#bh-size').evaluate(element => window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - 110, behavior: 'instant' }));
-      await expect(page.locator(guide === 'self-hosting' ? '#version-compatibility' : process.argv.includes('--upgrade') ? '#bh-upgrade' : '#bh-size')).toBeInViewport();
+      await page.locator(guide === 'self-hosting' ? (process.argv.includes('--backend-upgrade') ? '#upgrading-a-core-installation' : '#version-compatibility') : process.argv.includes('--upgrade') ? '#bh-upgrade' : '#bh-size').evaluate(element => window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - 110, behavior: 'instant' }));
+      await expect(page.locator(guide === 'self-hosting' ? (process.argv.includes('--backend-upgrade') ? '#upgrading-a-core-installation' : '#version-compatibility') : process.argv.includes('--upgrade') ? '#bh-upgrade' : '#bh-size')).toBeInViewport();
     }
     await page.screenshot({ path: join(out, `docs-${guide}-${width}.png`), fullPage: guide === 'desktop' });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

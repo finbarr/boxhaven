@@ -319,3 +319,55 @@ without stopping the VM or its running processes. A golden-image rotation affect
 new boxes only. Preserve existing work, create a replacement from the new image,
 and verify it before destroying the old box. BoxHaven does not rewrite running
 VMs during a backend or desktop update.
+
+## Upgrading a core installation
+
+Release images are published as `ghcr.io/finbarr/boxhaven-backend:vX.Y.Z` for
+AMD64 and ARM64. The release's `release-manifest.json` records the immutable
+image digest and compatible desktop, CLI, API, and runtime versions.
+
+For an initial installation, configure the variables documented above, set
+`BOXHAVEN_BACKEND_IMAGE` to the release image, and run:
+
+```sh
+docker compose -p boxhaven --env-file .env -f docker-compose.release.yml up -d
+```
+
+Upgrade explicitly; existing boxes keep running and reconnect when the backend
+returns. From the repository checkout:
+
+```sh
+npm run upgrade:backend -- --version v0.4.0 --env-file .env
+```
+
+The command pulls the image, stops the backend, checks SQLite integrity, and
+backs up `/data` (database and SSH CA) plus resolved Compose configuration
+before migrations run. It pins the selected image locally by ID, starts it, and
+checks health, version, and protocol. Backups are private under
+`.boxhaven-upgrades/`; they contain secrets. Retain the previous Docker image
+until the rollback window closes. Use your normal off-host backup as well.
+
+After an upgrade, use the saved resolved configuration for subsequent starts:
+
+```sh
+docker compose -p boxhaven -f .boxhaven-upgrades/active.json up -d --no-build --pull never
+```
+
+A failed health check stops the new backend and prints a recovery directory.
+After inspecting logs and preserving newer work, restore the earlier image
+and its database together:
+
+```sh
+npm run upgrade:backend -- --rollback .boxhaven-upgrades/RECOVERY_DIRECTORY --accept-data-loss
+```
+
+Rollback discards database changes since the backup; it first archives the
+current data separately. VM files are not rolled back. If boxes were created
+or destroyed since that backup, reconcile cloud resources before resuming use.
+Changing cloud configuration requires a new reviewed Compose configuration;
+the saved active configuration deliberately preserves the deployed settings.
+
+This command supports the core distribution with all persistent state in
+`/data`. It refuses unlabelled/custom distributions. Hosted billing and other
+modules must use their complete distribution's deployment and backup procedure.
+Source-based development continues to use `docker-compose.backend.yml`.

@@ -8,6 +8,7 @@
     "deploy:app": "deploy/digitalocean/deploy-production.sh",
     "deploy:production:local": "deploy/digitalocean/deploy-production.sh --local",
     "deploy:production:verify": "deploy/digitalocean/deploy-production.sh --verify-only",
-    "deploy:runtime": "deploy/digitalocean/deploy-runtime-image.sh"
+    "deploy:runtime": "deploy/digitalocean/deploy-runtime-image.sh",
+    "upgrade:backend": "python3 scripts/upgrade-backend.py"
   }
 }

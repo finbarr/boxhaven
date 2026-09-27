@@ -24,6 +24,14 @@ FROM node:24-bookworm-slim
 
 WORKDIR /app
 
+ARG BOXHAVEN_VERSION=dev
+ARG BOXHAVEN_REVISION=unknown
+ENV BOXHAVEN_VERSION=$BOXHAVEN_VERSION
+LABEL org.opencontainers.image.version=$BOXHAVEN_VERSION \
+  org.opencontainers.image.revision=$BOXHAVEN_REVISION \
+  org.opencontainers.image.source="https://github.com/finbarr/boxhaven" \
+  dev.boxhaven.distribution="core"
+
 ENV NODE_ENV=production \
   BOXHAVEN_BACKEND_LISTEN=0.0.0.0:8787 \
   BOXHAVEN_DATABASE_PATH=/data/boxhaven.sqlite

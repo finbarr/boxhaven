@@ -48,3 +48,8 @@ desktop/release/
 desktop/.artifacts/
 desktop/assets/icon.png
 desktop/assets/BoxHaven.icns
+
+# Private upgrade backups include database, SSH CA, and resolved configuration.
+.boxhaven-upgrades/
+
+__pycache__/

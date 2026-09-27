@@ -533,3 +533,7 @@ without stopping the VM or its running processes. A golden-image rotation affect
 new boxes only. Preserve existing work, create a replacement from the new image,
 and verify it before destroying the old box. BoxHaven does not rewrite running
 VMs during a backend or desktop update.
+
+Self-hosted core installations can use versioned backend images and
+`npm run upgrade:backend -- --version v0.4.0 --env-file .env` for a backed-up,
+health-checked upgrade. See the [upgrade and rollback guide](docs/self-hosting.md#upgrading-a-core-installation).

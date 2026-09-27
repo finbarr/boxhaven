@@ -210,3 +210,11 @@ jobs:
       - run: npm --prefix desktop run smoke
       - run: npm --prefix desktop run package
       - run: node desktop/scripts/smoke-package.mjs desktop/release/BoxHaven-darwin-arm64/BoxHaven.app
+
+  backend-upgrades:
+    name: Backend Upgrade and Rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - run: python3 scripts/smoke-backend-upgrade.py
