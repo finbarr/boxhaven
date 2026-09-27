@@ -1,8 +1,6 @@
-# BoxHaven Desktop 0.1.2
+# BoxHaven Desktop 0.1.3
 
-- Signed and notarized macOS Apple Silicon app with a bundled CLI.
-- Automatic signed-update downloads and a Restart / Later prompt.
-- Create, rename, open previews, and manage independent remote boxes from one window.
-- API compatibility checks give clear upgrade instructions when needed.
+- New H3 smiling-box mark with a pale-sage face throughout the desktop app.
+- Updated macOS Dock icon on a white rounded tile with a soft shadow.
 
 Remote tmux sessions keep running while the desktop app restarts.
