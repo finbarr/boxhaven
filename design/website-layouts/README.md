@@ -41,8 +41,8 @@ work: a desktop interface, separate remote machines, and a self-hostable backend
 
 **A — Product first (selected).** A centered explicit headline, concise remote
 machine explanation, one primary CTA, and a wide selectable desktop illustration.
-Follow with six illustrated product features, hosting, and two compact setup paths. The optional agent skill
-lives under the CLI path. Repeated task cards have been removed.
+Follow with six illustrated product features, hosting, and three equal setup paths. Desktop, CLI, and agent skill each have their own card; the skill
+card keeps its CLI and Node prerequisites visible under Requirements. Repeated task cards have been removed.
 
 **B — Request first.** A split hero pairs a short outcome headline with a realistic
 request branching into three independent homepage explorations. Parallelism is
@@ -72,7 +72,8 @@ the live site is unchanged.
 - Self-hosting describes deployment control. Avoid “code never leaves your servers”:
   agents may call external model providers, and that depends on configuration.
 - The desktop app currently has a source-build/setup path. Link to its guide rather
-  than a fictional signed download. Desktop and CLI are equal entry paths; the skill is an optional CLI addition.
+  than a fictional signed download. Desktop, CLI, and agent skill are equal entry paths into the same boxes.
+  The skill requires the CLI to be installed and authenticated.
 - Setup command and CLI prerequisites retain the canonical existing workflow.
 - Preserve the cabin logo, small quirky portraits, ivory, evergreen, and sage.
   No invented customer logos, quotes, metrics, or production task activity.
@@ -118,3 +119,6 @@ Also considered: direct SSH / VS Code Remote SSH (`cmd/bh/ssh_config.go`) and
 forwarding recent Claude/Codex conversations (`cmd/bh/agent_sessions.go`). Useful
 secondary docs topics; omit from this first six-card section to keep it focused.
 No remote behavior changed or live machine was created for this copy revision.
+
+The cloud CTA is “Start on BoxHaven Cloud.” Self-hosting links explicitly to
+GitHub in a new tab. The smoke verifies that popup with a stubbed destination.

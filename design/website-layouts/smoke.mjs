@@ -26,7 +26,7 @@ try{
   assert.deepEqual(await page.locator('img').evaluateAll(imgs=>imgs.filter(i=>!i.complete||!i.naturalWidth).map(i=>i.src)),[]);
   if(width!==320)await page.screenshot({path:resolve(dir,`previews/${option}-${width===1440?'desktop':'mobile'}.png`)});
   await page.screenshot({path:resolve(dir,`.artifacts/${option}-${width}-full.png`),fullPage:true});
-  if(option==='a' && width!==320)for(const section of ['parallel','start']){
+  if(option==='a' && width!==320)for(const section of ['parallel','hosting','start']){
    await page.locator('#'+section).screenshot({path:resolve(dir,`.artifacts/a-${width}-${section}.png`)});
   }
   await page.getByRole('tab',{name:/search-feature/}).click();
@@ -44,10 +44,19 @@ try{
   if(option==='a'){
    assert.equal(await page.locator('#parallel .task-cards').count(),0);
    assert.equal(await page.locator('.product-feature').count(),6);
-   assert.equal(await page.locator('.entry-option').count(),2);
+   assert.equal(await page.locator('.entry-option').count(),3);
    await page.getByRole('button',{name:'Copy CLI install command',exact:true}).click();
    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'brew install finbarr/tap/boxhaven');
-   await page.getByText('Add the agent skill',{exact:true}).click();
+   await page.getByText('Requirements',{exact:true}).click();
+   const github = page.locator('#hosting').getByRole('link',{name:'View on GitHub'});
+   assert.equal(await github.getAttribute('target'),'_blank');
+   assert.match(await github.getAttribute('rel'),/noopener/);
+   assert.equal(await page.getByRole('link',{name:'Start on BoxHaven Cloud'}).getAttribute('href'),'https://app.boxhaven.dev/');
+   if(width===1440){
+    await context.route('https://github.com/**',route=>route.fulfill({body:'GitHub navigation verified'}));
+    const popupPromise=page.waitForEvent('popup');await github.click();const popup=await popupPromise;
+    await popup.waitForLoadState();assert.match(popup.url(),/^https:\/\/github.com\/finbarr\/boxhaven/);await popup.close();
+   }
   }
   await page.getByRole('button',{name:'Copy install command',exact:true}).click();
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'npx skills add finbarr/boxhaven --skill boxhaven -g -a codex claude-code');
