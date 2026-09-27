@@ -211,6 +211,7 @@ sha256_file() {
 
 verify_runtime() {
   local name="$1"
+  verify_runtime_contract "$name"
   log "verifying runtime on ${name}"
   run_remote "$name" 'set -euo pipefail
 check() {
@@ -267,6 +268,25 @@ git config --system --get-all safe.directory | grep -Fx /opt/boxhaven/project >/
 }
 check "synced project git status" git -C /opt/boxhaven/project status --short
 '
+}
+
+verify_runtime_contract() {
+  local name="$1" agent_source expected status
+  agent_source="$(mktemp "${TMPDIR:-/tmp}/boxhaven-agent-source.XXXXXX")"
+  awk '
+    /cat > \/usr\/local\/lib\/boxhaven\/agent.mjs/ { copying = 1; next }
+    copying && /^EOF$/ { exit }
+    copying { print }
+  ' "${repo_root}/cmd/bh/assets/remote-vm-install.sh" > "$agent_source"
+  test -s "$agent_source"
+  expected="sha256:$(sha256_file "$agent_source")"
+  rm -f "$agent_source"
+  status="$(bh status "$name")"
+  if ! printf '%s\n' "$status" | grep -Fq "protocol 1, ${expected}"; then
+    printf 'runtime contract mismatch for %s; expected protocol 1, %s\n%s\n' "$name" "$expected" "$status" >&2
+    return 1
+  fi
+  log "verified runtime protocol and source fingerprint on ${name}: ${expected}"
 }
 
 verify_github_auth() {
@@ -360,6 +380,7 @@ verify_after_restart() {
     run_remote "$name" 'set -euo pipefail
 printf "agent reconnected on %s\n" "$BOXHAVEN_PROJECT_PATH"
 '
+    verify_runtime_contract "$name"
   done
 }
 
