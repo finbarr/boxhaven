@@ -9,11 +9,11 @@ leaves your remote sessions running. Reopen the app to return to the selected bo
 
 ## Downloadable releases
 
-A signed macOS Apple Silicon DMG release pipeline is configured. The first
-public installer is pending Apple signing credentials and release verification;
-for now, use the source build below.
+A signed, Apple-notarized macOS Apple Silicon DMG has been built for version
+0.1.0. It remains a draft pending final installation review. Until the installer
+is published, use the source build below.
 
-The installer will bundle the CLI and terminal runtime, so users will not need
+The installer bundles the CLI and terminal runtime, so users do not need
 Node.js, Go, Homebrew, or Xcode. The installation flow is open the DMG, drag
 BoxHaven to Applications, and sign in from Connection settings.
 

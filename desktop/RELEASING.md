@@ -7,9 +7,10 @@ its signature and native PTY, then signs, notarizes, staples, and verifies the
 DMG. Only successful builds can create a **draft** GitHub release. Missing
 credentials fail the release; it never publishes an unsigned fallback.
 
-The first signed release still requires Apple credentials and an end-to-end
-signing run. Until a verified draft is published, source builds remain the
-available installation method. Intel builds and auto-updates are separate work.
+Version 0.1.0 has completed the signed and notarized release workflow and is a
+draft pending final installation review. Until the draft is published, source
+builds remain the public installation method. Intel builds and auto-updates are
+separate work.
 
 ## One-time Apple setup
 
@@ -71,8 +72,19 @@ when that command fails. GitHub disposes of the runner if the job is terminated.
    a partial draft explicitly rather than replacing a published artifact.
 4. Download the draft DMG in a browser on another Apple Silicon Mac. Open it,
    drag BoxHaven to Applications, launch normally, sign in, and verify a real
-   create/connect/reconnect/preview/destroy cycle. Maintainers can also use
-   `node desktop/scripts/smoke-remote.mjs --packaged` against the built bundle.
+   create/connect/reconnect/preview/destroy cycle. The reusable DMG smoke checks
+   the checksum, signatures, notarization tickets, Applications shortcut, and
+   native terminal after copying the app out of the disk image:
+
+   ```sh
+   gh release download desktop-v0.1.0 --dir desktop/release/download --pattern '*.dmg*'
+   node desktop/scripts/smoke-dmg.mjs desktop/release/download/BoxHaven-0.1.0-mac-arm64.dmg --remote
+   ```
+
+   `--remote` uses your signed-in account to create one temporary small box,
+   exercises the downloaded app with its bundled CLI, and destroys the box.
+   Omit it for local-only verification. To check an already extracted bundle,
+   use `node desktop/scripts/smoke-remote.mjs --app /path/to/BoxHaven.app`.
 5. Publish the verified draft and change the website's desktop CTA from setup
    to the actual versioned DMG URL. Do not link `/releases/latest/download`:
    CLI releases share this repository and can become the latest release.

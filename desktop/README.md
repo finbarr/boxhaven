@@ -79,9 +79,9 @@ each box keeps its accessory across renames and changes expression with machine
 state. Creator initials use backend metadata when available.
 This is a local development build, not a signed/notarized public installer.
 Packaging runs on the target platform/architecture so the CLI and native PTY
-module match Electron. The [release workflow](RELEASING.md) can produce signed, notarized Apple Silicon
-DMGs once the Apple signing credentials are configured. The first signed release
-has not been verified or published yet. Windows/Linux distribution is not included.
+module match Electron. The [release workflow](RELEASING.md) has produced a signed,
+Apple-notarized Apple Silicon DMG for version 0.1.0. It remains a draft pending
+final installation review. Windows/Linux distribution is not included.
 
 ## Verification
 
@@ -95,6 +95,11 @@ After packaging, `node desktop/scripts/smoke-remote.mjs --packaged` runs the
 same remote checks against the actual macOS `.app` bundle. After building the
 docs, `node desktop/scripts/smoke-docs.mjs` verifies and screenshots the desktop
 guide in headless Chrome at desktop and mobile widths.
+
+For a downloaded release, `node desktop/scripts/smoke-dmg.mjs /path/to/BoxHaven.dmg --remote`
+verifies its adjacent `.sha256` file, signatures, notarization tickets, installation
+layout, and native terminal, then exercises one disposable remote box using the
+app and CLI copied from that DMG. Omit `--remote` for local-only verification.
 
 The first smoke launches real Electron and a real native PTY with a test CLI.
 It checks switching, input/output, reconnection, resizing, delayed readiness,

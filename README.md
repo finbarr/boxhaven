@@ -59,8 +59,9 @@ npm run desktop
 ```
 
 See the [desktop guide](docs/desktop.md) for prerequisites and packaging. A
-[signed macOS release pipeline](desktop/RELEASING.md) is configured; the first
-public DMG is pending Apple credentials and release verification.
+[signed macOS release pipeline](desktop/RELEASING.md) has produced the first
+Apple-notarized DMG. It remains a draft pending final installation review;
+source builds are available until the installer is published.
 
 ## Use The CLI Directly
 

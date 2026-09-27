@@ -3,12 +3,16 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 const run = promisify(execFile);
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const cli = join(root, 'bin/bh');
+const appIndex = process.argv.indexOf('--app');
+if (appIndex !== -1) assert.ok(process.argv[appIndex + 1], '--app requires a bundle path');
+const bundle = appIndex !== -1 ? resolve(process.argv[appIndex + 1]) : process.argv.includes('--packaged')
+  ? join(root, `release/BoxHaven-${process.platform}-${process.arch}/BoxHaven.app`) : null;
+const cli = bundle ? join(bundle, 'Contents/Resources/app/bin/bh') : join(root, 'bin/bh');
 const temp = mkdtempSync(join(tmpdir(), 'boxhaven-desktop-remote-'));
 const originalName = `desktop-smoke-${Date.now()}`;
 let name = originalName;
@@ -18,8 +22,8 @@ const out = join(root, '.artifacts'); mkdirSync(out, { recursive: true });
 const bh = (...args) => run(cli, args, { cwd: temp, timeout: 300000, maxBuffer: 4 * 1024 * 1024 });
 let app;
 let attempted = false;
-const launch = () => electron.launch(process.argv.includes('--packaged') ? {
-  executablePath: join(root, `release/BoxHaven-${process.platform}-${process.arch}/BoxHaven.app/Contents/MacOS/BoxHaven`),
+const launch = () => electron.launch(bundle ? {
+  executablePath: join(bundle, 'Contents/MacOS/BoxHaven'),
   args: [`--user-data-dir=${join(temp, 'profile')}`],
 } : { args: [join(root, 'test/fixture-main.cjs')], env: { ...process.env, TEST_BH_CLI: cli, TEST_USER_DATA: join(temp, 'profile') } });
 try {
