@@ -1,7 +1,7 @@
 # Release Runbook
 
 For a coordinated release, bump `desktop/package.json` and its lockfile, add a
-dated core changelog entry, then commit and push a clean `master`. On a Mac with
+dated core changelog entry, then commit and push a clean `master`. On an Apple Silicon Mac with
 `gh`, Homebrew, Docker, Go, and the Apple command-line tools:
 
 ```sh
@@ -22,8 +22,8 @@ digest. Core releases own GitHub's latest pointer; desktop and skill releases
 must use `--latest=false`. Users stay on their current version until explicitly
 upgrading the CLI/backend or accepting a desktop restart.
 
-The first GHCR package must be made public in GitHub's package settings before
-anonymous pulls can pass. Signing secrets live in the `desktop-release` GitHub
+The command verifies public GHCR access. If a new package defaults to private,
+make it public in GitHub's package settings and retry the anonymous pull. Signing secrets live in the `desktop-release` GitHub
 environment. Homebrew uses the maintainer's existing local GitHub authentication;
 no additional cross-repository CI token is required.
 

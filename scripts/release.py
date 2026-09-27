@@ -154,7 +154,8 @@ def main():
             # Consumers must be able to pull without maintainer credentials.
             empty_config = temp / 'docker-config'
             empty_config.mkdir()
-            run(['docker', '--config', empty_config, 'pull', manifest['backend_image']])
+            docker_host = os.environ.get('DOCKER_HOST') or run(['docker', 'context', 'inspect', '--format', '{{.Endpoints.docker.Host}}'], capture=True).strip()
+            run(['docker', '--host', docker_host, '--config', empty_config, 'pull', manifest['backend_image']])
             verify_desktop(desktop, args.version, temp)
             update_tap(args.version, temp)
             run(['gh', 'release', 'edit', tags[1], '--repo', REPO, '--draft=false', '--latest=false'])
