@@ -1,9 +1,10 @@
 // No account credentials or remote VMs: exercise the packaged native code locally.
 import { _electron as electron, expect } from 'playwright/test';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 const bundle = resolve(process.argv[2]);
 const profile = mkdtempSync(join(tmpdir(), 'boxhaven-package-smoke-'));
@@ -14,6 +15,10 @@ try {
   app = await electron.launch({ executablePath: join(bundle, 'Contents/MacOS/BoxHaven'), args: [`--user-data-dir=${profile}`], env: { ...process.env, XDG_CONFIG_HOME: profile, BOXHAVEN_TOKEN: '', BOXHAVEN_BACKEND_URL: '' } });
   const page = await app.firstWindow();
   await expect(page.locator('body')).toContainText('BoxHaven');
+  await page.locator('.brand img').evaluate(img => img.decode());
+  const screenshots = fileURLToPath(new URL('../.artifacts/', import.meta.url));
+  mkdirSync(screenshots, { recursive: true });
+  await page.screenshot({ path: join(screenshots, 'desktop-packaged.png') });
   const output = await app.evaluate(async ({ app }) => {
     const { createRequire } = process.getBuiltinModule('module');
     const require = createRequire(app.getAppPath() + '/package.json');
