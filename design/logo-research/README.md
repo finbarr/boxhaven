@@ -2,7 +2,7 @@
 
 Design review · 27 September 2026. Open [the gallery](index.html).
 
-Eight studies refine the normal smiling square. The original simple mark remains a candidate. No production logo, website, or desktop packaging was changed. These are imagegen concept PNGs, not final vector artwork or Icon Composer exports.
+Eight standalone studies refine the normal smiling square. The logo has no white Dock tile; that belongs only to the separately packaged desktop app icon. The original simple mark remains a candidate. No production logo, website, or desktop packaging was changed. These are imagegen concept PNGs, not final vector artwork or Icon Composer exports.
 
 ## Recommendation
 
@@ -59,12 +59,14 @@ BoxHaven currently generates flattened PNGs and `.icns` through Electron packagi
 2. **Square & calm:** tighter corners, upright eyes, quieter smile.
 3. **Wide smile:** more expressive face and broader mouth.
 4. **Printed shadow:** crisp sage offset under/right; no appendage above the head.
-5. **Paper box:** forest outline and positive face on a paper interior.
+5. **Paper box:** forest outline and positive face with a transparent interior.
 6. **Sage:** light sage body and dark face.
 7. **Soft depth:** diffuse matte shading without a shiny highlight band.
 8. **Charcoal:** dark neutral body with pale sage facial features.
 
-All use a normal square body and white desktop tile. No roof, sprouts, clipped corner, second box, pipeline, or extra mascot accessories. The prompts are saved in [prompts.json](prompts.json); images were created with the built-in imagegen tool, one call per study, using the original smiling-box study as the reference.
+All use a normal square body without a Dock tile. No roof, sprouts, clipped corner, second box, pipeline, or extra mascot accessories. The standalone PNGs are in `marks/`; five have transparent backgrounds. 02, 04, and 08 are paper-background proofs because repeated generated cutouts introduced visible blemishes. Those studies need clean vector exports before use on other backgrounds.
+
+The correction prompts are saved in [logo-prompts.json](logo-prompts.json), with source paths in [logo-generation-sources.json](logo-generation-sources.json). The earlier white-tile desktop explorations remain archived in `concepts/` with their original [prompts.json](prompts.json); they are not the logo artwork shown in the gallery.
 
 ## Local research collection
 

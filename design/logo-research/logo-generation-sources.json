@@ -1,0 +1,42 @@
+[
+  {
+    "id": "01-classic",
+    "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-fae1ca02-662e-4556-9415-8e00b2b2823b.png",
+    "transparent": true
+  },
+  {
+    "id": "02-square",
+    "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-f1967282-a856-49fe-9c92-a81c7d0fee92.png",
+    "transparent": false
+  },
+  {
+    "id": "03-grin",
+    "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-a194190f-2ea6-4fc7-a1f4-4b6e385526ac.png",
+    "transparent": true
+  },
+  {
+    "id": "04-shadow",
+    "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-97c9c7d8-021d-4bd3-a132-b591ba17d15e.png",
+    "transparent": false
+  },
+  {
+    "id": "05-outline",
+    "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-36aefbec-2782-4c24-bf2d-4a92167eadb1.png",
+    "transparent": true
+  },
+  {
+    "id": "06-sage",
+    "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-afa96eca-2868-4df1-a54e-b85dc26ca9f2.png",
+    "transparent": true
+  },
+  {
+    "id": "07-matte",
+    "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-7ce5ee39-3839-479d-8958-81df281d2d34.png",
+    "transparent": true
+  },
+  {
+    "id": "08-charcoal",
+    "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-cb0b4889-12a7-4e72-824d-b21c3aadaff9.png",
+    "transparent": false
+  }
+]

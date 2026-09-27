@@ -13,6 +13,8 @@ try {
   await page.goto(new URL('./index.html', import.meta.url).href);
   await page.addStyleTag({ content: 'html { scroll-behavior: auto !important; }' });
   assert.equal(await page.locator('.concept').count(), 8);
+  assert.equal(await page.locator('.concept .art-stage img[src^="marks/"]').count(), 8);
+  assert.equal(await page.locator('img[src^="concepts/"]').count(), 0);
   assert.equal(await page.locator('.reference').count(), 13);
   assert.equal(await page.locator('.guide').count(), 15);
   await page.locator('img:not(#modal-image)').evaluateAll(images => Promise.all(images.map(image => image.decode())));
