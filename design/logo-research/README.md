@@ -2,7 +2,9 @@
 
 Design review · 27 September 2026. Open [the gallery](index.html).
 
-Latest: **F** in [Classic refinements](refinements.html) combines soft matte depth with the deeper printed shadow. The image and prompt are saved in `refinements/classic-depth-shadow.png` and `refinements/prompts-round-three.json`.
+Latest: **G** matches the shared box portrait geometry in `backend/src/box-art.ts`: front width 35, right side extension 5, zero vertical offset, with a small contact shadow underneath. The generated concept approximates the 14.3% ratio; final vectors should enforce it. Source and correction prompts are in `refinements/prompts-round-four.json`. The reference render is reproducible with `node design/logo-research/render-box-reference.mjs`.
+
+**F** in [Classic refinements](refinements.html) combines soft matte depth with the deeper printed shadow. The image and prompt are saved in `refinements/classic-depth-shadow.png` and `refinements/prompts-round-three.json`.
 
 The comparison also includes a slightly deeper printed shadow (targeting a 4% offset) and subtle matte depth on Classic itself. Both are plain paper proofs, with prompts recorded in `refinements/prompts-round-two.json`. The page also compares the unchanged Classic baseline, Classic with a shallow printed shadow, and Sage with subtle depth. The shadow targets roughly a 2% offset rather than the earlier deep offset. New PNGs and prompts are in `refinements/`. Rebuild with `python3 design/logo-research/build-refinements.py`.
 

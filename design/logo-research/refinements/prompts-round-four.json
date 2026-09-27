@@ -1,0 +1,16 @@
+{
+  "tool": "Built-in image_gen",
+  "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-92e15aa5-6ceb-4870-b6c8-0b516d8ab601.png",
+  "output": "refinements/classic-box-family-depth.png",
+  "prompt": "Use case: precise-object-edit. FIRST image is the BoxHaven Classic logo to edit. SECOND image is the ACTUAL shared box portrait reference, use its side-depth direction and proportions. Change only the first logo's sage down-right printed shadow into the SAME rightward case depth as the second image. In the reference SVG the front is x=13..48, y=18..57, rear right extent=53 and identical y=18..57. Thus the visible right side is 5/35 = 14.3% of front width, with ZERO downward offset. Match that right-facing side geometry: top and bottom aligned, rounded right side visible, no layer peeking below front, no extrusion above the head. Use a darker forest green for the side, as reference's side is darker than front, NOT pale sage. Preserve first logo's soft matte green front, subtle upper-left illumination, perfectly normal rounded square, cream circular eyes and compact thick cream U smile, exact facial position. Do not copy the reference's sprout, vents, lights, outlines or hardware details. Keep a very soft small contact shadow directly underneath matching the reference, not a diagonal duplicate. Frontal face stays square, no perspective skew. Plain opaque warm paper canvas. No Dock tile or white enclosing plate. No text.",
+  "correction": "Precise correction of this logo: preserve everything except increase the dark right side thickness by roughly 40%. The front green face is about 800 pixels wide; the visible dark right side should be approximately 114 pixels wide (one seventh of the FRONT face width), rather than the current approximately 80 pixels. Move ONLY the outside right contour outward; keep front contour, face, shading, and top/bottom aligned at exactly the same heights. No downward offset. Normal uninterrupted top, same rounded side profile, same warm paper canvas and soft oval contact shadow underneath. No added hardware details, no Dock tile, no text. Preserve composition with whole mark centered.",
+  "reference": "backend/src/box-art.ts boxSVG body geometry; rendered design/website-layouts/assets/box-sprout.svg",
+  "geometry": {
+    "frontWidth": 35,
+    "rearRightExtension": 5,
+    "relativeDepth": 0.14285714285714285,
+    "verticalOffset": 0
+  },
+  "note": "Imagegen concept targets the shared proportions; final vector artwork should enforce exact geometry.",
+  "transparent_background": false
+}
