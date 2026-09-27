@@ -1,0 +1,34 @@
+{
+  "tool": "Built-in image_gen",
+  "reference": "refinements/classic-box-family-centered.png",
+  "note": "Only eyes and mouth recolored. Hex values are prompt targets, not exact sampled PNG color specifications.",
+  "variants": [
+    {
+      "id": "h-warm-cream",
+      "name": "Warm cream",
+      "color": "#E4D9BF",
+      "description": "Warm oat tones, softer than white.",
+      "prompt": "Use case: precise-object-edit. Change ONLY the color of the two eyes and smiling mouth in this exact BoxHaven H logo. Replace the bright white fill of all three facial shapes with #E4D9BF, warm cream. Warm oat tones, softer than white. All three facial shapes must have the SAME new solid opaque color. This is a recoloring edit only: keep exact eye shapes, eye spacing, face position, mouth shape, body silhouette, forest green front and dark right side, matte illumination, ground shadow, background and composition unchanged. No new details, no new frame, no white Dock tile. Preserve the opaque warm paper background.",
+      "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-a55576b1-159e-4761-8bbe-a320d33e12cd.png",
+      "output": "h-colors/h-warm-cream.png"
+    },
+    {
+      "id": "h-pale-sage",
+      "name": "Pale sage",
+      "color": "#CAD9BB",
+      "description": "A gentle green tint with clear contrast.",
+      "prompt": "Use case: precise-object-edit. Change ONLY the color of the two eyes and smiling mouth in this exact BoxHaven H logo. Replace the bright white fill of all three facial shapes with #CAD9BB, pale sage. A gentle green tint with clear contrast. All three facial shapes must have the SAME new solid opaque color. This is a recoloring edit only: keep exact eye shapes, eye spacing, face position, mouth shape, body silhouette, forest green front and dark right side, matte illumination, ground shadow, background and composition unchanged. No new details, no new frame, no white Dock tile. Preserve the opaque warm paper background.",
+      "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-a63bbf00-3022-4bbc-976e-70771d4e0a7c.png",
+      "output": "h-colors/h-pale-sage.png"
+    },
+    {
+      "id": "h-muted-sage",
+      "name": "Muted sage",
+      "color": "#ACC2A6",
+      "description": "Lower contrast and a quieter face.",
+      "prompt": "Use case: precise-object-edit. Change ONLY the color of the two eyes and smiling mouth in this exact BoxHaven H logo. Replace the bright white fill of all three facial shapes with #ACC2A6, muted sage. Lower contrast and a quieter face. All three facial shapes must have the SAME new solid opaque color. This is a recoloring edit only: keep exact eye shapes, eye spacing, face position, mouth shape, body silhouette, forest green front and dark right side, matte illumination, ground shadow, background and composition unchanged. No new details, no new frame, no white Dock tile. Preserve the opaque warm paper background.",
+      "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-b288e3cf-68a4-4a64-a417-ef8e6002eb53.png",
+      "output": "h-colors/h-muted-sage.png"
+    }
+  ]
+}
