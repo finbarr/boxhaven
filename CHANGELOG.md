@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## v0.4.0 - 2026-09-26
+
+### Added
+
+- Signed and notarized BoxHaven Desktop for macOS Apple Silicon, with built-in
+  terminal sessions, box creation settings, renaming, previews, and destruction.
+- Signed desktop updates with a restart prompt and a CLI bundled in each update.
+- `bh upgrade` for checksum-verified atomic upgrades of direct installations;
+  Homebrew and desktop installations use their own update paths.
+- Versioned backend container images, a compatible-component release manifest,
+  and `npm run release` to coordinate desktop, CLI, backend, and Homebrew releases.
+- Explicit self-hosted upgrades with consistent database/SSH CA backups,
+  health verification, and database-aware rollback.
+- API protocol checks and VM agent protocol/fingerprint reporting, including
+  clear errors when incompatible clients or runtimes attempt commands.
+
+### Changed
+
+- Release discovery distinguishes core CLI versions from desktop and skill tags.
+- Existing VMs retain their runtime during backend and desktop upgrades; golden
+  image changes apply to newly created boxes.
+
 ## v0.3.1 - 2026-09-16
 
 ### Fixed

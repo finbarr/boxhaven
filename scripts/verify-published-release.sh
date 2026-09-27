@@ -33,6 +33,7 @@ tag = sys.argv[1]
 release = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
 expected = {
     "SHA256SUMS",
+    "release-manifest.json",
     f"bh_{tag}_darwin_amd64.tar.gz",
     f"bh_{tag}_darwin_arm64.tar.gz",
     f"bh_{tag}_linux_amd64.tar.gz",
@@ -48,6 +49,16 @@ if actual != expected:
 PY
 
 base_url="https://github.com/finbarr/boxhaven/releases/download/${tag}"
+curl -fsSL --retry 3 "${base_url}/release-manifest.json" -o "${temporary_dir}/release-manifest.json"
+python3 - "$tag" "${temporary_dir}/release-manifest.json" <<'PYMANIFEST'
+import json, pathlib, re, sys
+m = json.loads(pathlib.Path(sys.argv[2]).read_text())
+assert m["core_version"] == m["cli_version"] == sys.argv[1]
+assert re.fullmatch(r"ghcr.io/finbarr/boxhaven-backend@sha256:[0-9a-f]{64}", m["backend_image"])
+assert m["api_protocol"] == m["runtime_protocol"] == 1
+assert re.fullmatch(r"[0-9a-f]{40}", m["source_commit"])
+PYMANIFEST
+
 assets=(
   SHA256SUMS
   "bh_${tag}_darwin_amd64.tar.gz"

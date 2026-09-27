@@ -1,7 +1,7 @@
 {
   "name": "boxhaven-desktop",
   "productName": "BoxHaven",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Your BoxHaven machines, together on your desktop.",
   "license": "AGPL-3.0-only",
   "private": true,

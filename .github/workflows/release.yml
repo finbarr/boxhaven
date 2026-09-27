@@ -128,9 +128,54 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  backend-image:
+    name: Versioned Backend Image
+    needs: verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Refuse to replace a published image tag
+        env:
+          IMAGE: ghcr.io/finbarr/boxhaven-backend:${{ github.ref_name }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
+            echo "Image tag already exists; rerun only failed jobs or choose a new version." >&2
+            exit 1
+          fi
+      - uses: docker/build-push-action@v6
+        id: image
+        with:
+          context: backend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/finbarr/boxhaven-backend:${{ github.ref_name }}
+          build-args: |
+            BOXHAVEN_VERSION=${{ github.ref_name }}
+            BOXHAVEN_REVISION=${{ github.sha }}
+      - name: Record compatible components
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: python3 scripts/release-manifest.py "$GITHUB_REF_NAME" "$DIGEST" release-manifest.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-manifest
+          path: release-manifest.json
+          if-no-files-found: error
+
   publish:
     name: Publish Verified Draft
-    needs: package
+    needs: [package, backend-image]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -150,6 +195,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: release-${{ github.ref_name }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-manifest
 
       - name: Re-verify downloaded artifacts and metadata
         run: |
@@ -175,7 +224,7 @@ jobs:
               "dist/bh_${GITHUB_REF_NAME}_darwin_arm64.tar.gz" \
               "dist/bh_${GITHUB_REF_NAME}_linux_amd64.tar.gz" \
               "dist/bh_${GITHUB_REF_NAME}_linux_arm64.tar.gz" \
-              dist/SHA256SUMS
+              dist/SHA256SUMS release-manifest.json
           fi
 
       - name: Verify draft asset names and GitHub digests
@@ -198,6 +247,7 @@ jobs:
           expected["SHA256SUMS"] = "sha256:" + __import__("hashlib").sha256(
               sums_path.read_bytes()
           ).hexdigest()
+          expected["release-manifest.json"] = "sha256:" + __import__("hashlib").sha256(pathlib.Path("release-manifest.json").read_bytes()).hexdigest()
           release = json.loads(release_path.read_text(encoding="utf-8"))
           actual = {asset["name"]: asset.get("digest") for asset in release.get("assets", [])}
           if release.get("tagName") != tag or not release.get("isDraft"):

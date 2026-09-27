@@ -1,6 +1,37 @@
 # Release Runbook
 
-This runbook covers public CLI and Homebrew releases. The tap must only point
+For a coordinated release, bump `desktop/package.json` and its lockfile, add a
+dated core changelog entry, then commit and push a clean `master`. On a Mac with
+`gh`, Homebrew, Docker, Go, and the Apple command-line tools:
+
+```sh
+npm run release -- v0.4.0 --check
+npm run release -- v0.4.0
+```
+
+The command waits for CI, pushes the core and desktop tags atomically, waits
+for signed builds, checks downloaded assets and the bundled CLI version,
+verifies an anonymous pull of the backend image, updates and tests Homebrew,
+and publishes the desktop draft. It never moves tags. A failed step stops the
+release; fix the cause and rerun at the same source commit. If an image job
+already succeeded, rerun only failed workflow jobs, not all jobs.
+
+Each core release includes `release-manifest.json`: source commit, CLI and
+desktop versions, API/runtime protocols, supported platforms, and backend image
+digest. Core releases own GitHub's latest pointer; desktop and skill releases
+must use `--latest=false`. Users stay on their current version until explicitly
+upgrading the CLI/backend or accepting a desktop restart.
+
+The first GHCR package must be made public in GitHub's package settings before
+anonymous pulls can pass. Signing secrets live in the `desktop-release` GitHub
+environment. Homebrew uses the maintainer's existing local GitHub authentication;
+no additional cross-repository CI token is required.
+
+Hosted billing deployment remains a separate complete-distribution operation in
+`boxhaven-hosted`; the core image must never replace that deployment. Golden-image
+rotation is also separate, and changes only newly created boxes.
+
+The detailed steps below cover CLI and Homebrew releases. The tap must only point
 at an existing, verified GitHub release. Never move an existing tag or replace
 published assets. Test against a deployment you operate with a disposable
 account and cloud resources.

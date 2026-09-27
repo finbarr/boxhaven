@@ -1,16 +1,8 @@
-BoxHaven for macOS Apple Silicon.
+# BoxHaven Desktop 0.1.2
 
-Download the DMG, open it, and drag BoxHaven into Applications. The app bundles
-its CLI and terminal runtime; Node.js, Go, Homebrew, and Xcode are not required.
-Sign in from Connection settings with `https://api.boxhaven.dev` or your own backend.
+- Signed and notarized macOS Apple Silicon app with a bundled CLI.
+- Automatic signed-update downloads and a Restart / Later prompt.
+- Create, rename, open previews, and manage independent remote boxes from one window.
+- API compatibility checks give clear upgrade instructions when needed.
 
-The release workflow requires Developer ID signing, Apple notarization, signature
-and ticket verification, and a packaged app/CLI/PTY smoke before creating a draft.
-Before publishing, verify installation on another Mac using a browser-downloaded
-DMG and run the packaged remote smoke against a disposable box.
-
-Updates download automatically and offer Restart to update. The signed app and
-its bundled CLI are replaced together; remote sessions keep running.
-
-Intel Macs and Mac App Store distribution are not included
-in this initial desktop release.
+Remote tmux sessions keep running while the desktop app restarts.
