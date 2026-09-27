@@ -1,0 +1,12 @@
+{
+  "tool": "Built-in image_gen",
+  "id": "classic-depth-shadow",
+  "prompt": "Use case: precise-object-edit. Combine these two BoxHaven logo treatments. FIRST image is the edit target: preserve its exact dark forest green Classic body, subtle matte depth and upper-left illumination, rounded edges, cream circular eyes, compact thick U-shaped smile, face placement, frontal view, size and composition. SECOND image is ONLY the reference for the crisp sage printed offset shadow. Add that same sage shadow behind the FIRST logo, offset about 4% of body width down and right. It must be a modest crisp offset silhouette visible only along the bottom and right, no blur, no floating ground shadow, no extra box. Keep the first image's soft dimensional shading on the green body; do not flatten it. Preserve the uniform warm paper canvas. No enclosing white Dock tile or plate, no text, no extra facial changes or accessories.",
+  "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-49ae5235-4761-4697-8ef1-855a6643f2aa.png",
+  "output": "refinements/classic-depth-shadow.png",
+  "references": [
+    "refinements/classic-soft-depth.png",
+    "refinements/classic-medium-shadow.png"
+  ],
+  "transparent_background": false
+}
