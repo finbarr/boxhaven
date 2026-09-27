@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const docs = join(dirname(root), 'docs/.vitepress/dist');
-const guide = process.argv.includes('--commands') ? 'commands' : 'desktop';
+const guide = process.argv.includes('--self-hosting') ? 'self-hosting' : process.argv.includes('--commands') ? 'commands' : 'desktop';
 const out = join(root, '.artifacts'); mkdirSync(out, { recursive: true });
 const server = createServer(async (request, response) => {
   const pathname = new URL(request.url, 'http://localhost').pathname;
@@ -26,11 +26,11 @@ try {
   for (const width of [1440, 390]) {
     const page = await browser.newPage({ viewport: { width, height: 1000 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/${guide}`);
-    await expect(page.locator('h1')).toContainText(guide === 'desktop' ? 'BoxHaven Desktop' : 'CLI Reference');
-    if (guide === 'commands') {
+    await expect(page.locator('h1')).toContainText(guide === 'desktop' ? 'BoxHaven Desktop' : guide === 'self-hosting' ? 'Self-Hosting' : 'CLI Reference');
+    if (guide !== 'desktop') {
       await page.waitForLoadState('networkidle');
-      await page.locator(process.argv.includes('--upgrade') ? '#bh-upgrade' : '#bh-size').evaluate(element => window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - 110, behavior: 'instant' }));
-      await expect(page.locator(process.argv.includes('--upgrade') ? '#bh-upgrade' : '#bh-size')).toBeInViewport();
+      await page.locator(guide === 'self-hosting' ? '#version-compatibility' : process.argv.includes('--upgrade') ? '#bh-upgrade' : '#bh-size').evaluate(element => window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - 110, behavior: 'instant' }));
+      await expect(page.locator(guide === 'self-hosting' ? '#version-compatibility' : process.argv.includes('--upgrade') ? '#bh-upgrade' : '#bh-size')).toBeInViewport();
     }
     await page.screenshot({ path: join(out, `docs-${guide}-${width}.png`), fullPage: guide === 'desktop' });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

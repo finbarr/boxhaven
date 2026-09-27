@@ -339,3 +339,7 @@ bh upgrade --version vX.Y.Z
 Updates a direct binary installation after verifying its checksum and version.
 Homebrew users should run `brew update && brew upgrade boxhaven`; desktop users
 update the whole app. Existing remote sessions continue running.
+
+`bh status NAME` also reports the box's runtime protocol and agent fingerprint.
+Use these when diagnosing an incompatible runtime; existing boxes keep their
+installed runtime after golden-image updates.

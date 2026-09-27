@@ -1,3 +1,4 @@
+import { apiProtocol, runtimeProtocol, compatibility, reportedProtocol } from "./compatibility.js";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
@@ -151,6 +152,14 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   const moduleContext = createModuleContext(options, () => policyDelivery?.notifyReconcile());
   const moduleRuntimes = startModules(options.modules || [], moduleContext);
   const app = Fastify({ logger: false });
+  app.addHook("onRequest", async (request, reply) => {
+    if (!request.url.startsWith("/v1/")) return;
+    reply.header("X-BoxHaven-Protocol", String(apiProtocol));
+    if (reportedProtocol(request.headers["x-boxhaven-protocol"]) !== apiProtocol) {
+      return reply.code(426).send({ id: "incompatible_client", message: `This backend requires BoxHaven API protocol ${apiProtocol}. Update your CLI with bh upgrade, or update the desktop app.`, ...compatibility });
+    }
+  });
+  app.get("/v1/compatibility", async () => ({ ...compatibility, backend_version: options.version || "dev" }));
   const releaseChecker = options.releaseChecker || new GitHubReleaseChecker(options.version || "dev");
   const commercialPolicy = resolveCommercialPolicy(options.commercialPolicy, moduleRuntimes);
   const teamDeletionPolicies = moduleRuntimes.flatMap((runtime) => runtime.teamDeletionPolicy ? [runtime.teamDeletionPolicy] : []);
@@ -2345,6 +2354,11 @@ async function handleAgentConnection(
   if (existing) {
     closeAgent(existing, "machine agent reconnected");
   }
+  const agentProtocol = reportedProtocol(request.headers["x-boxhaven-runtime-protocol"]);
+  const runtimeVersion = request.headers["x-boxhaven-runtime-version"];
+  machine.runtime_protocol = agentProtocol;
+  machine.runtime_version = typeof runtimeVersion === "string" && /^sha256:[a-f0-9]{64}$/.test(runtimeVersion) ? runtimeVersion : "unreported";
+  await options.store.putMachine(machine);
   agent = {
     machineKey: key,
     machine,
@@ -2408,6 +2422,9 @@ function closeAgent(agent: AgentConnection, reason: string): void {
 }
 
 function callAgentRPC(agent: AgentConnection, action: string, payload: unknown, timeout: number): Promise<unknown> {
+  if ((agent.machine.runtime_protocol ?? 1) !== runtimeProtocol) {
+    return Promise.reject(new AgentRPCError(`This box uses runtime protocol ${agent.machine.runtime_protocol}; backend requires ${runtimeProtocol}. Preserve its files and create a replacement from an updated golden image. Existing processes have not been stopped.`, "incompatible_runtime"));
+  }
   if (agent.socket.readyState !== WebSocket.OPEN) {
     return Promise.reject(new AgentRPCError("remote machine agent is not connected", "agent_disconnected"));
   }
@@ -2772,7 +2789,8 @@ function registerCors(app: FastifyInstance, origins: string[]): void {
   if (allowed.size === 0) return;
   void app.register(cors, {
     credentials: true,
-    allowedHeaders: ["authorization", "content-type"],
+    allowedHeaders: ["authorization", "content-type", "x-boxhaven-protocol"],
+    exposedHeaders: ["x-boxhaven-protocol"],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     origin(origin, callback) {
       callback(null, !origin || allowed.has(origin));

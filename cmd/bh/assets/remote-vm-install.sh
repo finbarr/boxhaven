@@ -568,6 +568,9 @@ install_boxhaven_agent() {
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+const runtimeVersion = "sha256:" + createHash("sha256").update(readFileSync(new URL(import.meta.url))).digest("hex");
 
 const backendURL = (process.env.BOXHAVEN_AGENT_BACKEND_URL || "").replace(/\/+$/, "");
 const token = process.env.BOXHAVEN_AGENT_TOKEN || "";
@@ -600,7 +603,7 @@ function connectionURL() {
 
 function connect(delay = 1000) {
   const ws = new WebSocket(connectionURL(), {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, "X-BoxHaven-Runtime-Protocol": "1", "X-BoxHaven-Runtime-Version": runtimeVersion },
   });
   socket = ws;
 

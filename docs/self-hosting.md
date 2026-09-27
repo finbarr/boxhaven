@@ -303,3 +303,19 @@ Apps should bind HTTP to `0.0.0.0:$BOXHAVEN_WEB_PORT` or run a reverse proxy
 on that port to the app's internal dev-server port. Framework dev-server
 WebSockets, including Vite HMR, use the same preview URL. The default
 `boxhaven` user has sudo access if binding to port 80 is required.
+
+## Version compatibility
+
+Product versions can advance without changing the wire protocol. Clients send
+`X-BoxHaven-Protocol: 1`; the backend advertises the supported protocol at
+`/v1/compatibility` and rejects a different protocol with HTTP 426 and upgrade
+instructions. Clients and images predating negotiation speak the original
+protocol 1. Deploy the backend before clients when making an incompatible change.
+
+VM agents report their protocol and an SHA-256 fingerprint of their agent code.
+`bh status NAME` and machine JSON expose `runtime_protocol` and `runtime_version`;
+older agents show an unreported fingerprint. Incompatible agent RPC is blocked
+without stopping the VM or its running processes. A golden-image rotation affects
+new boxes only. Preserve existing work, create a replacement from the new image,
+and verify it before destroying the old box. BoxHaven does not rewrite running
+VMs during a backend or desktop update.

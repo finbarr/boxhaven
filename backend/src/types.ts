@@ -33,6 +33,8 @@ export type RemoteMachine = {
   bootstrap_complete?: boolean;
   agent_token_hash?: string;
   agent_last_seen_at?: string;
+  runtime_protocol?: number;
+  runtime_version?: string;
   ssh_principal?: string;
   /** Durable non-ready state exposed so interrupted creates can be destroyed safely. */
   create_state?: "provisioning" | "recovery_required";

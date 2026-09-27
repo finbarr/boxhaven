@@ -45,6 +45,8 @@ export type ProviderInfo = {
 export type Machine = {
   status?: string;
   agent_last_seen_at?: string;
+  runtime_protocol?: number;
+  runtime_version?: string;
   name: string;
   user_id?: string;
   owner_name?: string;
@@ -168,11 +170,14 @@ export async function apiRequest<T = unknown>(
     method: init.method || "GET",
     ...(init.credentials ? { credentials: init.credentials } : {}),
     headers: {
+      "X-BoxHaven-Protocol": "1",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
+  const protocol = response.headers.get("X-BoxHaven-Protocol");
+  if (protocol && protocol !== "1") throw new BoxHavenAPIError(`Backend requires API protocol ${protocol}. Reload the console or install a compatible client.`, 426, "incompatible_backend");
   if (!response.ok) {
     const detail = await response.text();
     const parsed = readAPIError(detail);

@@ -330,6 +330,7 @@ func remoteBackendSessionRequest(baseURL, token, method, endpoint string, body a
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-BoxHaven-Protocol", "1")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -338,6 +339,9 @@ func remoteBackendSessionRequest(baseURL, token, method, endpoint string, body a
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if protocol := resp.Header.Get("X-BoxHaven-Protocol"); protocol != "" && protocol != "1" {
+		return fmt.Errorf("backend requires API protocol %s; this bh supports protocol 1. Run bh upgrade or use a compatible backend release", protocol)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var buf bytes.Buffer
 		_, _ = buf.ReadFrom(resp.Body)

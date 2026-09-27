@@ -2390,3 +2390,64 @@ async function nextWSMessageWithTimeout(socket: { once: (event: "message" | "err
     }),
   ]);
 }
+
+
+test("API protocol negotiation preserves v1 and rejects incompatible clients before operations", async () => {
+  const { app } = await createTestBackend();
+  const original = await app.inject({ method: "GET", url: "/v1/compatibility" });
+  assert.equal(original.statusCode, 200);
+  assert.equal(original.json().api_protocol, 1);
+  assert.equal(original.headers["x-boxhaven-protocol"], "1");
+  for (const version of ["0", "2", "invalid"]) {
+    const response = await app.inject({ method: "POST", url: "/v1/machines", headers: { "x-boxhaven-protocol": version }, payload: { name: "must-not-create" } });
+    assert.equal(response.statusCode, 426);
+    assert.equal(response.json().id, "incompatible_client");
+  }
+});
+
+test("agent runtime versions are recorded and incompatible RPC cannot run", async () => {
+  const { app, provider, token } = await createTestBackend();
+  const headers = { authorization: `Bearer ${token}` };
+  assert.equal((await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "runtime-test" } })).statusCode, 201);
+  const agent = await app.injectWS("/v1/agent/connect", { headers: { authorization: `Bearer ${provider.created[0].agent_token}`, "x-boxhaven-runtime-protocol": "2", "x-boxhaven-runtime-version": "sha256:" + "a".repeat(64) } });
+  agent.send(JSON.stringify({ type: "ping" }));
+  assert.equal(JSON.parse((await nextWSMessage(agent)).toString()).type, "pong");
+  const machine = (await app.inject({ method: "GET", url: "/v1/machines/runtime-test", headers })).json().machine;
+  assert.equal(machine.runtime_protocol, 2);
+  assert.equal(machine.runtime_version, "sha256:" + "a".repeat(64));
+  const result = await app.inject({ method: "POST", url: "/v1/machines/runtime-test/sessions/boxhaven/prepare", headers, payload: {} });
+  assert.notEqual(result.statusCode, 200);
+  assert.match(result.body, /runtime protocol 2/);
+  agent.terminate();
+});
+
+test("the shipped VM agent negotiates and reconnects after a backend restart", { timeout: 30000 }, async () => {
+  const { readFile, writeFile, rm } = await import('node:fs/promises');
+  const { spawn } = await import('node:child_process');
+  const fixture = await createTestBackend();
+  let app = fixture.app;
+  const headers = { authorization: `Bearer ${fixture.token}` };
+  assert.equal((await app.inject({ method: 'POST', url: '/v1/machines', headers, payload: { name: 'real-agent' } })).statusCode, 201);
+  const directory = await mkdtemp(join(tmpdir(), 'boxhaven-runtime-test-'));
+  const installer = await readFile(new URL('../../cmd/bh/assets/remote-vm-install.sh', import.meta.url), 'utf8');
+  const source = installer.split("cat > /usr/local/lib/boxhaven/agent.mjs <<'EOF'\n")[1].split('\nEOF')[0];
+  const path = join(directory, 'agent.mjs'); await writeFile(path, source);
+  await app.listen({ port: 0, host: '127.0.0.1' });
+  const port = (app.server.address() as AddressInfo).port;
+  const agent = spawn(process.execPath, [path], { env: { ...process.env, BOXHAVEN_AGENT_BACKEND_URL: `http://127.0.0.1:${port}`, BOXHAVEN_AGENT_TOKEN: fixture.provider.created[0].agent_token, BOXHAVEN_AGENT_HEARTBEAT_INTERVAL: '100' }, stdio: 'ignore' });
+  const seen = async (after = '') => {
+    for (let i = 0; i < 150; i++) {
+      const machine = (await app.inject({ method: 'GET', url: '/v1/machines/real-agent', headers })).json().machine;
+      if (machine.runtime_protocol === 1 && machine.agent_last_seen_at > after) { assert.match(machine.runtime_version, /^sha256:[a-f0-9]{64}$/); return machine.agent_last_seen_at; }
+      await delay(100);
+    }
+    throw new Error('Shipped agent did not reconnect');
+  };
+  try {
+    const before = await seen();
+    await app.close();
+    app = createBackend({ auth: createBackendAuth(fixture.authOptions), providers: fixture.providers, store: fixture.store, sshCA: fixture.sshCA, machineReadyTimeoutMs: 0 });
+    await app.listen({ host: '127.0.0.1', port });
+    await seen(before);
+  } finally { agent.kill(); await app.close(); await rm(directory, { recursive: true, force: true }); }
+});

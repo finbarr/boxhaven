@@ -47,6 +47,8 @@ var defaultRemoteSyncExcludePatterns = []string{
 }
 
 type remoteMachine struct {
+	RuntimeProtocol    int       `json:"runtime_protocol,omitempty"`
+	RuntimeVersion     string    `json:"runtime_version,omitempty"`
 	OwnerName          string    `json:"owner_name,omitempty"`
 	OwnerEmail         string    `json:"owner_email,omitempty"`
 	Name               string    `json:"name"`
@@ -529,6 +531,11 @@ func runRemoteStatus(args []string, projectDir string) error {
 	fmt.Printf("%sproject_path:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.ProjectPath))
 	fmt.Printf("%swork_path:%s %s\n", colorBold, colorReset, configValueOrNotSet(remoteWorkPath(machine)))
 	fmt.Printf("%slast_synced_at:%s %s\n", colorBold, colorReset, displayTime(machine.LastSyncedAt))
+	protocol := "unreported"
+	if machine.RuntimeProtocol > 0 {
+		protocol = fmt.Sprint(machine.RuntimeProtocol)
+	}
+	fmt.Printf("%sruntime:%s protocol %s, %s\n", colorBold, colorReset, protocol, configValueOrNotSet(machine.RuntimeVersion))
 	fmt.Printf("%sagent_last_seen:%s %s (%s)\n", colorBold, colorReset, displayTime(machine.AgentLastSeenAt), remoteMachineStatusLabel(machine, time.Now()))
 	fmt.Printf("%sbootstrap_complete:%s %t\n", colorBold, colorReset, machine.BootstrapComplete)
 	return nil

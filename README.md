@@ -517,3 +517,19 @@ destroys the box unless `BOXHAVEN_SMOKE_KEEP=1` is set.
 Use `make smoke-remote-full` with `BOXHAVEN_SMOKE_RESTART_BACKEND_CMD` when the
 agent reconnect path needs coverage. Use `make smoke-remote-two-box` only for
 concurrency, provider import, or multiple-machine behavior.
+
+## Version compatibility
+
+Product versions can advance without changing the wire protocol. Clients send
+`X-BoxHaven-Protocol: 1`; the backend advertises the supported protocol at
+`/v1/compatibility` and rejects a different protocol with HTTP 426 and upgrade
+instructions. Clients and images predating negotiation speak the original
+protocol 1. Deploy the backend before clients when making an incompatible change.
+
+VM agents report their protocol and an SHA-256 fingerprint of their agent code.
+`bh status NAME` and machine JSON expose `runtime_protocol` and `runtime_version`;
+older agents show an unreported fingerprint. Incompatible agent RPC is blocked
+without stopping the VM or its running processes. A golden-image rotation affects
+new boxes only. Preserve existing work, create a replacement from the new image,
+and verify it before destroying the old box. BoxHaven does not rewrite running
+VMs during a backend or desktop update.
