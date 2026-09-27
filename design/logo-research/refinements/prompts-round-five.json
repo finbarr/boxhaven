@@ -1,0 +1,9 @@
+{
+  "tool": "Built-in image_gen",
+  "source": "/Users/finbarr/.codex/generated_images/01a0db53-b2b6-7bb3-8eb7-edeae92db8bb/exec-83cfe007-8a66-441f-93c8-850c042211e2.png",
+  "output": "refinements/classic-box-family-centered.png",
+  "reference": "refinements/classic-box-family-depth.png",
+  "prompt": "Move the whole face just 15 pixels to the left. Both eyes and mouth move together unchanged, like one sticker. Preserve all sizes, spacing, shapes and vertical positions. Everything else in this image must remain the same, including front body, right side, shading, shadow, background and framing. The shift should be barely noticeable. Do not redesign or redraw the expression.",
+  "intent": "Translate face toward front-panel center, keeping spacing and expression. Earlier attempts rejected for spacing/position drift.",
+  "transparent_background": false
+}

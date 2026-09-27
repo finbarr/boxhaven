@@ -2,7 +2,9 @@
 
 Design review · 27 September 2026. Open [the gallery](index.html).
 
-Latest: **G** matches the shared box portrait geometry in `backend/src/box-art.ts`: front width 35, right side extension 5, zero vertical offset, with a small contact shadow underneath. The generated concept approximates the 14.3% ratio; final vectors should enforce it. Source and correction prompts are in `refinements/prompts-round-four.json`. The reference render is reproducible with `node design/logo-research/render-box-reference.mjs`.
+Latest: **H** centers the face on the front panel of G. The first comparison row normalizes D, E, and H to a 220px front-panel width using measured source bounds in `build-refinements.py`; image files remain unscaled. The prompt is in `refinements/prompts-round-five.json`.
+
+**G** matches the shared box portrait geometry in `backend/src/box-art.ts`: front width 35, right side extension 5, zero vertical offset, with a small contact shadow underneath. The generated concept approximates the 14.3% ratio; final vectors should enforce it. Source and correction prompts are in `refinements/prompts-round-four.json`. The reference render is reproducible with `node design/logo-research/render-box-reference.mjs`.
 
 **F** in [Classic refinements](refinements.html) combines soft matte depth with the deeper printed shadow. The image and prompt are saved in `refinements/classic-depth-shadow.png` and `refinements/prompts-round-three.json`.
 

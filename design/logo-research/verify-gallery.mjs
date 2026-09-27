@@ -57,15 +57,20 @@ try {
   await page.locator('#right').selectOption('02-square');
   await page.locator('#compare').screenshot({ path: fileURLToPath(new URL('compare-finalists.png', out)) });
   await page.goto(new URL('./refinements.html', import.meta.url).href);
-  assert.equal(await page.locator('.grid article').count(), 7);
+  assert.equal(await page.locator('.grid article').count(), 8);
   await page.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())));
   for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
     await page.setViewportSize({ width, height });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${name} refinements overflow`);
+    for (const image of await page.locator('.normalized').all()) {
+      const box = await image.boundingBox();
+      const fraction = Number(await image.getAttribute('data-front-fraction'));
+      assert.ok(Math.abs(box.width * fraction - 220) < 0.1, 'Equal front-panel width');
+    }
     await page.screenshot({ path: fileURLToPath(new URL(`refinements-${name}.png`, out)), fullPage: true });
   }
   assert.deepEqual(errors, []);
-  console.log('Verified 7 refinements, 8 concepts, 13 reference images, 15 guides, actual CSS sizes, comparison controls, backgrounds, modal keyboard dismissal, and desktop/tablet/mobile layout.');
+  console.log('Verified 8 refinements, 8 concepts, 13 reference images, 15 guides, actual CSS sizes, comparison controls, backgrounds, modal keyboard dismissal, and desktop/tablet/mobile layout.');
 } finally {
   await browser.close();
 }
