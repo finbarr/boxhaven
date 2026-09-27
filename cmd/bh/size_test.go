@@ -26,14 +26,20 @@ func TestSizeCatalogJSON(t *testing.T) {
 			if r.URL.Query().Get("provider") != provider || r.URL.Query().Get("region") != "nyc3" || r.URL.Query().Get("team") != "demo" {
 				t.Errorf("unexpected filters: %s", r.URL.RawQuery)
 			}
-			fmt.Fprint(w, `{"provider":{"name":"configured","label":"Configured","default_region":"nyc3"},"plans":[],"sizes":[{"name":"small","provider":"configured","hourly_price_cents":10,"plan":{"slug":"s-2vcpu-4gb","available":true,"regions":["nyc3"],"prices":[{"region":"nyc3","hourly":0.02,"monthly":12,"currency":"USD"}]}}]}`)
+			if _, err := fmt.Fprint(w, `{"provider":{"name":"configured","label":"Configured","default_region":"nyc3"},"plans":[],"sizes":[{"name":"small","provider":"configured","hourly_price_cents":10,"plan":{"slug":"s-2vcpu-4gb","available":true,"regions":["nyc3"],"prices":[{"region":"nyc3","hourly":0.02,"monthly":12,"currency":"USD"}]}}]}`); err != nil {
+				t.Errorf("write catalog response: %v", err)
+			}
 		case "/v1/providers":
 			if failProviders {
 				w.WriteHeader(503)
-				fmt.Fprint(w, `{"message":"Catalog unavailable"}`)
+				if _, err := fmt.Fprint(w, `{"message":"Catalog unavailable"}`); err != nil {
+					t.Errorf("write catalog response: %v", err)
+				}
 				return
 			}
-			fmt.Fprint(w, `{"providers":[{"name":"configured","label":"Configured","default":true}]}`)
+			if _, err := fmt.Fprint(w, `{"providers":[{"name":"configured","label":"Configured","default":true}]}`); err != nil {
+				t.Errorf("write catalog response: %v", err)
+			}
 		default:
 			t.Errorf("unexpected route %s", r.URL.Path)
 			w.WriteHeader(404)
@@ -46,7 +52,11 @@ func TestSizeCatalogJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer output.Close()
+	defer func() {
+		if err := output.Close(); err != nil {
+			t.Errorf("close catalog output: %v", err)
+		}
+	}()
 	original := os.Stdout
 	os.Stdout = output
 	defer func() { os.Stdout = original }()
