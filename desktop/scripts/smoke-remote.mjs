@@ -47,7 +47,7 @@ try {
   await expect(terminal).toContainText('BOXHAVEN_DESKTOP_VERIFIED', { timeout: 15000 });
   const created = JSON.parse((await bh('list', '--json')).stdout).machines.find(box => box.name === name);
   assert.equal(created.provider, provider); assert.equal(created.region, region);
-  await page.getByRole('button', { name: 'Actions for docs-refresh', exact: true }).click();
+  await page.getByRole('button', { name: `Actions for ${name}`, exact: true }).click();
   await page.getByRole('button', { name: 'Rename box', exact: true }).click();
   await page.locator('#rename-name').fill(renamed);
   await page.screenshot({ path: join(out, 'desktop-real-rename.png') });
@@ -88,6 +88,7 @@ try {
       return { response: 1 };
     };
   }, name);
+  await reopened.getByRole('button', { name: 'Box actions', exact: true }).click();
   await reopened.getByRole('button', { name: 'Destroy box…', exact: true }).click();
   await expect(reopened.locator(`.box-row[data-name="${name}"]`)).toHaveCount(0, { timeout: 120000 });
   await expect(reopened.locator('#session-header')).toBeHidden();

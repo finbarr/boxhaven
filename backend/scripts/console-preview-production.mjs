@@ -31,7 +31,7 @@ try {
   const previews = page.locator(".boxes-table .preview-link");
   await previews.first().waitFor();
   const count = await previews.count();
-  assert.equal(await page.locator(".boxes-table th").count(), 3);
+  assert.equal(await page.locator(".boxes-table th").count(), 5);
   const row = page.locator(".boxes-table tbody tr").filter({ has: page.locator(".preview-link") }).first();
   assert.equal(await row.locator(".box-avatar").count(), 1);
   const href = await previews.first().getAttribute("href");
