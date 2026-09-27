@@ -23,3 +23,8 @@ Review `.artifacts/brand/sizes.png` at native resolution as well as screenshots 
 the real surfaces. Earlier raster experiments in `design/logo-research` are
 archival studies, not production assets. Per-machine character portraits remain
 a separate identity system in `backend/src/box-art.ts`.
+
+After deployment, run `node scripts/smoke-brand.mjs` with an existing production
+CLI login. This read-only check verifies the served logo and favicon hashes,
+opens the authenticated console, and captures the website, console, and docs at
+desktop and mobile widths in `.artifacts/brand/production`.
