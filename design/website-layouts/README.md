@@ -39,10 +39,11 @@ work: a desktop interface, separate remote machines, and a self-hostable backend
 
 ## Three directions
 
-**A — Product first (recommended).** A centered explicit headline, concise remote
+**A — Product first (selected).** A centered explicit headline, concise remote
 machine explanation, one primary CTA, and a wide selectable desktop illustration.
-Follow with concrete tasks, control/sharing/persistence, hosting, then setup.
-Tradeoff: the delegation mechanism needs explanation in the next section.
+Follow with a diagram showing desktop and CLI connecting to the same remote boxes,
+feature callouts, hosting, and two equal setup paths. The optional agent skill
+lives under the CLI path. Repeated task cards have been removed.
 
 **B — Request first.** A split hero pairs a short outcome headline with a realistic
 request branching into three independent homepage explorations. Parallelism is
@@ -54,9 +55,10 @@ subtitle and a range of examples.
 jobs next to the benefit. Visitors switch between feature, exploration, and backlog
 examples, then see the desktop view. Tradeoff: the product is less prominent than A.
 
-Use A's hierarchy with B's concrete request demonstration in the second section.
-This is a recommendation for the next implementation, not a fourth implemented
-variant or a validated conversion result.
+A is the selected direction. The latest revision replaces the duplicate task list
+with a shared-box connection diagram and separates desktop and CLI onboarding.
+B and C are retained as earlier explorations. These are still review artifacts;
+the live site is unchanged.
 
 ## Copy and product boundaries
 
@@ -70,7 +72,7 @@ variant or a validated conversion result.
 - Self-hosting describes deployment control. Avoid “code never leaves your servers”:
   agents may call external model providers, and that depends on configuration.
 - The desktop app currently has a source-build/setup path. Link to its guide rather
-  than a fictional signed download. The skill remains the default delegation path.
+  than a fictional signed download. Desktop and CLI are equal entry paths; the skill is an optional CLI addition.
 - Setup command and CLI prerequisites retain the canonical existing workflow.
 - Preserve the cabin logo, small quirky portraits, ivory, evergreen, and sage.
   No invented customer logos, quotes, metrics, or production task activity.

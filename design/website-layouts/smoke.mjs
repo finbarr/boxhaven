@@ -26,6 +26,9 @@ try{
   assert.deepEqual(await page.locator('img').evaluateAll(imgs=>imgs.filter(i=>!i.complete||!i.naturalWidth).map(i=>i.src)),[]);
   if(width!==320)await page.screenshot({path:resolve(dir,`previews/${option}-${width===1440?'desktop':'mobile'}.png`)});
   await page.screenshot({path:resolve(dir,`.artifacts/${option}-${width}-full.png`),fullPage:true});
+  if(option==='a' && width!==320)for(const section of ['parallel','start']){
+   await page.locator('#'+section).screenshot({path:resolve(dir,`.artifacts/a-${width}-${section}.png`)});
+  }
   await page.getByRole('tab',{name:/search-feature/}).click();
   assert.equal(await page.locator('#terminal-name').textContent(),'search-feature');
   assert.match(await page.locator('#terminal').textContent(),/product search/);
@@ -38,9 +41,17 @@ try{
    assert.match(await page.locator('#scenario-cards').textContent(),/flaky test/);
   }
   await page.getByRole('link',{name:'Get started',exact:false}).click();
-  await page.getByRole('button',{name:'Copy install command'}).click();
+  if(option==='a'){
+   assert.equal(await page.locator('#parallel .task-cards').count(),0);
+   assert.equal(await page.locator('.remote-node').count(),3);
+   assert.equal(await page.locator('.entry-option').count(),2);
+   await page.getByRole('button',{name:'Copy CLI install command',exact:true}).click();
+   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'brew install finbarr/tap/boxhaven');
+   await page.getByText('Add the agent skill',{exact:true}).click();
+  }
+  await page.getByRole('button',{name:'Copy install command',exact:true}).click();
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'npx skills add finbarr/boxhaven --skill boxhaven -g -a codex claude-code');
-  await page.getByText('First-time setup',{exact:true}).click();
+  if(option!=='a')await page.getByText('First-time setup',{exact:true}).click();
   assert.equal(await page.locator('details').getAttribute('open'),'');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   assert.deepEqual(errors,[]);
