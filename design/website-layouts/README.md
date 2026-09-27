@@ -42,7 +42,7 @@ work: a desktop interface, separate remote machines, and a self-hostable backend
 **A — Product first (selected).** A centered explicit headline, concise remote
 machine explanation, one primary CTA, and a wide selectable desktop illustration.
 Follow with six illustrated product features, hosting, and three equal setup paths. Desktop, CLI, and agent skill each have their own card; the skill
-card keeps its CLI and Node prerequisites visible under Requirements. Repeated task cards have been removed.
+prerequisites sit in a disclosure beneath the cards so their edges stay aligned. Repeated task cards have been removed.
 
 **B — Request first.** A split hero pairs a short outcome headline with a realistic
 request branching into three independent homepage explorations. Parallelism is
@@ -89,7 +89,7 @@ node design/website-layouts/smoke.mjs
 
 The first command captures external reference pages under ignored `.artifacts/`.
 The second serves only this repository locally, checks all three concepts at
-1440, 390, and 320 pixels, exercises the example controls and copy action, checks
+1440, 1170, 390, and 320 pixels, exercises the example controls and copy action, checks
 images, local links, console errors, and overflow, and refreshes `previews/`.
 Full-page screenshots and diagnostic output are under ignored `.artifacts/`.
 

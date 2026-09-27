@@ -17,14 +17,14 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}/design/website-layouts/`;
 const browser=await chromium.launch({channel:'chrome'});
 try{
- for(const option of ['a','b','c'])for(const width of [1440,390,320]){
+ for(const option of ['a','b','c'])for(const width of [1440,1170,390,320]){
   const context=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce',permissions:['clipboard-read','clipboard-write']});
   const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base+option+'.html');await page.locator('h1').waitFor();
   assert.equal(await page.locator('h1').count(),1);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${option} ${width} overflow`);
   assert.deepEqual(await page.locator('img').evaluateAll(imgs=>imgs.filter(i=>!i.complete||!i.naturalWidth).map(i=>i.src)),[]);
-  if(width!==320)await page.screenshot({path:resolve(dir,`previews/${option}-${width===1440?'desktop':'mobile'}.png`)});
+  if(width===1440||width===390)await page.screenshot({path:resolve(dir,`previews/${option}-${width===1440?'desktop':'mobile'}.png`)});
   await page.screenshot({path:resolve(dir,`.artifacts/${option}-${width}-full.png`),fullPage:true});
   if(option==='a' && width!==320)for(const section of ['parallel','hosting','start']){
    await page.locator('#'+section).screenshot({path:resolve(dir,`.artifacts/a-${width}-${section}.png`)});
@@ -45,9 +45,15 @@ try{
    assert.equal(await page.locator('#parallel .task-cards').count(),0);
    assert.equal(await page.locator('.product-feature').count(),6);
    assert.equal(await page.locator('.entry-option').count(),3);
+   if(width>760){
+    for(const selector of ['.entry-option','.entry-action .button']){
+     const edges=await page.locator('.three-paths '+selector).evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return [r.top,r.bottom]}));
+     for(const edge of [0,1])assert.ok(Math.max(...edges.map(r=>r[edge]))-Math.min(...edges.map(r=>r[edge]))<1,'Setup cards and actions align');
+    }
+   }
    await page.getByRole('button',{name:'Copy CLI install command',exact:true}).click();
    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'brew install finbarr/tap/boxhaven');
-   await page.getByText('Requirements',{exact:true}).click();
+   await page.getByText('Agent skill requirements',{exact:true}).click();
    const github = page.locator('#hosting').getByRole('link',{name:'View on GitHub'});
    assert.equal(await github.getAttribute('target'),'_blank');
    assert.match(await github.getAttribute('rel'),/noopener/);
@@ -77,5 +83,5 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'gallery overflow');
   await page.screenshot({path:resolve(dir,`.artifacts/gallery-${width}.png`),fullPage:true});
  }
- console.log(JSON.stringify({ok:true,concepts:3,widths:[1440,390,320],gallery:base+'index.html'}));
+ console.log(JSON.stringify({ok:true,concepts:3,widths:[1440,1170,390,320],gallery:base+'index.html'}));
 }finally{await browser.close();await new Promise(r=>server.close(r));}
