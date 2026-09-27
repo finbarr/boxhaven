@@ -58,7 +58,7 @@ func runUpgrade(args []string) error {
 		if err != nil {
 			return nil, err
 		}
-		defer response.Body.Close()
+		defer func() { _ = response.Body.Close() }()
 		if response.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("download %s: HTTP %d", name, response.StatusCode)
 		}
@@ -76,7 +76,11 @@ func runUpgrade(args []string) error {
 	if err := os.Mkdir(lock, 0700); err != nil {
 		return fmt.Errorf("cannot lock %s for upgrade (check directory permissions or another upgrade): %w", executable, err)
 	}
-	defer os.RemoveAll(lock)
+	defer func() {
+		if err := os.RemoveAll(lock); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: remove upgrade lock %s: %v\n", lock, err)
+		}
+	}()
 	sums, err := download("SHA256SUMS", 1<<20)
 	if err != nil {
 		return err
@@ -133,7 +137,7 @@ func stageUpgrade(archive []byte, sums, asset, destination string) error {
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	tarball := tar.NewReader(reader)
 	found := false
 	for {
