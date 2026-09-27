@@ -20,9 +20,11 @@ icon. Click a screen to enlarge it. Revision 3 exact prompts are in
   glasses, antennas, and cat ears make them recognizable without competing with
   names. Base identity stays stable through renames and team moves, while
   expressions and lights evolve with the machine state.
-- Reduce in-app logo and portrait dimensions roughly 35% from the first pass.
-  Target 26–30 px list portraits, 32–36 px header portraits, and a 36 px brand mark
-  at ordinary desktop scale. Keep interaction targets at least 32 px.
+- The initial review reduced portraits roughly 35%; the September 27 production
+  review revised the hosted console to 40 px square list portraits and 48 px
+  detail portraits. Website workspace portraits are 40 px on desktop and 32 px
+  on mobile. Keep the original cabin logo and comfortable interaction targets.
+  The raster studies below retain the earlier sizing for reference.
 - Status remains a separate labelled dot. Expressions reflect verified machine
   lifecycle state, never inferred agent progress or task completion.
 - Creation keeps visible size/spec/price rows. Support all actual backend sizes,
