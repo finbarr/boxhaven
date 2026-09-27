@@ -54,6 +54,7 @@ try{
    await page.getByRole('button',{name:'Copy CLI install command',exact:true}).click();
    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'brew install finbarr/tap/boxhaven');
    await page.getByText('Agent skill requirements',{exact:true}).click();
+   await page.locator('#start').screenshot({path:resolve(dir,`.artifacts/a-${width}-start-expanded.png`)});
    const github = page.locator('#hosting').getByRole('link',{name:'View on GitHub'});
    assert.equal(await github.getAttribute('target'),'_blank');
    assert.match(await github.getAttribute('rel'),/noopener/);
