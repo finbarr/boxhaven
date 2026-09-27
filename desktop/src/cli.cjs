@@ -33,6 +33,8 @@ function parseMachines(output) {
     // Send only display data to the renderer; credentials stay with the CLI.
     return {
       name: machine.name, status: machine.status,
+      provider_id: machine.provider_id, preview_hostname: machine.preview_hostname, create_state: machine.create_state,
+      owner_name: machine.owner_name, owner_email: machine.owner_email, user_id: machine.user_id,
       identity: JSON.stringify([machine.provider, machine.provider_id, machine.created_at]),
       previewURL: previewURL(machine.preview_url),
       team: machine.team_slug || machine.team_name || 'Personal',

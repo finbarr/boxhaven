@@ -485,6 +485,8 @@ test("backend renames machine records without changing provider identity", async
   const listed = await app.inject({ method: "GET", url: "/v1/machines", headers });
   assert.equal(listed.statusCode, 200, listed.body);
   assert.deepEqual(listed.json().machines.map((machine: RemoteMachine) => machine.name), ["bar"]);
+  assert.equal(listed.json().machines[0].owner_email, "user@example.com");
+  assert.equal(listed.json().machines[0].owner_name, "user");
 
   const duplicate = await app.inject({
     method: "POST",

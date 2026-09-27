@@ -43,6 +43,8 @@ export type ProviderInfo = {
 };
 
 export type Machine = {
+  status?: string;
+  agent_last_seen_at?: string;
   name: string;
   user_id?: string;
   owner_name?: string;

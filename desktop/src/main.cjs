@@ -200,7 +200,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     if (signingIn) return signingIn;
     if (creating) throw new Error('Wait for your new box to finish before changing accounts.');
     if (destructions.size) throw new Error('Wait for box destruction to finish before changing accounts.');
-    if (sessions.size) throw new Error('Detach your open sessions before signing in to another account.');
+    if (sessions.size) throw new Error('Close local connections in Connection settings before signing in to another account.');
     if (typeof backend !== 'string') throw new Error('Invalid backend URL.');
     const args = ['login'];
     if (backend.trim()) {
@@ -216,7 +216,7 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     commands = new AbortController();
     window = new BrowserWindow({
       title: 'BoxHaven', width: 1240, height: 820, minWidth: 760, minHeight: 480,
-      backgroundColor: '#151719', icon,
+      backgroundColor: '#faf9f5', icon,
       titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 18 },
       ...(process.platform !== 'darwin' ? { titleBarOverlay: { color: '#1c1e21', symbolColor: '#bfc1c6', height: 48 } } : {}),
       webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },

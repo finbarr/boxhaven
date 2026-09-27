@@ -34,7 +34,7 @@ try {
   await expect(page.locator('#create-box')).toBeEnabled({ timeout: 90000 });
   const provider = await page.locator('#create-provider').inputValue();
   const region = await page.locator('#create-region').inputValue();
-  await page.locator('#create-size').selectOption('small');
+  await page.locator('#create-size input[value=small]').check();
   await page.screenshot({ path: join(out, 'desktop-real-settings.png') });
   await page.locator('#create-box').click();
   await page.screenshot({ path: join(out, 'desktop-real-creating.png') });
@@ -47,6 +47,7 @@ try {
   await expect(terminal).toContainText('BOXHAVEN_DESKTOP_VERIFIED', { timeout: 15000 });
   const created = JSON.parse((await bh('list', '--json')).stdout).machines.find(box => box.name === name);
   assert.equal(created.provider, provider); assert.equal(created.region, region);
+  await page.getByRole('button', { name: 'Actions for docs-refresh', exact: true }).click();
   await page.getByRole('button', { name: 'Rename box', exact: true }).click();
   await page.locator('#rename-name').fill(renamed);
   await page.screenshot({ path: join(out, 'desktop-real-rename.png') });

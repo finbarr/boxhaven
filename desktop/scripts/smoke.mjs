@@ -9,7 +9,7 @@ const temp = mkdtempSync(join(tmpdir(), 'boxhaven-desktop-smoke-'));
 const stateFile = join(temp, 'boxes.json');
 const out = join(root, '.artifacts'); mkdirSync(out, { recursive: true });
 const fixture = join(root, 'test/fixture-cli.cjs'); chmodSync(fixture, 0o755);
-const machine = (name, status, ready = true) => ({ name, status, provider_id: name, preview_url: name === 'api-cleanup' ? 'https://api-cleanup.example.com/' : '', bootstrap_complete: ready, team_slug: 'Personal', provider: 'digitalocean', region: 'nyc3', size: 'small' });
+const machine = (name, status, ready = true) => ({ name, status, owner_name: 'Jamie Taylor', owner_email: 'jamie@example.com', user_id: 'user-1', provider_id: name, preview_url: name === 'api-cleanup' ? 'https://api-cleanup.example.com/' : '', bootstrap_complete: ready, team_slug: 'Personal', provider: 'digitalocean', region: 'nyc3', size: 'small' });
 let state = { machines: [machine('api-cleanup', 'online'), machine('dashboard-redesign', 'online'), machine('docs-refresh', 'creating', false), machine('nightly-tests', 'offline')] };
 const save = () => writeFileSync(stateFile, JSON.stringify(state)); save();
 let app;
@@ -52,11 +52,11 @@ try {
   assert.equal(readFileSync(`${stateFile}.connections`, 'utf8').trim().split('\n').length, 2, 'switching boxes must reuse the PTY');
   await page.getByRole('button', { name: 'Connection settings' }).click();
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.locator('#login-status')).toContainText('Detach your open sessions');
+  await expect(page.locator('#login-status')).toContainText('Close local connections');
   await page.getByRole('button', { name: 'Close settings' }).click();
   await assert.rejects(page.evaluate(() => window.boxhaven.connect('--help', 80, 24)), /not ready/);
   await page.screenshot({ path: join(out, 'desktop-terminal.png') });
-  await page.getByRole('button', { name: 'Detach', exact: true }).click();
+  await page.evaluate(() => window.boxhaven.detach('api-cleanup'));
   await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Reconnect', exact: true }).click();
   await expect(page.locator('#connection-state')).toHaveText('Terminal open');
@@ -80,6 +80,7 @@ try {
   await page.screenshot({ path: join(out, 'desktop-small.png') });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   const connectionsBeforeRename = readFileSync(`${stateFile}.connections`, 'utf8');
+  await page.getByRole('button', { name: 'Actions for docs-refresh', exact: true }).click();
   await page.getByRole('button', { name: 'Rename box', exact: true }).click();
   await page.locator('#rename-name').fill('api-cleanup');
   await page.locator('#save-name').click();
@@ -142,7 +143,7 @@ try {
   await expect(page.locator('#create-box')).toBeDisabled();
   await page.locator('#create-region').press('Tab');
   await expect(page.locator('#size-price')).toContainText('$0.12/hr');
-  await page.locator('#create-size').selectOption('medium');
+  await page.locator('#create-size input[value=medium]').check();
   state.catalogError = 'Catalog unavailable.'; save();
   await page.locator('#create-region').fill('nyc3');
   await page.locator('#create-region').press('Tab');
@@ -151,7 +152,7 @@ try {
   delete state.catalogError; save();
   await page.locator('#retry-catalog').click();
   await expect(page.locator('#create-box')).toBeEnabled();
-  await expect(page.locator('#create-size')).toHaveValue('medium');
+  await expect(page.locator('#create-size input[value=medium]')).toBeChecked();
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(760, 480));
   await expect(page.locator('#create-box')).toBeInViewport();
   assert.equal(await page.locator('#create-dialog').evaluate(element => element.scrollWidth > element.clientWidth), false);
@@ -198,8 +199,9 @@ try {
   await expect(page.locator('#create-dialog')).not.toBeVisible({ timeout: 15000 });
   await expect(page.locator('.terminal-pane:not([hidden])')).toContainText('boxhaven@background-box');
   assert.equal(JSON.parse(readFileSync(stateFile, 'utf8')).machines.length, 2);
+  await page.getByRole('button', { name: 'Box actions', exact: true }).click();
   await page.getByRole('button', { name: 'Destroy box…', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Destroy box…', exact: true })).toBeEnabled();
+  await expect(page.locator('#destroy-box')).toBeEnabled();
   assert.equal(existsSync(`${stateFile}.destructions`), false, 'Cancel must not invoke the CLI');
   const prompt = await app.evaluate(() => global.desktopSmoke.confirmations.at(-1));
   assert.match(prompt.message, /background-box/);
@@ -210,14 +212,16 @@ try {
   await app.evaluate(() => { global.desktopSmoke.response = 1; });
   state = JSON.parse(readFileSync(stateFile, 'utf8'));
   state.destroyError = 'Provider refused deletion.'; save();
+  await page.getByRole('button', { name: 'Box actions', exact: true }).click();
   await page.getByRole('button', { name: 'Destroy box…', exact: true }).click();
   await expect(page.locator('#action-error')).toContainText('Provider refused deletion');
   await expect(page.locator('.box-row')).toHaveCount(2);
   await expect(page.locator('.terminal-pane:not([hidden])')).toContainText('boxhaven@background-box');
   await page.screenshot({ path: join(out, 'desktop-destroy-error.png') });
   delete state.destroyError; state.destroyDelay = 1200; save();
+  await page.getByRole('button', { name: 'Box actions', exact: true }).click();
   await page.getByRole('button', { name: 'Destroy box…', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Destroying…', exact: true })).toBeDisabled();
+  await expect(page.locator('#destroy-box')).toBeDisabled();
   await expect(page.locator('.box-row')).toHaveCount(1);
   await expect(page.locator('#session-header')).toBeHidden();
   assert.deepEqual(JSON.parse(readFileSync(stateFile, 'utf8')).machines.map(box => box.name), ['my-next-idea']);
@@ -227,6 +231,7 @@ try {
   await app.evaluate(({ dialog }) => {
     dialog.showMessageBox = () => new Promise(resolve => { global.desktopSmoke.confirm = resolve; });
   });
+  await page.getByRole('button', { name: 'Box actions', exact: true }).click();
   await page.getByRole('button', { name: 'Destroy box…', exact: true }).click();
   await expect.poll(() => app.evaluate(() => typeof global.desktopSmoke.confirm)).toBe('function');
   state = JSON.parse(readFileSync(stateFile, 'utf8'));

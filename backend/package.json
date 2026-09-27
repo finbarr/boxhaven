@@ -21,7 +21,11 @@
       "import": "./dist/browser-session.js"
     },
     "./console.css": "./dist/console.css",
-    "./console-logo.png": "./dist/console-logo.png"
+    "./console-logo.png": "./dist/console-logo.png",
+    "./box-art": {
+      "types": "./dist/box-art.d.ts",
+      "import": "./dist/box-art.js"
+    }
   },
   "scripts": {
     "dev": "tsx src/index.ts",

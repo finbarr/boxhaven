@@ -551,7 +551,7 @@ async function checkBoxPreviews(page, store, whoami) {
   ].map((machine) => ({
     user_id: whoami.user.id, org_id: whoami.team.id,
     provider: "fake", provider_label: "Fake Cloud", region: "nyc3",
-    public_ipv4: "127.0.0.1", bootstrap_complete: true, ...machine,
+    public_ipv4: "127.0.0.1", bootstrap_complete: true, agent_last_seen_at: new Date().toISOString(), ...machine,
   }));
   for (const machine of fixtures) await store.putMachine(machine);
   // Exercise a backend without preview configuration alongside configured boxes.
@@ -569,7 +569,7 @@ async function checkBoxPreviews(page, store, whoami) {
   await page.goto(appURL, { waitUntil: "networkidle" });
   const table = page.locator(".boxes-table");
   await table.waitFor();
-  assert.equal(await table.locator("thead th").count(), 3, "no separate generic status icon column");
+  assert.equal(await table.locator("thead th").count(), 5, "creator badge and labelled state accompany each box");
   assert.equal(await table.locator(".box-avatar").count(), fixtures.length);
   assert.equal(await table.locator(".preview-link").count(), 3, "only usable preview URLs become links");
   assert.equal(await table.locator("tr").filter({ hasText: "still-creating" }).getByText("Creating…").count(), 1);
@@ -607,8 +607,17 @@ async function checkBoxPreviews(page, store, whoami) {
   assert.equal(await table.evaluate((node) => node.scrollWidth > node.clientWidth), false);
 
   // Provider identity, not the user-editable name or array position, determines appearance.
-  await store.deleteMachine(whoami.user.id, "porch");
-  await store.putMachine({ ...fixtures[0], name: "renamed-porch" });
+  await page.getByRole("link", { name: "porch", exact: true }).click();
+  await drawer.getByRole("button", { name: "Rename", exact: true }).click();
+  await drawer.getByLabel("Box name").fill("renamed-porch");
+  await drawer.getByRole("button", { name: "Save", exact: true }).click();
+  await drawer.getByRole("heading", { name: "renamed-porch", exact: true }).waitFor();
+  assert.equal((await store.getMachine(whoami.user.id, "renamed-porch")).provider_id, fixtures[0].provider_id);
+  await drawer.locator("summary[aria-label='Box actions']").click();
+  await drawer.getByRole("button", { name: "Destroy box…", exact: true }).waitFor();
+  page.once("dialog", dialog => dialog.dismiss());
+  await drawer.getByRole("button", { name: "Destroy box…", exact: true }).click();
+  assert.ok(await store.getMachine(whoami.user.id, "renamed-porch"), "cancelling destroy retains the machine");
   await page.goto(appURL, { waitUntil: "networkidle" });
   assert.equal(await page.getByRole("link", { name: "renamed-porch", exact: true }).locator("svg").evaluate((node) => node.outerHTML), avatar);
   for (const name of [...fixtures.map((machine) => machine.name), "renamed-porch"]) await store.deleteMachine(whoami.user.id, name);

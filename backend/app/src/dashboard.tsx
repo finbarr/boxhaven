@@ -20,7 +20,7 @@ import {
   TeamInfo,
 } from "./api";
 import { useConsole } from "./console-context";
-import { BoxAvatar } from "./box-avatar";
+import { BoxAvatar, CreatorBadge, BoxStatus } from "./box-avatar";
 import { CostEstimate } from "./cost-estimate";
 import { Drawer } from "./drawer";
 import { WorkspaceHead } from "./shell";
@@ -41,7 +41,7 @@ function imageValue(image: MachineImage): string {
 // the detail drawer; "/" renders the table with no drawer open. The "New box"
 // button opens a create drawer.
 export function Dashboard({ selectedName }: { selectedName?: string }) {
-  const { token, teams, activeTeam } = useConsole();
+  const { token, teams, activeTeam, user } = useConsole();
   const navigate = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
@@ -123,6 +123,10 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
       void navigate({ to: "/" });
     },
   });
+  const renameMachine = useMutation({
+    mutationFn: ({ from, name }: { from: string; name: string }) => apiFetch(`/v1/machines/${encodeURIComponent(from)}`, token, { method: "PATCH", body: { name } }),
+    onSuccess: (_, { name }) => { void queryClient.invalidateQueries({ queryKey: ["machines", token] }); void navigate({ to: "/boxes/$name", params: { name } }); },
+  });
   const moveMachine = useMutation({
     mutationFn: (input: { machineName: string; team: string }) => apiFetch<MachineResponse>(`/v1/machines/${encodeURIComponent(input.machineName)}/move`, token, {
       method: "POST",
@@ -133,7 +137,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
       void navigate({ to: "/" });
     },
   });
-  const allMachines = useMemo(() => [...(machines.data?.machines || [])].sort((a, b) => a.name.localeCompare(b.name)), [machines.data]);
+  const allMachines = useMemo(() => [...(machines.data?.machines || [])].map(machine => ({ ...machine, ...(machine.user_id === user?.id ? { owner_name: user?.name, owner_email: user?.email } : {}) })).sort((a, b) => a.name.localeCompare(b.name)), [machines.data, user]);
   const machineList = useMemo(() => {
     if (!activeTeamID) return allMachines;
     return allMachines.filter((machine) => (machine.team_id || machine.org_id) === activeTeamID);
@@ -187,7 +191,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
               <thead>
                 <tr>
                   <th>Box</th>
-                  <th>Location</th>
+                  <th aria-label="Creator">◎</th><th>Status</th><th>Location</th>
                   <th>Public preview</th>
                 </tr>
               </thead>
@@ -204,7 +208,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
                         <strong>{machine.name}</strong>
                       </Link>
                     </td>
-                    <td className="box-location">{machine.provider_label || machine.provider || "-"} / {machine.region || "-"}</td>
+                    <td><CreatorBadge machine={machine} /></td><td><BoxStatus machine={machine} /></td><td className="box-location">{machine.provider_label || machine.provider || "-"} / {machine.region || "-"}</td>
                     <td className="box-preview">
                       {machine.create_state === "recovery_required"
                         ? <span className="recovery-label"><TriangleAlert size={14} /> destroy and recreate</span>
@@ -331,6 +335,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
         connect={connect.data}
         loading={machines.isLoading || (Boolean(selectedMachine) && connect.isLoading)}
         onClose={() => void navigate({ to: "/" })}
+        onRename={(from, name) => renameMachine.mutateAsync({ from, name })}
         onDestroy={(machineName) => destroyMachine.mutate(machineName)}
         destroying={destroyMachine.isPending}
         onMove={(machineName, targetTeam) => moveMachine.mutate({ machineName, team: targetTeam })}
@@ -397,7 +402,7 @@ function NoTeamBoxes({ teamName, onCreate }: { teamName: string; onCreate: () =>
   );
 }
 
-function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClose, onDestroy, destroying, onMove, moving, moveError }: {
+function BoxDrawer({ open, machine, onRename, missingName, teams, connect, loading, onClose, onDestroy, destroying, onMove, moving, moveError }: {
   open: boolean;
   machine?: Machine;
   missingName?: string;
@@ -405,36 +410,31 @@ function BoxDrawer({ open, machine, missingName, teams, connect, loading, onClos
   connect?: ConnectResponse;
   loading: boolean;
   onClose: () => void;
+  onRename: (from: string, name: string) => Promise<unknown>;
   onDestroy: (name: string) => void;
   destroying: boolean;
   onMove: (name: string, team: string) => void;
   moving: boolean;
   moveError: string;
 }) {
+  const [renaming, setRenaming] = useState(false);
+  const [nextName, setNextName] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setRenaming(false); setRenameError(""); }, [machine?.name]);
   if (machine) {
     return (
       <Drawer
         wide
         open={open}
         onClose={onClose}
-        eyebrow={connect?.status || "box"}
         title={machine.name}
         headingIcon={<BoxAvatar machine={machine} />}
-        footer={(
-          <button
-            className="danger-button"
-            type="button"
-            onClick={() => {
-              if (window.confirm(`Destroy ${machine.name}?`)) onDestroy(machine.name);
-            }}
-            disabled={destroying}
-            title="Destroy box"
-          >
-            <Trash2 size={16} />
-            {destroying ? "Destroying" : "Destroy box"}
-          </button>
-        )}
+        actions={<details className="box-overflow"><summary aria-label="Box actions">•••</summary><div><button className="danger-button" disabled={destroying} onClick={() => { if (window.confirm(`Destroy ${machine.name}?`)) onDestroy(machine.name); }}>{destroying ? "Destroying…" : "Destroy box…"}</button></div></details>}
+
       >
+        <div className="box-detail-actions"><CreatorBadge machine={machine} /><BoxStatus machine={machine} /><button className="secondary-button" onClick={() => { setNextName(machine.name); setRenaming(true); }}>Rename</button></div>
+        {renaming ? <form className="rename-form" onSubmit={async event => { event.preventDefault(); setSaving(true); setRenameError(""); try { await onRename(machine.name, nextName); setRenaming(false); } catch (error) { setRenameError((error as Error).message); } finally { setSaving(false); } }}><label>Box name<input required maxLength={63} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={nextName} onChange={event => setNextName(event.target.value)} /></label><button className="primary-button" disabled={saving}>Save</button><button type="button" className="secondary-button" onClick={() => setRenaming(false)}>Cancel</button>{renameError ? <p role="alert">{renameError}</p> : null}</form> : null}
         {machine.create_state === "recovery_required" ? (
           <div className="recovery-notice" role="alert">
             <TriangleAlert size={18} />

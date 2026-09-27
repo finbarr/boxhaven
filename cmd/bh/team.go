@@ -83,8 +83,6 @@ type teamSetActiveRequest struct {
 
 type teamMachine struct {
 	remoteMachine
-	OwnerEmail string `json:"owner_email,omitempty"`
-	OwnerName  string `json:"owner_name,omitempty"`
 }
 
 type teamMachinesResponse struct {

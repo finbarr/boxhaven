@@ -48,8 +48,9 @@ The [BoxHaven desktop app](desktop/README.md) shows your boxes in a sidebar and
 attaches to the selected box's persistent tmux session. It uses your existing
 CLI login and works with hosted or self-hosted backends. Click **New box** to
 choose a provider, region, and size with price estimates, then open the new
-box’s terminal automatically. The header lets you rename it without disconnecting,
-open its web preview, or destroy it with confirmation. The first macOS build
+box’s terminal automatically. Rename from the sidebar overflow menu without
+disconnecting. Open its web preview from the header, or use the overflow menu
+to destroy it with confirmation. The first macOS build
 is available from source:
 
 ```bash

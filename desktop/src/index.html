@@ -11,7 +11,7 @@
   <header class="titlebar"><span>BoxHaven</span></header>
   <div class="workspace">
     <aside class="sidebar">
-      <div class="sidebar-heading"><h1>Your boxes <span id="count">0</span></h1><button id="refresh" class="icon-button" aria-label="Refresh boxes" title="Refresh boxes (⌘R)">↻</button></div>
+      <div class="sidebar-heading"><div class="brand"><img src="logo.png" alt=""><h1>BoxHaven</h1><span id="count">0</span></div><button id="refresh" class="icon-button" aria-label="Refresh boxes" title="Refresh boxes (⌘R)">↻</button></div>
       <button id="new-box" class="new-box"><span aria-hidden="true">+</span> New box</button>
       <button id="creation-notice" class="creation-notice" hidden></button>
       <div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find a box…" aria-label="Find a box" autocomplete="off"><kbd>⌘K</kbd></div>
@@ -21,27 +21,28 @@
     </aside>
     <main>
       <header id="session-header" hidden>
-        <div class="session-heading"><span class="box-glyph" aria-hidden="true">⬡</span><div><div class="box-title"><h2 id="box-name"></h2><button id="rename-box" class="icon-button" aria-label="Rename box" title="Rename box">✎</button></div><p id="box-meta"></p></div></div>
-        <div class="session-actions"><span id="connection-state" role="status"></span><button id="open-preview">Open preview ↗</button><button id="reconnect" hidden>Reconnect</button><button id="detach" class="subtle" hidden>Detach</button><button id="destroy-box" class="subtle danger">Destroy box…</button></div>
+        <div class="session-heading"><span id="box-portrait"></span><div><div class="box-title"><h2 id="box-name"></h2><span id="box-creator"></span></div><p id="box-meta"></p></div></div>
+        <div class="session-actions"><span id="connection-state" role="status"></span><button id="open-preview">Open preview ↗</button><button id="reconnect" hidden>Reconnect</button><button id="box-actions" aria-label="Box actions" aria-expanded="false" popovertarget="box-menu">•••</button></div>
       </header>
       <p id="action-error" role="alert" hidden></p>
       <section id="welcome" class="welcome">
-        <img src="icon.png" alt="Three happy boxes at home">
+        <img src="logo.png" alt="Three happy boxes at home">
         <h2 id="welcome-title">Loading…</h2>
         <div id="empty-guide" hidden><button id="create-first-box" class="primary">Create box</button></div>
       </section>
       <div id="terminals" hidden></div>
     </main>
   </div>
+  <div id="box-menu" popover><button id="rename-box">Rename box</button><button id="destroy-box" class="danger">Destroy box…</button></div>
   <dialog id="create-dialog" aria-labelledby="create-title">
     <form id="create-form">
-      <div class="dialog-heading"><h2 id="create-title">New box</h2><button type="button" id="close-create" class="icon-button" aria-label="Close new box">×</button></div>
+      <div class="dialog-heading"><div class="box-title"><span id="create-portrait" aria-hidden="true"></span><h2 id="create-title">New box</h2></div><button type="button" id="close-create" class="icon-button" aria-label="Close new box">×</button></div>
       <label for="new-box-name">Box name</label><input id="new-box-name" placeholder="work" required maxlength="63" pattern="[a-z0-9]+(-[a-z0-9]+)*" title="Lowercase letters, numbers, and single hyphens between words" autocomplete="off" spellcheck="false" autofocus>
       <div class="field-row">
         <div><label for="create-provider">Provider</label><select id="create-provider" required disabled></select></div>
         <div><label for="create-region">Region</label><input id="create-region" list="create-regions" placeholder="Default" maxlength="63" autocomplete="off" spellcheck="false" disabled><datalist id="create-regions"></datalist></div>
       </div>
-      <label for="create-size">Size</label><select id="create-size" required disabled></select>
+      <fieldset id="size-options"><legend>Size</legend><div id="create-size"></div></fieldset>
       <div id="size-summary" hidden><span id="size-hardware"></span><strong id="size-price"></strong></div>
       <p id="catalog-status" role="status"></p><button id="retry-catalog" type="button" hidden>Retry</button>
       <p id="create-status" role="status" aria-live="polite"></p>
@@ -61,6 +62,7 @@
       <div class="dialog-heading"><h2>Connection</h2><button type="button" id="close-settings" class="icon-button" aria-label="Close settings">×</button></div>
       <label for="backend-url">Backend URL</label><input id="backend-url" type="url" placeholder="Configured backend" title="Leave blank to keep your backend. For a new connection, enter https://api.boxhaven.dev or your server URL.">
       <p id="login-status" role="status"></p>
+      <button id="close-connections" type="button">Close local connections</button>
       <button id="login" class="primary" type="submit">Sign in</button>
     </form>
   </dialog>

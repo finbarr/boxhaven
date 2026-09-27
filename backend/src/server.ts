@@ -41,10 +41,12 @@ export type BackendOptions = {
   releaseChecker?: ReleaseUpdateChecker;
 };
 
-type AuthContext = BackendUserContext;
+type AuthContext = BackendUserContext & { name?: string };
 type TeamInfo = BackendTeam;
 
 type TeamMachine = RemoteMachine & {
+  owner_email?: string;
+  owner_name?: string;
   team_id?: string;
   team_slug?: string;
   team_name?: string;
@@ -570,7 +572,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const machines: TeamMachine[] = [];
     for (const machine of await options.store.listMachinesForUser(auth.userID)) {
       const healed = await healMachineTeam(options, auth, machine);
-      machines.push(decorateTeam(publicMachine(normalizeMachine(options, healed)), auth.teams));
+      machines.push({ ...decorateTeam(publicMachine(normalizeMachine(options, healed)), auth.teams), owner_email: auth.email, owner_name: auth.name });
     }
     return { machines };
   });
@@ -2134,6 +2136,7 @@ async function requireAuth(options: BackendOptions, request: { headers: Record<s
   }
   return {
     userID: session.user.id,
+    name: session.user.name,
     email: session.user.email,
     emailVerified: session.user.emailVerified,
     orgID,

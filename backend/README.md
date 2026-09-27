@@ -492,3 +492,6 @@ files.
 The CLI also forwards only the effective local Git author identity,
 `user.name` and `user.email`, into the remote SSH user's global Git config. It
 does not copy the full local Git config.
+
+The machine list includes `owner_name` and `owner_email` for the authenticated creator. Clients
+use it for a compact initials badge with the full name available on hover.

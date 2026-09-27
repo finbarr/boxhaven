@@ -62,12 +62,12 @@ another name, since the provider may already have allocated the box.
 
 Select an existing box to reattach to its session. The sidebar refreshes every
 15 seconds; use the refresh button or **⌘R** for an immediate update. Use **⌘K**
-to find a box. **Detach** closes that terminal connection, and **Reconnect**
-reattaches to the remote session.
+to find a box. **Reconnect** reattaches after a connection closes. Connection settings includes
+**Close local connections** for switching accounts; remote sessions keep running.
 
 ## Rename a box
 
-Click the pencil beside the selected box’s name, enter a new name, and click
+Open the box’s sidebar overflow menu, choose **Rename box**, enter a new name, and click
 **Save**. Names use lowercase letters, numbers, and hyphens, up to 63 characters.
 The current terminal stays connected and the sidebar updates automatically.
 
@@ -80,14 +80,13 @@ the box's preview port to serve your application; see [web previews](./getting-s
 
 ## Shut down a box
 
-Click **Destroy box…** and confirm the named box in the dialog. This permanently
+Choose **Destroy box…** from the overflow menu and confirm the named box in the dialog. This permanently
 deletes its VM and files and stops every running session. Save any work you want
 to keep first. Cancel is selected by default.
 
 After deletion, the box disappears from the sidebar and its terminal closes.
 Other boxes remain running. Closing the window does not cancel a confirmed
-deletion; quitting waits for it to finish. **Detach** just disconnects your
-terminal and keeps the box running. There is currently no stop/resume operation
+deletion; quitting waits for it to finish. Closing a local connection keeps the box running. There is currently no stop/resume operation
 that preserves the VM.
 
 The sidebar's `online`, `offline`, and `creating` labels describe the machine's

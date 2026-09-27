@@ -47,6 +47,8 @@ var defaultRemoteSyncExcludePatterns = []string{
 }
 
 type remoteMachine struct {
+	OwnerName          string    `json:"owner_name,omitempty"`
+	OwnerEmail         string    `json:"owner_email,omitempty"`
 	Name               string    `json:"name"`
 	UserID             string    `json:"user_id,omitempty"`
 	TeamID             string    `json:"team_id,omitempty"`

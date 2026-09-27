@@ -42,19 +42,19 @@ Existing names are rejected rather than reused. If creation fails, refresh the
 list before trying another name: the provider may already have allocated a box.
 Project sync remains available through the CLI.
 
-Click the pencil beside a box’s name to rename it. The active terminal stays
+Open a box’s sidebar overflow menu and choose **Rename box**. The active terminal stays
 connected, and the sidebar and selected box update to the new name.
 
 Use **Open preview** in the selected box's header to open its backend-assigned
 web URL in your default browser. The button is disabled when no preview URL is
 configured. The box still needs a web server listening on its preview port.
 
-Use **Destroy box…** to permanently delete the selected remote VM, its files,
+Choose **Destroy box…** from the overflow menu to permanently delete the selected remote VM, its files,
 and running sessions. A native confirmation dialog defaults to Cancel. Save work
 you need before confirming. The app refreshes the list and closes that terminal
 after deletion; other boxes keep running. Closing the window does not cancel an
-accepted deletion, and quitting waits for it to finish. **Detach** only closes
-the local connection. The current backend has no stop/resume operation that
+accepted deletion, and quitting waits for it to finish. **Close local connections** in Connection settings closes
+local connections without stopping remote sessions. The current backend has no stop/resume operation that
 preserves the VM.
 
 Select any existing box in the desktop sidebar to reattach. For an unused box,
@@ -73,8 +73,10 @@ npm run desktop:package
 open desktop/release/BoxHaven-darwin-arm64/BoxHaven.app
 ```
 
-Output is `desktop/release/BoxHaven-<platform>-<arch>/`. The happy-box artwork is
-reused from the console and converted into the macOS app icon during the build.
+Output is `desktop/release/BoxHaven-<platform>-<arch>/`. The original happy-box cabin artwork sits on a white rounded tile with a soft
+shadow for the Dock. The app uses light-paper surfaces and compact portraits;
+each box keeps its accessory across renames and changes expression with machine
+state. Creator initials use backend metadata when available.
 This is a local development build, not a signed/notarized public installer.
 Packaging runs on the target platform/architecture so the CLI and native PTY
 module match Electron. Public distribution/signing and Windows/Linux validation
@@ -123,3 +125,7 @@ forwarding still applies.
 - xterm.js renders the terminal; output acknowledgements bound queued PTY output.
 - No renderer network access, arbitrary process execution API, remote pages,
   backend changes, or additional credential store.
+
+To regenerate the Dock tile after changing the original cabin asset, install
+Playwright Chromium and run `node desktop/scripts/icon.mjs`. Normal builds use
+the checked-in tile and do not require a browser.

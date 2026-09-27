@@ -4,7 +4,8 @@ const { parseMachines, validName, terminalSize, runCLI, cliEnvironment, previewU
 
 test('machine records are display-only and preserve readiness, team, and liveness', () => {
   assert.deepEqual(parseMachines('{"machines":[]}'), []);
-  const [box] = parseMachines(JSON.stringify({ machines: [{ name: 'work', status: 'online', bootstrap_complete: true, team_slug: 'team', token: 'secret', last_command: ['secret'] }] }));
+  const [box] = parseMachines(JSON.stringify({ machines: [{ name: 'work', status: 'online', bootstrap_complete: true, team_slug: 'team', owner_name: 'Jamie Taylor', owner_email: 'jamie@example.com', token: 'secret', last_command: ['secret'] }] }));
+  assert.equal(box.owner_name, 'Jamie Taylor'); assert.equal(box.owner_email, 'jamie@example.com');
   assert.equal(box.ready, true); assert.equal(box.team, 'team'); assert.equal(box.status, 'online');
   assert.equal(JSON.stringify(box).includes('secret'), false);
   assert.equal(parseMachines('{"machines":[{"name":"broken","status":"recovery required","bootstrap_complete":true,"create_state":"recovery_required"}]}')[0].ready, false);
