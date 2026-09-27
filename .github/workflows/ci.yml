@@ -190,3 +190,23 @@ jobs:
           bash deploy/digitalocean/deploy-production.test.sh
           bash deploy/digitalocean/deploy-runtime-image.test.sh
           bash deploy/digitalocean/build-remote-image.test.sh
+
+  desktop:
+    name: Desktop macOS
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: npm --prefix desktop ci
+      - run: npm --prefix desktop test
+      - run: npm --prefix desktop run smoke
+      - run: npm --prefix desktop run package
+      - run: node desktop/scripts/smoke-package.mjs desktop/release/BoxHaven-darwin-arm64/BoxHaven.app

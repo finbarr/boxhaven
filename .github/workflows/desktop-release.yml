@@ -1,0 +1,77 @@
+name: Desktop Release
+
+on:
+  push:
+    tags: ['desktop-v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mac:
+    name: Sign and notarize Apple Silicon DMG
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: desktop-release
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Verify release source and version
+        run: |
+          test "$(uname -m)" = arm64
+          git fetch --no-tags origin master
+          git merge-base --is-ancestor HEAD origin/master
+          # shellcheck disable=SC2016
+          node --input-type=module -e 'import fs from "node:fs"; const {version}=JSON.parse(fs.readFileSync("desktop/package.json")); if (process.env.GITHUB_REF_NAME !== `desktop-v${version}`) throw Error("Tag must match desktop version");'
+      - run: npm --prefix desktop ci
+      - run: npm --prefix desktop test
+      - run: npm --prefix desktop run smoke
+      - name: Sign, notarize, and verify app and DMG
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: python3 desktop/scripts/ci-sign.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: desktop-mac-arm64
+          path: desktop/release/artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+  draft:
+    name: Prepare downloadable release
+    needs: mac
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          name: desktop-mac-arm64
+          path: artifacts
+      - name: Verify checksum and create draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd artifacts
+          sha256sum --check ./*.sha256
+          gh release create "$GITHUB_REF_NAME" ./*.dmg ./*.sha256 \
+            --verify-tag --draft --title "BoxHaven Desktop ${GITHUB_REF_NAME#desktop-v}" \
+            --notes-file ../desktop/RELEASE-NOTES.md

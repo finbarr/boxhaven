@@ -7,6 +7,18 @@ session in the right pane.
 You can switch between boxes without closing their terminals. Closing the app
 leaves your remote sessions running. Reopen the app to return to the selected box.
 
+## Downloadable releases
+
+A signed macOS Apple Silicon DMG release pipeline is configured. The first
+public installer is pending Apple signing credentials and release verification;
+for now, use the source build below.
+
+The installer will bundle the CLI and terminal runtime, so users will not need
+Node.js, Go, Homebrew, or Xcode. The installation flow is open the DMG, drag
+BoxHaven to Applications, and sign in from Connection settings.
+
+Maintainers: see the [signed release guide](https://github.com/finbarr/boxhaven/blob/master/desktop/RELEASING.md).
+
 ## Build and open
 
 The initial app is available as a source build, verified on macOS Apple Silicon.

@@ -58,7 +58,9 @@ npm --prefix desktop ci
 npm run desktop
 ```
 
-See the [desktop guide](docs/desktop.md) for prerequisites and packaging.
+See the [desktop guide](docs/desktop.md) for prerequisites and packaging. A
+[signed macOS release pipeline](desktop/RELEASING.md) is configured; the first
+public DMG is pending Apple credentials and release verification.
 
 ## Use The CLI Directly
 

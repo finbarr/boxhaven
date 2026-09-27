@@ -79,8 +79,9 @@ each box keeps its accessory across renames and changes expression with machine
 state. Creator initials use backend metadata when available.
 This is a local development build, not a signed/notarized public installer.
 Packaging runs on the target platform/architecture so the CLI and native PTY
-module match Electron. Public distribution/signing and Windows/Linux validation
-are not part of this initial build.
+module match Electron. The [release workflow](RELEASING.md) can produce signed, notarized Apple Silicon
+DMGs once the Apple signing credentials are configured. The first signed release
+has not been verified or published yet. Windows/Linux distribution is not included.
 
 ## Verification
 

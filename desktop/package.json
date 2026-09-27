@@ -13,7 +13,8 @@
     "package": "npm run build && node scripts/package.mjs",
     "test": "node --test test/*.test.cjs",
     "smoke": "npm run build && node scripts/smoke.mjs",
-    "smoke:remote": "npm run build && node scripts/smoke-remote.mjs"
+    "smoke:remote": "npm run build && node scripts/smoke-remote.mjs",
+    "release": "npm run build && node scripts/release.mjs"
   },
   "dependencies": {
     "node-pty": "1.1.0"
