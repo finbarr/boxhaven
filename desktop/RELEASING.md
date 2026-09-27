@@ -7,9 +7,8 @@ its signature and native PTY, then signs, notarizes, staples, and verifies the
 DMG. Only successful builds can create a **draft** GitHub release. Missing
 credentials fail the release; it never publishes an unsigned fallback.
 
-Version 0.1.0 has completed the signed and notarized release workflow and is a
-draft pending final installation review. Until the draft is published, source
-builds remain the public installation method. Intel builds remain separate work. From desktop 0.1.1, the app checks only
+Version 0.1.2 is the first public signed release. The earlier 0.1.0 and 0.1.1
+builds remain historical test drafts. Installed builds from 0.1.1 check for
 published `desktop-vX.Y.Z` releases, downloads their signed ZIP, and offers a
 restart. The bundled CLI updates with the app. A release must include its DMG,
 ZIP, and checksums. Keep desktop releases marked `latest=false`; core CLI

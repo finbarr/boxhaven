@@ -9,9 +9,8 @@ leaves your remote sessions running. Reopen the app to return to the selected bo
 
 ## Downloadable releases
 
-A signed, Apple-notarized macOS Apple Silicon DMG has been built for version
-0.1.0. It remains a draft pending final installation review. Until the installer
-is published, use the source build below.
+[Download BoxHaven 0.1.2 for macOS Apple Silicon](https://github.com/finbarr/boxhaven/releases/download/desktop-v0.1.2/BoxHaven-0.1.2-mac-arm64.dmg).
+The app and installer are signed with Developer ID and notarized by Apple.
 
 The installer bundles the CLI and terminal runtime, so users do not need
 Node.js, Go, Homebrew, or Xcode. The installation flow is open the DMG, drag
@@ -29,7 +28,7 @@ The original 0.1.0 draft requires a manual DMG replacement.
 
 ## Build and open
 
-The initial app is available as a source build, verified on macOS Apple Silicon.
+For development, you can also build the app from source on macOS Apple Silicon.
 Install Node.js 22.12 or later, Go 1.23 or later, and Xcode Command Line Tools.
 From a BoxHaven checkout:
 

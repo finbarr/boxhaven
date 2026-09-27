@@ -50,18 +50,13 @@ CLI login and works with hosted or self-hosted backends. Click **New box** to
 choose a provider, region, and size with price estimates, then open the new
 box’s terminal automatically. Rename from the sidebar overflow menu without
 disconnecting. Open its web preview from the header, or use the overflow menu
-to destroy it with confirmation. The first macOS build
-is available from source:
+to destroy it with confirmation.
 
-```bash
-npm --prefix desktop ci
-npm run desktop
-```
-
-See the [desktop guide](docs/desktop.md) for prerequisites and packaging. A
-[signed macOS release pipeline](desktop/RELEASING.md) has produced the first
-Apple-notarized DMG. It remains a draft pending final installation review;
-source builds are available until the installer is published.
+[Download BoxHaven for macOS Apple Silicon](https://github.com/finbarr/boxhaven/releases/download/desktop-v0.1.2/BoxHaven-0.1.2-mac-arm64.dmg).
+Open the signed, Apple-notarized DMG, drag BoxHaven to Applications, and sign in.
+The CLI is bundled; no development tools are required. Updates download in the
+background and prompt before restarting. See the [desktop guide](docs/desktop.md)
+for installation, updates, and source builds.
 
 Standalone CLI updates: `bh upgrade` for direct installs, or
 `brew update && brew upgrade boxhaven` for Homebrew installs.

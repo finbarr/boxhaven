@@ -5,7 +5,13 @@ sidebar to attach to its persistent `boxhaven` tmux session on the right.
 Switching boxes preserves each open terminal. Closing the app disconnects local
 SSH clients; it does not stop remote tmux sessions or destroy boxes.
 
-## Run on macOS
+## Install
+
+[Download the signed macOS Apple Silicon installer](https://github.com/finbarr/boxhaven/releases/download/desktop-v0.1.2/BoxHaven-0.1.2-mac-arm64.dmg).
+Open the DMG, drag BoxHaven to Applications, and sign in. The app includes its CLI
+and terminal runtime. Updates download automatically and offer Restart / Later.
+
+## Develop on macOS
 
 Requires Node.js 22.12 or later, npm, Go 1.23 or later, Xcode Command Line Tools,
 and the system OpenSSH client. Native dependencies are rebuilt for Electron
@@ -79,9 +85,8 @@ each box keeps its accessory across renames and changes expression with machine
 state. Creator initials use backend metadata when available.
 This is a local development build, not a signed/notarized public installer.
 Packaging runs on the target platform/architecture so the CLI and native PTY
-module match Electron. The [release workflow](RELEASING.md) has produced a signed,
-Apple-notarized Apple Silicon DMG for version 0.1.0. It remains a draft pending
-final installation review. Windows/Linux distribution is not included.
+module match Electron. The [release workflow](RELEASING.md) produces signed,
+Apple-notarized installers and update ZIPs; 0.1.2 is the first public release. Windows/Linux distribution is not included.
 
 ## Verification
 
