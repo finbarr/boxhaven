@@ -113,3 +113,17 @@ Apple submissions. The GitHub workflow configures these through `ci-sign.py`.
 References: [Apple Developer ID](https://developer.apple.com/developer-id/),
 [Electron signing](https://www.electronforge.io/guides/code-signing/code-signing-macos),
 and [Electron notarization](https://github.com/electron/notarize).
+
+## Native update smoke
+
+After downloading two signed releases and their adjacent `.sha256` files:
+
+```sh
+node desktop/scripts/smoke-update.mjs old.dmg new.zip 0.1.1
+```
+
+This copies the old app into a temporary directory, serves the ZIP on loopback,
+and exercises the real macOS updater through download, signature validation,
+replacement, and stapling verification. It never replaces your installed app.
+Squirrel can create root-owned directories; the script reports their exact
+paths if cleanup needs administrator privileges.
