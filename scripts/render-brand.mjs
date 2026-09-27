@@ -1,4 +1,4 @@
-// Render all shared brand PNGs from the H3 vector master. The Dock tile is separate.
+// Render all shared brand PNGs from the flat classic vector master. The Dock tile is separate.
 import { chromium } from '../desktop/node_modules/playwright/index.mjs';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

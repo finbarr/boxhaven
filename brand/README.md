@@ -1,10 +1,12 @@
 # BoxHaven brand
 
-`boxhaven.svg` is the production master of the selected H3 study: a forest-green
-box with pale-sage (`#CAD9BB`) eyes and smile. Its face is centered on the front
-panel. Shallow depth extends to the right without a vertical offset, with light
-from the upper left and a quiet contact shadow below. The standalone mark is
-transparent; the white rounded tile belongs only to the desktop application icon.
+`boxhaven.svg` is the production master of the flat classic mark: a solid
+forest-green (`#085747`) box with pale-sage (`#CAD9BB`) eyes and smile.
+The face is centered; there are no gradients, side depth, or shadows. The
+standalone mark is transparent. Only the desktop icon has a white rounded tile,
+with the visible mark filling 80% of its width: a 10% white border on each side.
+The Dock renderer crops the SVG's transparent margins before scaling it so
+padding is not applied twice. The tile has no baked-in shadow.
 
 Regenerate the checked-in assets after installing desktop dependencies:
 

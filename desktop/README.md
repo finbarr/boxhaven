@@ -79,8 +79,8 @@ npm run desktop:package
 open desktop/release/BoxHaven-darwin-arm64/BoxHaven.app
 ```
 
-Output is `desktop/release/BoxHaven-<platform>-<arch>/`. The H3 pale-sage smiling-box mark sits on a white rounded tile with a soft
-shadow for the Dock. The app uses light-paper surfaces and compact portraits;
+Output is `desktop/release/BoxHaven-<platform>-<arch>/`. The flat classic smiling-box mark sits on a white rounded tile with a 10%
+border on each side and no baked-in shadow for the Dock. The app uses light-paper surfaces and compact portraits;
 each box keeps its accessory across renames and changes expression with machine
 state. Creator initials use backend metadata when available.
 This is a local development build, not a signed/notarized public installer.

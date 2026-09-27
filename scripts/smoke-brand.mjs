@@ -41,6 +41,6 @@ try {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${name} overflow at ${width}`);
     }
     await context.close();
-    console.log(`Verified ${name}: live H3 logo, favicon, desktop/mobile screenshots.`);
+    console.log(`Verified ${name}: live flat classic logo, favicon, desktop/mobile screenshots.`);
   }
 } finally { await browser.close(); }
