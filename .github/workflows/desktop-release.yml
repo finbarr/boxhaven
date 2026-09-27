@@ -72,6 +72,6 @@ jobs:
         run: |
           cd artifacts
           sha256sum --check ./*.sha256
-          gh release create "$GITHUB_REF_NAME" ./*.dmg ./*.sha256 \
+          gh release create "$GITHUB_REF_NAME" ./*.dmg ./*.zip ./*.sha256 \
             --verify-tag --draft --latest=false --title "BoxHaven Desktop ${GITHUB_REF_NAME#desktop-v}" \
             --notes-file ../desktop/RELEASE-NOTES.md

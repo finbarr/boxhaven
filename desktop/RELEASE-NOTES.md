@@ -9,5 +9,8 @@ and ticket verification, and a packaged app/CLI/PTY smoke before creating a draf
 Before publishing, verify installation on another Mac using a browser-downloaded
 DMG and run the packaged remote smoke against a disposable box.
 
-Intel Macs, automatic updates, and Mac App Store distribution are not included
+Updates download automatically and offer Restart to update. The signed app and
+its bundled CLI are replaced together; remote sessions keep running.
+
+Intel Macs and Mac App Store distribution are not included
 in this initial desktop release.

@@ -35,7 +35,11 @@ try {
   run('xcrun', ['stapler', 'validate', dmg]);
   run('codesign', ['--verify', '--strict', dmg]);
   run('spctl', ['--assess', '--type', 'open', '--context', 'context:primary-signature', '--verbose=2', dmg]);
-  const digest = createHash('sha256').update(readFileSync(dmg)).digest('hex');
-  writeFileSync(join(artifacts, `${name}.sha256`), `${digest}  ${name}\n`);
+  const zipName = `BoxHaven-${version}-mac-arm64.zip`;
+  run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, join(artifacts, zipName)]);
+  for (const asset of [name, zipName]) {
+    const digest = createHash('sha256').update(readFileSync(join(artifacts, asset))).digest('hex');
+    writeFileSync(join(artifacts, `${asset}.sha256`), `${digest}  ${asset}\n`);
+  }
   console.log(`Verified signed and notarized release: ${name}`);
 } finally { rmSync(staging, { recursive: true, force: true }); }

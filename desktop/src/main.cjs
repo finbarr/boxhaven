@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain, Menu, nativeImage, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, nativeImage, shell, dialog, autoUpdater } = require('electron');
 const { join } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { homedir } = require('node:os');
 const pty = require('node-pty');
 const { cliEnvironment, runCLI, parseMachines, terminalSize, validName } = require('./cli.cjs');
+const { createUpdater } = require('./updater.cjs');
 const { filterArgs, parseCatalog, createArgs } = require('./catalog.cjs');
 
 async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
@@ -229,8 +230,11 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     window.on('closed', () => { disposeSessions(); window = null; });
     window.loadURL(page);
   }
+  const updater = createUpdater({ app, autoUpdater, dialog, getWindow: () => window,
+    readyToRestart: async () => { await Promise.allSettled([creating, renaming, ...[...destructions.values()].map(operation => operation.promise)]); },
+  });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(process.platform === 'darwin' ? [{ label: 'BoxHaven', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] }] : []),
+    ...(process.platform === 'darwin' ? [{ label: 'BoxHaven', submenu: [{ role: 'about' }, { label: 'Check for Updates…', click: () => void updater.check(true) }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] }] : []),
     { label: 'Edit', submenu: [{ role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: 'View', submenu: [
       { label: 'Refresh Boxes', accelerator: 'CmdOrCtrl+R', click: () => send('app:refresh') },

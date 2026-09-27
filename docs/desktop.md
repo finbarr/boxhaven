@@ -19,6 +19,14 @@ BoxHaven to Applications, and sign in from Connection settings.
 
 Maintainers: see the [signed release guide](https://github.com/finbarr/boxhaven/blob/master/desktop/RELEASING.md).
 
+## Updates
+
+Installed macOS builds from 0.1.1 check for desktop updates automatically.
+Downloads happen in the background. Choose **Restart to update** when ready,
+or **Later** to keep working. **BoxHaven → Check for Updates…** checks manually.
+Your remote boxes keep running and the bundled CLI updates with the app.
+The original 0.1.0 draft requires a manual DMG replacement.
+
 ## Build and open
 
 The initial app is available as a source build, verified on macOS Apple Silicon.

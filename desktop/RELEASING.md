@@ -9,8 +9,11 @@ credentials fail the release; it never publishes an unsigned fallback.
 
 Version 0.1.0 has completed the signed and notarized release workflow and is a
 draft pending final installation review. Until the draft is published, source
-builds remain the public installation method. Intel builds and auto-updates are
-separate work.
+builds remain the public installation method. Intel builds remain separate work. From desktop 0.1.1, the app checks only
+published `desktop-vX.Y.Z` releases, downloads their signed ZIP, and offers a
+restart. The bundled CLI updates with the app. A release must include its DMG,
+ZIP, and checksums. Keep desktop releases marked `latest=false`; core CLI
+releases own GitHub's repository-wide latest pointer.
 
 ## One-time Apple setup
 

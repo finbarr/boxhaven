@@ -135,3 +135,12 @@ forwarding still applies.
 To regenerate the Dock tile after changing the original cabin asset, install
 Playwright Chromium and run `node desktop/scripts/icon.mjs`. Normal builds use
 the checked-in tile and do not require a browser.
+
+## Updates
+
+Installed macOS builds from 0.1.1 check for desktop updates at startup and every
+ten minutes. Updates download in the background; choose **Restart to update**
+when ready, or **Later**. Use **BoxHaven → Check for Updates…** to check manually.
+The signed app and bundled CLI update together. Box mutations finish before
+restart and remote sessions keep running. The initial 0.1.0 draft must be replaced
+with a newer DMG manually because it predates the updater.
