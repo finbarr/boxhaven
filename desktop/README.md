@@ -79,7 +79,7 @@ npm run desktop:package
 open desktop/release/BoxHaven-darwin-arm64/BoxHaven.app
 ```
 
-Output is `desktop/release/BoxHaven-<platform>-<arch>/`. The original happy-box cabin artwork sits on a white rounded tile with a soft
+Output is `desktop/release/BoxHaven-<platform>-<arch>/`. The H3 pale-sage smiling-box mark sits on a white rounded tile with a soft
 shadow for the Dock. The app uses light-paper surfaces and compact portraits;
 each box keeps its accessory across renames and changes expression with machine
 state. Creator initials use backend metadata when available.
@@ -137,7 +137,7 @@ forwarding still applies.
 - No renderer network access, arbitrary process execution API, remote pages,
   backend changes, or additional credential store.
 
-To regenerate the Dock tile after changing the original cabin asset, install
+To regenerate the Dock tile after changing the shared brand asset, install
 Playwright Chromium and run `node desktop/scripts/icon.mjs`. Normal builds use
 the checked-in tile and do not require a browser.
 

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64">
+  <title>BoxHaven</title>
+  <desc>A forest-green smiling box with a pale-sage face and shallow right-side depth.</desc>
+  <defs>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#204b3e"/><stop offset="1" stop-color="#12382d"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0.8" y2="1">
+      <stop stop-color="#126650"/><stop offset="0.5" stop-color="#085747"/><stop offset="1" stop-color="#034c40"/>
+    </linearGradient>
+    <radialGradient id="light" cx="0" cy="0" r="1">
+      <stop stop-color="#8bbaa0" stop-opacity=".23"/><stop offset=".6" stop-color="#8bbaa0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="31" cy="56.5" rx="26" ry="2.2" fill="#243a31" opacity=".10"/>
+  <rect x="10.3" y="5.5" width="48.2" height="50.6" rx="8" fill="url(#side)"/>
+  <rect x="4" y="5.5" width="48" height="50.6" rx="7.8" fill="url(#front)"/>
+  <rect x="4" y="5.5" width="48" height="50.6" rx="7.8" fill="url(#light)"/>
+  <g fill="#cad9bb">
+    <circle cx="17.25" cy="28.6" r="3.75"/>
+    <circle cx="38.75" cy="28.6" r="3.75"/>
+  </g>
+  <path d="M22.4 36.7 Q28 42.3 33.6 36.7" fill="none" stroke="#cad9bb" stroke-width="4.1" stroke-linecap="round"/>
+</svg>

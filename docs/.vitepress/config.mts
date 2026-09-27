@@ -6,7 +6,7 @@ const SITE_URL = 'https://docs.boxhaven.dev'
 const SITE_NAME = 'BoxHaven Docs'
 const SITE_DESCRIPTION = 'Install the BoxHaven skill and run coding agents in parallel on separate remote VMs.'
 const SOCIAL_IMAGE_URL = `${SITE_URL}/logo.png`
-const SOCIAL_IMAGE_ALT = 'The BoxHaven logo: a cozy wooden house sheltering three friendly server boxes.'
+const SOCIAL_IMAGE_ALT = 'The BoxHaven logo: a forest-green smiling box with a pale-sage face.'
 
 const pageSeo: Record<string, { title: string, description: string, noindex?: boolean }> = {
   '/': {

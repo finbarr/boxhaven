@@ -53,3 +53,6 @@ desktop/assets/BoxHaven.icns
 .boxhaven-upgrades/
 
 __pycache__/
+
+# Local branding review renders
+/.artifacts/

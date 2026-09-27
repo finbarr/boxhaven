@@ -1,4 +1,4 @@
-// Render the original, untouched cabin inside a native-style Dock tile.
+// Render the shared H3 smiling-box mark inside a separate native Dock tile.
 import { chromium } from 'playwright';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
