@@ -5,10 +5,10 @@ Status: architecture proposal, not implemented. Research checked September 27,
 
 ## 1. Recommendation
 
-Build a shared TypeScript connector layer that the desktop app calls through a
-local, privileged connector host. Give each provider a small adapter, and share
-terminal transports, credential storage, lifecycle handling, file transfer,
-runtime setup, and verification across adapters.
+Keep the **BoxHaven backend as the required control plane and team sync point**
+for every provider. Run provider lifecycle adapters there. The desktop uses one
+BoxHaven API for shared state and authorization, plus a common local transport
+layer for direct terminal, file, and preview access.
 
 The goal is **one API for the desktop, with accurate provider semantics**. A single
 universal wire protocol cannot provision all these services: their account APIs,
@@ -16,32 +16,43 @@ image formats, permission boundaries, and retention models differ. Adding a
 provider should mostly require an adapter and integration tests rather than
 changes throughout the application.
 
-Use direct laptop-to-provider connections for terminals, command output, file
-transfer, and previews. BoxHaven's hosted backend handles identity, team policy,
-provisioning, and access grants when the user selects a managed account. It must
-not become a mandatory traffic relay.
+The backend owns team membership, connected provider accounts, resource identity,
+lifecycle operations, access policy, session/run records, and synchronization
+between devices. The provider remains the authority for actual compute state;
+the backend reconciles that state into the shared registry. Desktop state is a
+cache, never an independent inventory that teammates must manually synchronize.
 
-Working product assumption: **users connect their own provider accounts first**.
-Keep the existing BoxHaven account connector and design the same provider modules
-to run on the backend for managed team accounts later. A personal connector must
-work without a BoxHaven account or a running BoxHaven server.
+Use direct laptop-to-provider connections for terminal bytes, file contents,
+command output, and previews. Backend traffic consists of coordination and bounded
+control requests. This reduces bandwidth and connection pressure while preserving
+the backend's role in every connection.
+
+Bring-your-own-provider and BoxHaven-funded capacity describe who supplies the
+account and pays the provider. Both use the same backend and team model. A solo
+user uses their personal team, as the existing backend already supports. Hosted
+and self-hosted BoxHaven use the same architecture.
 
 Initial scope: Linux development sandboxes, macOS desktop, existing BoxHaven plus
-E2B, Daytona, Blaxel, exe.dev, and Boat. Windows/macOS guest environments, GPU
-workloads, remote graphical desktops, and additional providers are extensions.
+E2B, Daytona, Blaxel, exe.dev, and Boat. Team coordination ships with the connector
+foundation. Windows/macOS guest environments, GPU workloads, remote graphical
+desktops, and additional providers are extensions.
 
 ### Decisions to adopt
 
-1. Separate provider lifecycle operations from terminal/file transports.
-2. Prefer provider-native PTYs and file APIs; retain certificate SSH for existing
-   BoxHaven machines. Use a shared runtime bridge where a native terminal is absent.
+1. Centralize provider control, shared state, and access grants in the backend;
+   keep bulk I/O direct between the desktop and provider.
+2. Prefer provider-native PTYs and file APIs when they support sufficiently scoped
+   access. Retain certificate SSH for existing BoxHaven machines and use a shared
+   runtime bridge where the native path cannot meet the terminal or access contract.
 3. Model closing a connection, pausing memory, stopping compute, archiving disk,
    and deleting data as distinct operations.
-4. Keep secrets in the OS credential store and privileged processes. Never send
-   account credentials to the renderer, a preview page, or a sandbox.
+4. Store provider account credentials in the backend vault. Keychain holds the
+   desktop's BoxHaven login; scoped connection grants stay in privileged processes.
+   Never expose account credentials to teammates' desktops, previews, or guests.
 5. Support existing resources without silently installing software, changing
-   retention, or taking ownership of them.
-6. Require a real provider conformance run before calling a connector supported.
+   retention, or claiming authority over unrelated resources in a provider account.
+6. Require real provider and multi-device conformance runs before calling a
+   connector supported.
 
 ## 2. Provider research
 
@@ -53,11 +64,11 @@ evidence of an API contract, not proof of our implementation or account entitlem
 
 | Provider | Published access model | Persistence and images | Recommended integration |
 | --- | --- | --- | --- |
-| **E2B** | TypeScript SDK with commands, files, and reconnectable PTYs. Its SSH guide builds OpenSSH plus a WebSocket bridge into a template. Controller and preview access use different tokens. | Pause can preserve memory and filesystem; disk-only pause also exists. Snapshots and forks are documented. Templates supply prepared environments. Continuous execution has plan limits. | Native SDK PTY/files first. Use a BoxHaven template for the full agent workflow. Track execution deadlines independently of resource existence. |
-| **Daytona** | Native process sessions, PTYs, files, expiring SSH access tokens, and previews. | Containers retain files across stop/start but do not preserve memory. VM classes support memory pause/resume and hot snapshots. Images, snapshots, and volumes have separate roles. | Native PTY/files. Resolve capabilities for the actual sandbox class. Use port-scoped signed preview URLs for sharing. |
+| **E2B** | TypeScript SDK with commands, files, and reconnectable PTYs. Its SSH guide builds OpenSSH plus a WebSocket bridge into a template. Controller and preview access use different tokens. | Pause can preserve memory and filesystem; disk-only pause also exists. Snapshots and forks are documented. Templates supply prepared environments. Continuous execution has plan limits. | Native PTY/files after scoped-delegation checks; use the runtime where required. Prepared templates enable the agent workflow. Track execution deadlines independently of resource existence. |
+| **Daytona** | Native process sessions, PTYs, files, expiring SSH access tokens, and previews. | Containers retain files across stop/start but do not preserve memory. VM classes support memory pause/resume and hot snapshots. Images, snapshots, and volumes have separate roles. | Native PTY/files where safe delegation is proven; otherwise use the shared runtime. Resolve capabilities by sandbox class and use port-scoped signed preview URLs. |
 | **Blaxel** | Process/files APIs, private previews, and expiring client sessions explicitly intended for direct access without an application proxy. | Automatic standby preserves state. Unattended computation needs process keep-alive. Snapshot/fork and archive docs currently mark those features private preview. | Native files/process APIs plus the common PTY bridge unless a suitable native PTY is confirmed. Use client sessions for delegated access and explicitly manage task lifetime. |
 | **exe.dev** | SSH gateway and HTTPS proxy. HTTPS command API can provision and run bounded commands but has no stdin/PTY and a 30-second request limit. VM HTTPS tokens can be scoped and expire. | OCI images and first-boot setup scripts. Persistent VMs and a `cp` operation are documented; do not assume `cp` is a memory fork. Shared account capacity differs from per-VM billing. | Provision over HTTPS; run the common bridge behind the provider's private HTTPS proxy. First prove authenticated WebSockets and long transfers. |
-| **Boat** | REST/TypeScript/Python APIs, command/file APIs, direct SSH, protected HTTPS hosting, and integrated agent APIs. Scoped API keys are documented. | Stop archives filesystem state; resume reboots and restarts enabled services. Running processes are not preserved. Forks and named snapshots exist. Snapshot exclusions and environment inheritance matter. | Native control/files plus the shared bridge for the first BYO terminal. Build a prepared Boat template. Use safe-for-third-parties environments and explicit workload credentials. |
+| **Boat** | REST/TypeScript/Python APIs, command/file APIs, direct SSH, protected HTTPS hosting, and integrated agent APIs. Scoped API keys are documented. | Stop archives filesystem state; resume reboots and restarts enabled services. Running processes are not preserved. Forks and named snapshots exist. Snapshot exclusions and environment inheritance matter. | Native control/files plus the shared bridge for direct terminals. Build a prepared Boat template. Use safe-for-third-parties environments and explicit workload credentials. |
 
 Primary references: E2B [PTY](https://docs.e2b.dev/sandbox/pty),
 [SSH](https://docs.e2b.dev/sandbox/ssh-access),
@@ -143,50 +154,144 @@ connector.
 
 ```mermaid
 flowchart LR
-  UI[Desktop renderer] -->|Validated IPC| HOST[Local connector host]
-  VAULT[OS credential store] --> HOST
-  HOST -->|Provision and inspect| API[Provider control API]
-  HOST -->|PTY, files, logs| EDGE[Provider gateway or direct VM]
+  A[Desktop A] -->|Actions and scoped grants| BH[BoxHaven backend]
+  B[Desktop B] -->|Actions and scoped grants| BH
+  BH -->|Team state and change events| A
+  BH -->|Team state and change events| B
+  BH --> DB[(Shared registry and operation journal)]
+  VAULT[Provider credential vault] --> BH
+  BH -->|Provision, inspect, issue access| API[Provider control API]
+  A -->|Terminal, files, previews| EDGE[Provider gateway or direct VM]
+  B -->|Terminal, files, previews| EDGE
   EDGE --> VM[Sandbox and optional BoxHaven runtime]
-  HOST -->|Managed accounts only| BH[BoxHaven backend]
-  BH -->|Provision and issue scoped grants| API
-  BROWSER[Preview browser] -->|Provider authentication| EDGE
 ```
 
-### Local connector host
+### Backend connector host
 
-Run provider code outside the renderer in Electron utility processes. Use one
-worker per configured account when an SDK depends on process-global credentials.
-Share TypeScript packages with the backend; keep Electron, Keychain, and UI
-imports out of those packages.
+The backend hosts provider control adapters, credential references, catalogs,
+reconciliation, operation workers, and the access broker. Reuse Better Auth and
+existing team membership checks. Every connection, resource, operation, session,
+run, and grant has a team ID checked on every API call and event subscription.
+Do not trust the client's selected team or possession of a resource UUID alone.
 
-The host owns credentials, connection handles, terminal streams, local transfer
-paths, operation journals, and SDKs. Renderer IPC exposes resource IDs and typed
-actions, not arbitrary fetch or subprocess access. Preview content must not reach
-connector IPC.
+Use isolated backend workers per credential scope when an SDK relies on global
+environment variables. Explicit-credential REST clients may be simpler. A worker
+isolates crashes and accidental credential mixing; it is not a security sandbox
+for untrusted plugins. Initially ship reviewed, pinned adapters with the product.
 
-A worker isolates crashes and accidental credential mixing; it is not a security
-sandbox for untrusted plugins. Initially ship reviewed adapters in the signed app,
-without downloading arbitrary connector packages from a marketplace.
+### Desktop transport host
 
-### Two account modes, one provider implementation
+Run connection code outside the renderer in Electron utility processes. The host
+owns the BoxHaven login, short-lived access handles, terminal streams, local
+transfer paths, and a disposable cache of shared state. It does not provision or
+list provider resources using an account API key.
 
-| Mode | Account credentials | Lifecycle caller | Terminal/file caller |
+Renderer IPC exposes resource IDs and typed actions, not arbitrary fetch or
+subprocess access. Preview content must not reach connector IPC. Share transport
+contracts and tested provider helpers in TypeScript packages; keep Electron and
+Keychain imports out of backend packages.
+
+### Provider ownership and delegated access
+
+| Capacity source | Account credentials | Lifecycle caller | Terminal/file caller |
 | --- | --- | --- | --- |
-| Personal provider account | Laptop OS credential store | Local worker | Local worker directly to provider |
-| BoxHaven-managed account | Backend credential vault | Backend | Laptop directly with a sandbox-scoped grant |
+| User/team connects its own provider account | Backend vault, tied to an authorized team connection | Backend adapter | Desktop directly with a resource-scoped grant |
+| BoxHaven supplies provider capacity | Backend vault, with explicit tenant resource assignments | Backend adapter | Desktop directly with a resource-scoped grant |
 
-Personal mode needs no credential forwarding through BoxHaven. Managed mode uses
-existing Better Auth/team rules, then grants the narrowest provider-supported
-access. Never send an account API key to the client to compensate for missing
-delegation. Where scoped delegation is inadequate, use the common runtime with a
-sandbox-bound grant or leave managed-account support unavailable. Personal
-support does not imply safe multi-tenant managed support.
+Connecting an account is an explicit credential-sharing step with the selected
+BoxHaven backend. Validate read-only identity/scope, then store an encrypted secret
+reference; never return the credential in team settings or events. Selecting
+which existing resources to import is separate from granting connection access.
+A team connection must not reveal unrelated provider resources to ordinary members.
+
+Authorize through Better Auth/team policy before minting access. Never send an
+account API key to a desktop to compensate for missing delegation. Where native
+PTY/files require an overbroad key, use sandbox-scoped credentials or the common
+runtime bridge. If no direct, adequately scoped route exists, that provider cannot
+ship the affected team capability. Validate this before committing to native PTY.
+
+### Shared records and synchronization
+
+Extend the existing backend database with records for:
+
+- Connections: team, provider account/project scope, credential reference,
+  credential version, billing owner, status, and allowed catalog.
+- Resources: stable BoxHaven ID, team, connection, provider ID, runtime generation,
+  desired and observed state, observation time, ownership, and retention policy.
+- Operations: actor, action, idempotency key, request hash, resource/version,
+  provider request ID, result, and recovery state.
+- Sessions/runs: resource generation, remote session ID, initiator, work directory,
+  selected agent, start/end state, and execution deadline. Sensitive command
+  arguments and environment values stay out of ordinary shared metadata.
+- Grants/audit: actor, resource/session scope, permissions, expiry, revocation
+  status, and lifecycle/access events. Store token identifiers/hashes, not reusable
+  bearer secrets in event payloads.
+
+Use a transactional outbox and ordered team change events over SSE. A desktop
+loads a snapshot with a cursor, subscribes after that cursor, deduplicates events,
+and resynchronizes if the cursor falls outside retention. Events carry record
+revisions; stale observations cannot overwrite newer operations. Authorization
+changes terminate affected subscriptions and invalidate cached views.
+
+The backend serializes conflicting lifecycle operations per resource using stored
+versions and durable operation claims. Request idempotency also survives two
+laptops retrying the same operation. Provider console changes are discovered by
+reconciliation; store them as observed changes rather than pretending the backend
+has exclusive control over the cloud account.
+
+### Team session behavior
+
+Example: Alice creates an E2B box and starts an agent through BoxHaven. The backend
+records the resource and run, and Bob sees them through the team event stream.
+After authorization, Bob receives a fresh grant and connects directly to that
+sandbox. Alice closing her laptop changes attachment presence, not resource or
+run ownership. Neither teammate needs the other's API key.
+
+Record run intent before invoking a remote start. Use a stable run/session ID and
+runtime/provider reconciliation so an ambiguous result does not launch the agent
+twice. Session records enable discovery; successful attach still requires a live
+remote session. Disk-only resume cannot recover a terminated process.
+
+Initial collaboration means shared inventory, operations, run discovery, and
+independent terminals on an authorized box. Shared viewing or control of one
+terminal is a capability requiring remote enforcement. Use a single-writer lease
+and explicit handoff only where the provider/runtime enforces it; a UI-only lease
+cannot stop another connected client from typing. A sandbox-access grant normally
+allows access to that sandbox's contents; do not imply per-process isolation.
+
+Keep terminal transcripts and file contents on the resource/direct path. The
+backend synchronizes bounded metadata and lifecycle events. Client attachment
+presence is advisory, expires when updates stop, and never proves that remote
+work is executing. Use provider/runtime observations for run status, and expose
+unknown or stale status when no non-disruptive observation is available.
+
+### Revocation and backend outages
+
+Membership removal or credential revocation stops new grants and renewals.
+Document and test whether each provider revokes established streams, not only
+new connections. Token/certificate expiration at handshake does not necessarily
+terminate an already-open SSH or WebSocket session.
+
+For the common runtime, enforce renewable access leases on open connections;
+expiry closes the attachment without killing the detached workload. Define the
+maximum revocation delay as part of team policy. Native transports must prove
+comparable enforcement or accurately declare their limitation. Existing
+certificate SSH requires its own active-session revocation work if teams need
+that guarantee; do not claim certificate expiry already provides it.
+
+During a backend outage, desktops show cached state as stale. Existing direct
+attachments may continue only within their transport's authorized access window;
+new grants and lifecycle operations require backend recovery. Remote workloads
+follow their recorded lifetime policy independently of viewers. Do not silently
+queue destructive actions for execution after reconnect. Reconcile state and
+replay team events after recovery.
 
 ### Reusable transports
 
-1. **Native PTY:** E2B and Daytona first. Normalize bytes, resize, detach/reattach,
-   exit, flow control, and reconnect into one terminal handle.
+1. **Native PTY:** E2B and Daytona first where scoped delegation is proven.
+   Normalize bytes, resize, detach/reattach, exit, flow control, and reconnect
+   into one terminal handle. Use the common runtime when native authorization
+   cannot satisfy team access policy.
 2. **Certificate SSH:** current BoxHaven machines. Preserve backend-signed,
    short-lived certificates, persistent host-key pinning, and rsync.
 3. **Runtime over provider HTTPS/WebSocket:** a service inside the sandbox supplies
@@ -205,8 +310,15 @@ possible extensions with an explicit security-policy decision before implementat
 
 - New connector terminal, file, command-log, and preview payload bytes through
   BoxHaven's backend: **zero**.
-- Managed backend requests: provisioning, authorization, grant renewal, metadata,
-  and lifecycle actions. These still create control-plane load.
+- Backend requests for every connector: provisioning, authorization, grant
+  renewal, reconciliation, bounded run control, metadata, and team change events.
+  This is intentional control-plane load and must be measured.
+- Reconcile once per provider connection and fan out authorized cached state to
+  desktops. Do not multiply provider polling by team size. Use one team event
+  subscription per active desktop, bounded queues, and reconnect backoff.
+- Coalesce presence updates; never send an event per keystroke or output chunk.
+  Measure API QPS, event fanout, reconciliation latency, and database growth as
+  separate budgets from bulk bandwidth.
 - Existing DO/Hetzner preview proxy traffic remains; this plan does not claim
   that path already bypasses the backend.
 - A customer Worker or provider gateway may carry traffic and incur provider
@@ -214,29 +326,40 @@ possible extensions with an explicit security-policy decision before implementat
 
 ## 4. Connector contract
 
-Own this contract in BoxHaven. Use vendor SDKs inside adapters. Do not expose SDK
-objects to the renderer or make UI code branch on provider names.
+Own the contract in BoxHaven. The **backend provider adapter** handles provider
+control; the **desktop transport adapter** consumes delegated access. The public
+BoxHaven API applies authorization and shared-state transactions around provider
+operations. Do not expose SDK objects or account credentials to the renderer.
 
 This is an interface outline, not a drop-in implementation. The first code change
 must make the contracts compile and add schema validation.
 
 ```ts
-interface Connector {
+// Backend only. Bound to a validated team connection and vault reference.
+interface ProviderControlAdapter {
   describeAccount(): Promise<AccountSummary>;
   capabilities(target?: ResourceRef): Promise<Capabilities>;
   catalog(): Promise<ResourceCatalog>;
   list(query: ListQuery): Promise<Page<SandboxSummary>>;
   inspect(ref: ResourceRef): Promise<SandboxDetails>;
-  create(spec: CreateSpec, operationId: string): Promise<Operation>;
-  getOperation(id: string): Promise<Operation>;
+  create(spec: CreateSpec, context: OperationContext): Promise<ProviderOperation>;
+  getOperation(id: string): Promise<ProviderOperation>;
   cancelOperation(id: string): Promise<CancelResult>;
   perform(ref: ResourceRef, action: LifecycleAction,
-          operationId: string): Promise<Operation>;
-  prepareAccess(ref: ResourceRef, request: AccessRequest): Promise<AccessHandle>;
+          context: OperationContext): Promise<ProviderOperation>;
+  startRun(ref: ResourceRef, spec: RunSpec,
+           context: OperationContext): Promise<RemoteRun>;
+  issueAccess(ref: ResourceRef, request: AuthorizedAccessRequest): Promise<AccessGrant>;
+  revokeAccess(grant: GrantRef): Promise<RevocationResult>;
+}
+
+// Privileged desktop process. Holds only delegated resource/session access.
+interface SandboxTransport {
+  connect(grant: AccessGrant): Promise<AccessHandle>;
   openTerminal(access: AccessHandle, spec: TerminalSpec): Promise<TerminalHandle>;
-  execute(access: AccessHandle, spec: CommandSpec): Promise<ExecutionHandle>;
+  attachExecution(access: AccessHandle, run: RemoteRunRef): Promise<ExecutionHandle>;
   files(access: AccessHandle): FileAccess;
-  preview(ref: ResourceRef, request: PreviewRequest): Promise<PreviewHandle>;
+  openPreview(access: AccessHandle, request: PreviewRequest): Promise<PreviewHandle>;
 }
 
 type LifecycleAction =
@@ -259,17 +382,24 @@ interface TerminalHandle {
 }
 ```
 
-`AccessHandle` is opaque and stays in the privileged host. IPC carries its ID,
+Backend APIs cover team connections, catalogs, resources, lifecycle operations,
+run/session registration, grants, and cursor-based change events. Every mutation
+has an actor, team, idempotency key, and expected resource revision where relevant.
+Use the existing route/auth infrastructure and map legacy machine identities
+through an explicit database migration when implementing the new contract.
+
+`AccessGrant` is returned only after backend authorization and consumed by the
+privileged desktop host. `AccessHandle` stays there; renderer IPC carries its ID,
 never secrets. Bulk I/O uses bounded MessagePorts or equivalent streaming IPC,
 not base64 blobs in ordinary request/response messages.
 
 ### Resource identity
 
-Give each connection a stable `connectionId`. Resource references contain that
-ID, provider, account/project/organization scope, provider resource ID, and an
-observed incarnation/generation. Keep display names separate.
+Give each backend connection a stable `connectionId`. Resource references contain
+the team ID, connection ID, provider account/project/organization scope, provider
+resource ID, and observed incarnation/generation. Keep display names separate.
 
-Persist a stable local resource UUID mapped to the provider reference. If a
+Persist a stable backend resource UUID mapped to the provider reference. If a
 provider uses mutable names or replaces a VM on resume, preserve the logical UUID
 and update its runtime generation. Never key sessions by display name.
 
@@ -301,7 +431,7 @@ account permissions, sandbox class, runtime version, network policy, and state.
 | Preview | Port scope, authentication, expiry, revocation, browser compatibility |
 | Images | OCI/template/VM snapshot; architecture, user, writable paths |
 | Resources | Plans versus numeric CPU/RAM; selectable versus account-wide region |
-| Delegation | Account/sandbox/port scope; expiry and revocation |
+| Delegation | Account/sandbox/port scope; expiry, new-connection revocation, active-stream revocation, maximum delay |
 
 Represent `supported`, `unavailable` with reason, and `unknown` separately.
 Private-preview APIs are not production support. Capability-driven UI reflects
@@ -315,30 +445,34 @@ retryability, retry-after, operation/resource IDs, and a redacted provider cause
 A transport timeout does not establish that provisioning failed. A command exit
 code is an execution result, not a connector transport error.
 
-Expose typed resource/operation/session events through the host. Use monotonic
-local revisions and observation timestamps so late list responses cannot replace
-a newer lifecycle result. An operation result identifies created resources,
-snapshots, and access changes explicitly; a fork never overwrites its source.
+Expose typed resource/operation/session events through the backend team stream.
+Use backend record revisions and observation timestamps so late list responses
+cannot replace a newer lifecycle result. An operation result identifies created
+resources, snapshots, and access changes explicitly; a fork never overwrites its source.
 
 Version the local IPC and guest protocol separately from vendor SDK versions.
-The signed desktop ships a tested adapter/SDK set. A runtime mismatch gets an
-explicit upgrade/setup action; support one current protocol rather than silently
-loading compatibility code.
+The backend and signed desktop ship tested control/transport adapter sets. A
+runtime mismatch gets an explicit upgrade/setup action; support one current
+protocol rather than silently loading compatibility code.
 
 ## 5. Reliable operations and execution lifetime
 
 ### Provisioning and reconciliation
 
-Journal before creating a billable resource: operation UUID, account scope,
-request hash, provider request ID, discovered resource ID, state, and last error.
-Persist across crashes. Use provider idempotency keys where available. Otherwise
-attach a unique operation marker and reconcile before repeating an ambiguous
+Journal in the backend before creating a billable resource: operation UUID,
+team/account scope, request hash, provider request ID, discovered resource ID,
+state, and last error.
+Persist across backend/client crashes; workers claim operations with expiring
+leases and recheck state before resuming. Use provider idempotency keys where
+available. Otherwise attach a unique operation marker and reconcile before
+repeating an ambiguous
 request. If neither mechanism exists, keep an `outcome-unknown` operation rather
 than blindly retrying. Boat documents create/fork idempotency with bounded
 retention. [Boat API](https://docs.boat.dev/api/v1).
 
-Canceling a local request cancels waiting unless remote cancellation is confirmed.
-Return that distinction. Confirm provider removal before completing deletion;
+Closing a desktop request cancels waiting; it does not cancel the backend job.
+Explicit cancellation returns whether provider cancellation was confirmed.
+Confirm provider removal before completing deletion;
 report snapshots and volumes retained under a separate policy.
 
 ### Closing the app
@@ -350,8 +484,10 @@ policy, renewal owner, and what happens when the laptop goes offline.
 Use detached execution and provider keep-alive where supported. An Electron timer
 cannot guarantee execution after laptop sleep. Never advertise indefinite work on
 a finite provider lease. Users can choose a sufficient supported duration,
-checkpoint/resume, or explicitly use a managed scheduler to renew leases. The
-scheduler generates control requests, not terminal traffic.
+checkpoint/resume, or a backend-managed renewal policy with a cost ceiling.
+The backend scheduler owns those renewals and their audit records. It generates
+control requests, not terminal traffic; show the provider-enforced deadline if
+the scheduler is unavailable.
 
 A preserved process may be suspended and making no progress. “Paused with state
 saved” and “agent still executing” must remain different product states.
@@ -370,9 +506,10 @@ Disconnecting a viewer must not send a termination signal to the workload.
 
 Use pagination, bounded concurrency, in-flight deduplication, jitter, and rate-limit
 backoff. Do not ping each guest every 15 seconds: that can wake sandboxes and incur
-charges. Prefer control-plane metadata and provider events. A personal desktop
-connection needs no public webhook receiver; reconcile on return. Guest probes
-are tied to user actions or explicit active-work policies.
+charges. The backend reconciles each provider connection once and consumes
+verified provider webhooks where available. Desktops subscribe to its team state
+instead of polling providers independently. Guest probes are tied to user actions
+or explicit active-work policies; reconciliation must continue with all apps closed.
 
 ## 6. Portable BoxHaven runtime and images
 
@@ -401,11 +538,12 @@ one versioned protocol; do not write SSH/TLS/cryptographic primitives.
 Reserve a runtime port separate from app previews and prevent public sharing of
 that port. Bind as required by the provider's ingress; loopback alone can be
 unreachable. Where available, use provider-scoped authentication as the outer
-gate. Runtime grants bind to resource generation, operation, and expiry. The
-backend issues managed grants; a personal connector can issue grants using
-per-resource credentials established at provisioning and protected in Keychain.
-Never put provider account credentials in the guest. Use established token
-libraries and review the new service boundary before shipping.
+gate. Runtime grants bind to team, actor, resource generation, allowed operation,
+and expiry. The backend issues every grant. A runtime trusts its provisioned
+resource identity and the backend signing authority, and checks authorization
+when attaching and renewing a live connection. Never put provider account
+credentials in the guest. Use established token libraries and review the new
+service boundary before shipping.
 
 This grants resource access; it does not replace hosted user login. Existing
 hosted identity remains Better Auth.
@@ -472,48 +610,61 @@ history. `shell.openExternal(url)` alone cannot supply E2B/exe.dev auth headers.
 
 ### Account and workload credentials
 
-Support multiple independent accounts per provider. Use macOS Keychain initially,
-with a vault interface for later platforms. Persist only credential references in
-local storage. Validate with read-only identity/list requests, not resource creation.
+Support multiple provider connections per team. Store account credentials in the
+backend vault with encryption keys outside the application database, versioned
+secret references, restricted worker access, rotation, and backup/recovery
+procedures. Persist only references in ordinary connection records. Validate
+connections through read-only identity/list requests, not resource creation.
+
+Use macOS Keychain for the desktop's BoxHaven login, with a vault interface for
+later platforms. Keep scoped grants in memory where possible. An explicit
+connection flow can import a local provider credential and submit it over TLS
+to the selected backend; explain where it will be stored. Teammates receive
+connection access through BoxHaven roles, never copies of the original key.
 
 Use official OAuth/device flows where actually available, otherwise API keys with
-exact scope instructions. Import CLI credentials only through an explicit action.
-Redact SDK errors, request headers, signed URLs, and keys from diagnostics.
+exact scope instructions. Redact SDK errors, request headers, signed URLs, and
+keys from diagnostics. Revalidate connection permissions after credential rotation.
 
-Pin account/project/organization scope per operation. Never mutate a global active
-organization or region to implement a local dropdown. Isolate SDKs with global
-environment credentials in account workers or use explicit REST clients; never
-switch shared `process.env` credentials around concurrent requests. Validate
-provider-returned endpoint origins before attaching credentials. Custom API
-endpoints are explicit connection configuration with normal TLS verification,
+Pin team/account/project/organization scope per operation. Never mutate a global
+active organization or region to implement a local dropdown. Isolate SDKs with
+global environment credentials in backend account workers or use explicit REST
+clients; never switch shared `process.env` credentials around concurrent requests.
+Validate provider-returned endpoint origins before attaching credentials. Custom
+API endpoints are explicit connection configuration with normal TLS verification,
 not arbitrary URLs supplied by a renderer or preview.
 
 Provider account credentials differ from model/Git/agent credentials. Deliver
-workload credentials explicitly to selected resources. Review existing CLI
-credential forwarding before using it with imported third-party sandboxes.
+workload credentials explicitly to selected resources with clear user/team
+ownership. Review existing CLI credential forwarding before using it with
+imported third-party sandboxes. A team-visible run record must never contain the
+underlying model key, Git token, or complete secret-bearing launch environment.
 
 ## 8. Provider implementation tasks
 
 ### E2B
 
-- Native SDK lifecycle, PTY, commands, files, previews.
+- Backend SDK lifecycle and access broker; direct scoped PTY, files, and previews.
 - Explicit command/PTY timeouts and sandbox expiration policy: unlimited command
   timeout does not mean unlimited sandbox lifetime.
 - Verify template/controller versions, including snapshot prerequisites.
-- Separate controller credentials from traffic credentials and refresh correctly.
+- Separate controller credentials from traffic credentials; prove resource-scoped
+  delegation and revocation before choosing the native desktop SDK path.
 - Map memory/disk pause and snapshots/forks accurately; test dropped-stream recovery.
 
 ### Daytona
 
-- Explicit organization scope; native PTY/files.
+- Backend-bound organization scope; native PTY/files only with safe delegation.
 - Determine container/VM capabilities before offering pause or fork.
 - Use signed port URLs for sharing; keep sandbox-wide preview tokens privileged.
-- Prove sandbox-scoped managed access; never delegate an organization key.
+- Prove sandbox-scoped access as a release prerequisite; never delegate an
+  organization key. Use the shared runtime if native PTY cannot meet this boundary.
 - Refresh credentials after stop/start; inspect archive and auto-delete policies.
 
 ### Blaxel
 
-- Explicit workspace/region; native files/processes and client sessions.
+- Backend workspace/region scope; native files/processes and backend-issued
+  client sessions.
 - Prove PTY bridge behind a private preview unless native PTY meets the contract.
 - Configure keep-alive/kill-timeout explicitly for unattended agents, then release
   the keep-alive when work finishes.
@@ -527,7 +678,8 @@ credential forwarding before using it with imported third-party sandboxes.
 - `/exec` for control/bounded bootstrap, with correct quoting and error parsing.
 - Require exact command permissions. VM HTTPS access is separate: offline signing
   requires a registered signing key, not merely a command API token.
-- Keep that key in Keychain or the backend vault; issue expiring VM access tokens.
+- Keep that key in the backend vault; issue expiring VM access tokens after
+  team authorization.
 - Bake the bridge into the OCI image; verify custom auth headers, ping/pong,
   idle behavior, reconnect, and large transfers through private HTTPS ingress.
 - Certify copy semantics; leave pause unavailable unless a matching current API
@@ -564,19 +716,26 @@ Code to change:
 - [Preload IPC](desktop/src/preload.cjs)
 - [Renderer](desktop/src/renderer.js)
 - [Provider contract](backend/src/types.ts) and [registry](backend/src/providers.ts)
+- [Shared database and migrations](backend/src/database.ts)
+- [Authentication and teams](backend/src/auth.ts)
 - [Runtime orchestration/preview proxy](backend/src/server.ts)
 - [SSH and rsync](cmd/bh/remote.go)
 
 ### User flow
 
-1. **Connections:** add BoxHaven or a provider, authenticate, select explicit
-   account/workspace scope, inspect granted access.
-2. **Inventory:** one sidebar, clear account/provider labels. Imported sandboxes
-   remain untouched. Disconnecting an account removes local access, not resources.
+1. **Connections:** sign into BoxHaven, select a team, and add a provider account
+   with explicit account/workspace scope. Show credential storage and granted access.
+2. **Inventory:** one synchronized sidebar, clear team/account/provider labels.
+   Imported sandboxes remain untouched until an explicit action. Signing out of
+   a desktop leaves team connections intact. Removing a shared provider connection
+   is an authorized team operation with affected-resource and cleanup checks;
+   it must not orphan active resources or silently delete them.
 3. **New box:** connection, prepared environment, resources, work lifetime. Show
    payer, billing basis, and expiration. Use real catalog constraints.
-4. **Work:** common terminal/actions; distinguish resource, connection, and agent
-   status. Unsupported actions have a useful reason.
+4. **Work:** common terminal/actions and shared run discovery; distinguish
+   resource, connection, attachment presence, and agent status. A teammate can
+   open their own terminal or attach where supported. Unsupported actions have
+   a useful reason.
 5. **Leave and return:** state whether work continues, sleeps, or reaches a
    deadline; recover the same logical session where possible.
 6. **Stop/delete:** explain precisely what survives; retain explicit deletion
@@ -596,32 +755,35 @@ output can still contain user secrets. Never treat output as privileged instruct
 
 ```text
 packages/connectors-core/       contracts, identity, operations, lifetimes
-packages/connectors/            boxhaven, e2b, daytona, blaxel, exedev, boat
-packages/transports/            native PTY, certificate SSH, runtime WebSocket
+packages/connectors/            provider control adapters and access mappings
+packages/transports/            scoped native PTY, certificate SSH, runtime WebSocket
 packages/runtime/               shared guest session/command implementation
-desktop/src/connectors/         workers, IPC, Keychain, local state
-backend/src/connectors/         managed host and grant broker
+backend/src/connectors/         provider workers, vault integration, access broker
+backend/src/team-sync/          registry, journal, outbox, reconciliation, event API
+desktop/src/connectors/         direct transports, IPC, login vault, shared-state cache
 deploy/providers/              artifact recipes and release manifests
-scripts/smoke-connectors/       conformance runner and provider fixtures
+scripts/smoke-connectors/       provider and multi-device conformance fixtures
 ```
 
-The existing BoxHaven API is a real connector, not a compatibility shim. Extract
-DO/Hetzner internals only when needed by the managed host; avoid a backend rewrite
-just to ship personal connectors.
+Preserve current DO/Hetzner provisioning and certificate SSH behind the backend
+contract. Extend the existing database, Better Auth integration, operation handling,
+and runtime orchestration. The current backend is the foundation of the connector
+system, including single-user accounts; avoid a second local control plane.
 
-The Go CLI continues using backend contracts for managed resources. If personal
-provider CLI access follows, package the same TypeScript host as a headless
-executable with a versioned local protocol. Do not duplicate six SDKs in Go.
-That packaging is a separate deliverable; desktop installation must not require
-user-installed Node.
+The Go CLI also calls the backend for every provider's inventory and lifecycle.
+Share direct-access descriptors and reuse transports where practical rather than
+implementing six control SDKs in Go. If a native transport needs a packaged
+TypeScript helper, give it a versioned local protocol and include its runtime;
+desktop installation must not require user-installed Node.
 
 ### Adding a provider
 
-Each adapter exports a manifest, account configuration schema, catalog mapping,
-capability resolver, lifecycle implementation, and access-transport bindings.
-Register it in the build-time provider registry; the shared UI renders its
-validated settings and capabilities. Its onboarding contribution explains how
-to create credentials and identifies any required account deployment.
+Each provider package exports a manifest, account configuration schema, catalog
+mapping, capability resolver, backend lifecycle implementation, and scoped access
+bindings for supported transports. Register it in the backend registry and ship
+any needed transport module with the desktop; the shared UI renders validated
+settings and capabilities from the backend. Its onboarding contribution explains
+how to create credentials and identifies any required account deployment.
 
 Acceptance requires an environment recipe if needed, a checked-in conformance
 fixture, and support documentation describing tested limits. Reject arbitrary
@@ -638,7 +800,7 @@ and lifecycle often remain on native `raw` objects. Its `stop()` permits
 provider-dependent stop/destroy/release behavior.
 
 Reuse useful mappings after license/maintenance review and contribute where
-sensible. Own the desktop lifecycle contract. Pin dependencies behind our tests;
+sensible. Own the shared BoxHaven lifecycle contract. Pin dependencies behind our tests;
 use a vendor SDK directly when that is clearer than an extra abstraction.
 
 [OpenSandbox](https://github.com/opensandbox-group/OpenSandbox) provides lifecycle
@@ -657,7 +819,10 @@ ceilings. Fakes test state machines; real providers prove networking/lifecycle.
 
 | Area | Required evidence |
 | --- | --- |
-| Accounts | Two accounts with identical names never mix resources, sessions, secrets, or deletion targets. Revoked/expired keys fail cleanly. |
+| Accounts/teams | Two teams/accounts with identical names never mix resources, sessions, secrets, events, or deletion targets. Revoked/expired keys fail cleanly. |
+| Team sync | Two real desktop clients see creates, imports, runs, renames, and deletes; cursor replay and snapshot recovery preserve order after disconnect. Removing a member prevents new grants/events. |
+| Concurrency | Two clients racing start/delete/resume get one valid serialized outcome; backend restart reconciles pending work without duplicate resources or agents. |
+| Access revocation | Verify new grants, existing SSH/WS streams, backend outage, credential rotation, expiry, and the documented maximum revocation delay. |
 | Provisioning | Crash before/after provider acceptance, reopen, reconcile without duplicate billable resources. |
 | Terminal | Full-screen TUI, UTF-8, resize, Ctrl-C, heavy output, reconnect, app quit/reopen, laptop sleep. Detach preserves work. |
 | Unattended work | Counter/task makes progress with the app fully quit; distinguish execution from preserved state and verify deadlines. |
@@ -665,9 +830,10 @@ ceilings. Fakes test state machines; real providers prove networking/lifecycle.
 | Previews | HTTP and WebSocket/HMR, auth, expiry/revocation, redirects, cross-port isolation, no account credential leaks. |
 | Lifecycle | Disk marker and process identity prove each pause/stop/resume preservation promise. |
 | Snapshots/forks | Source interruption, exclusions, child identity, credential isolation, external side-effect policy. |
-| Delete | Provider absence confirmed; retained snapshots/volumes recorded. Account disconnection preserves resources. |
+| Delete | Provider absence confirmed; retained snapshots/volumes recorded. Desktop logout preserves team resources; shared connection removal cannot orphan them. |
 | Failure recovery | DNS/auth/429/timeouts/dropped streams/incomplete lists retain state and avoid destructive retries. |
-| No relay | Connection tracing/backend byte counters during terminal flooding and large transfer. BYO works with BoxHaven domains blocked; managed data bypasses them. |
+| Direct data/control load | Trace payload paths during terminal flooding and large transfers: backend counters show only bounded coordination. Verify team event fanout, one reconciliation loop per connection, and no per-keystroke events. |
+| Backend outage | Cached views become stale; new grants/mutations fail clearly; existing attachments follow real lease semantics; workloads follow recorded provider lifetimes; recovery replays state safely. |
 | Desktop | Signed packaged app tests and inspected screenshots of connections, catalog, lifetime, terminal, and destructive actions. |
 
 Specific additions: E2B snapshot stream drops; Daytona class differences/token
@@ -687,22 +853,26 @@ connectors when their advertised surface passes; use no rollout feature flags.
 
 | Step | Deliverable | Exit criterion |
 | --- | --- | --- |
-| **0. Risk probes** | Reusable terminal/lifetime probes for all five; managed delegation assessed separately. | Viable direct data paths demonstrated before finalizing bridge design. |
-| **1. Core/current connector** | Contracts, stable identity, operation journal, BoxHaven connector; desktop session-key migration. | Existing unit/smoke/packaged remote workflow, rename, and deletion pass. |
-| **2. Accounts** | Profiles, Keychain, workers, validated IPC/catalogs. | Two-account isolation, key rotation, app-restart recovery. |
-| **3. E2B/Daytona** | Native PTY/files, lifetime model, private previews, environments. | Full create/run/disconnect/reconnect/delete and persistence suites. |
-| **4. Runtime/bridge** | Extract runtime; add provider-hosted PTY and required file service; image pipeline. | Systemd and entrypoint profiles, auth, flow control, generation, and reconnect tests. |
-| **5. Blaxel/exe.dev/Boat** | Adapters and recipes using common bridge. | Common/provider-specific tests, no central relay, documented app-quit behavior. |
-| **6. Persistence UX** | Explicit pause/stop/archive/fork, recovery, retention views. | Actions match preservation tests and explain effects. |
-| **7. Managed teams** | Backend host, RBAC, scoped grants, audit, optional renewal scheduler. | Users cannot reach another sandbox/account API; bulk traffic bypasses backend. |
-| **8. Broader catalog** | Modal, Vercel, Runloop, Deno, Cloudflare, CodeSandbox, OpenSandbox. | Certified advertised capabilities and explicit deployment prerequisites. |
+| **0. Risk probes** | Direct terminal, lifetime, resource-scoped delegation, and active-stream revocation probes for all five. | Viable team access demonstrated before committing to native or bridge transports. |
+| **1. Backend foundation** | Contracts, team connections, vault, stable IDs, durable operations, existing-provider adapter. | Existing workflow plus two-team isolation, concurrency, and crash recovery pass. |
+| **2. Team synchronization** | Registry/outbox/event API, run/session records, reconciliation, desktop cache and identity migration. | Two desktops see consistent state; reconnect, membership removal, and backend outage pass. |
+| **3. Access and runtime** | Access broker, renewals, direct transport contract, extracted runtime/bridge, image pipeline. | Scoped grants and live-session behavior verified; existing certificate SSH remains correct. |
+| **4. E2B/Daytona** | Backend adapters, scoped native access where adequate, runtime access where required, private previews. | Two users complete create/run/disconnect/attach/delete and persistence suites. |
+| **5. Blaxel/exe.dev/Boat** | Backend adapters and recipes using shared transports. | Common/provider-specific tests, no central bulk relay, documented app-quit behavior. |
+| **6. Persistence and release** | Pause/stop/archive/fork, retention, recovery, packaged desktop UX. | Preservation, team permissions, latency/load, and inspected UI tests pass. |
+| **7. Broader catalog** | Modal, Vercel, Runloop, Deno, Cloudflare, CodeSandbox, OpenSandbox. | Certified team access/capabilities and explicit deployment prerequisites. |
+
+Team support is part of the first connector milestone. Connecting a team's own
+provider account and using BoxHaven-funded capacity share this implementation;
+commercial billing integrations can proceed separately.
 
 Planning allowance for one engineer familiar with BoxHaven: 3–5 days for probes,
-8–12 for core/accounts, 5–8 for native connectors, 8–15 for runtime/bridge and the
-other three, 5–10 for release/failure testing. These are estimates, not measured
-schedules. Budget roughly **6–10 engineer-weeks** for five personal connectors if
-probes pass. Managed teams and the wider catalog are additional. A prototype can
-be faster; recovery, lifetime, and security promises dominate production work.
+12–18 for the backend/team foundation and desktop migration, 5–10 for scoped
+access and runtime extraction, 12–20 for five provider adapters/artifacts, and
+8–12 for multi-device/failure/release verification. Budget roughly **8–13
+engineer-weeks**, conditional on the delegation and transport probes. This is an
+unmeasured planning range; unavailable provider delegation could change scope.
+Wider provider coverage and new billing products are additional.
 
 For each later provider, target an adapter, environment recipe where necessary,
 and conformance fixture with no renderer changes. This is a design acceptance
@@ -718,22 +888,25 @@ UI pages. This proposal changes no supported commands, defaults, UI, or runtime.
 
 ## 13. Decisions and empirical gates
 
-1. Confirm personal-account versus managed-team priority. Personal first keeps
-   the backend out of the initial provider integration milestone.
+1. The backend is the shared authority for every connection, including a solo
+   user's own provider account. Team synchronization is a foundation requirement.
 2. Prove exe.dev and Boat private WebSockets. If they cannot sustain the bridge,
-   work with the vendor on direct access; do not quietly add a central relay.
+   work with the vendor on direct access; do not quietly add a central bulk relay.
 3. Check the pinned Blaxel SDK for suitable native PTY support; use the bridge
    only if necessary. Process/log documentation alone does not establish PTY semantics.
-4. Prove scoped managed access provider by provider. Account/organization isolation
-   does not automatically implement BoxHaven per-user permissions.
-5. Set lifetime defaults using measured behavior and account quotas. A laptop
-   timer cannot own an indefinite remote execution promise.
-6. Decide artifact ownership: published immutable BoxHaven artifacts where
+4. Prove scoped access provider by provider before release. Account/organization
+   isolation does not automatically implement BoxHaven per-user permissions.
+   Native PTY availability alone does not prove safe delegation to teammates.
+5. Define acceptable active-session revocation delay and certify its enforcement.
+   Credential expiry that only prevents new logins is a distinct capability.
+6. Set lifetime defaults using measured behavior and quotas. The backend owns
+   selected renewal policies; show what happens if it cannot reach the provider.
+7. Decide artifact ownership: published immutable BoxHaven artifacts where
    possible, account-local builds where required. Track cost, region, visibility,
    and cleanup.
-7. Implement the explicit generalization from fixed VM paths/systemd to declared
+8. Implement the explicit generalization from fixed VM paths/systemd to declared
    sandbox paths/entrypoints while retaining thin clients and certificate SSH.
 
-Recommended first deliverable: five reusable provider risk probes plus the
-core/current-BoxHaven connector extraction. This tests the architecture while
-preserving the desktop that already ships.
+Recommended first deliverable: provider access/lifetime probes plus the existing
+BoxHaven backend exposed through the new team-scoped connector contract. Then
+prove two desktops observe and operate the same resources before adding vendors.
