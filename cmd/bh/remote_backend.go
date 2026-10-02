@@ -65,12 +65,13 @@ type remoteBackendSSHCertificateRequest struct {
 }
 
 type remoteBackendSSHCertificateResponse struct {
-	Certificate string `json:"certificate"`
-	ExpiresAt   string `json:"expires_at,omitempty"`
-	Principal   string `json:"principal,omitempty"`
-	Host        string `json:"host,omitempty"`
-	Port        int    `json:"port,omitempty"`
-	SSHUser     string `json:"ssh_user,omitempty"`
+	Access      sshAccess `json:"access"`
+	Certificate string    `json:"certificate"`
+	ExpiresAt   string    `json:"expires_at,omitempty"`
+	Principal   string    `json:"principal,omitempty"`
+	Host        string    `json:"host,omitempty"`
+	Port        int       `json:"port,omitempty"`
+	SSHUser     string    `json:"ssh_user,omitempty"`
 }
 
 type remoteBackendSyncCompleteRequest struct {
@@ -503,6 +504,7 @@ func mergeRemoteBackendMachine(local remoteMachine, remote remoteMachine) remote
 	}
 	remote.SSHKeyPath = local.SSHKeyPath
 	remote.SSHCertificatePath = local.SSHCertificatePath
+	remote.SSHGrantPath = local.SSHGrantPath
 	remote.SSHHost = local.SSHHost
 	remote.SSHPort = local.SSHPort
 	return remote

@@ -47,6 +47,9 @@ var defaultRemoteSyncExcludePatterns = []string{
 }
 
 type remoteMachine struct {
+	ResourceID         string    `json:"resource_id,omitempty"`
+	SSHTransport       string    `json:"ssh_transport,omitempty"`
+	SSHGrantPath       string    `json:"-"`
 	RuntimeProtocol    int       `json:"runtime_protocol,omitempty"`
 	RuntimeVersion     string    `json:"runtime_version,omitempty"`
 	OwnerName          string    `json:"owner_name,omitempty"`
@@ -1346,6 +1349,16 @@ func remoteSSHOptions(machine remoteMachine, forwardAgent bool) ([]string, error
 		"-o", "HashKnownHosts=no",
 		"-o", "HostKeyAlias=" + machine.sshHostAlias(),
 		"-o", "ServerAliveInterval=30",
+	}
+	if machine.SSHTransport == "websocket" {
+		if machine.SSHGrantPath == "" {
+			return nil, fmt.Errorf("remote %s has no WebSocket access grant", machine.Name)
+		}
+		executable, err := os.Executable()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "-o", "ProxyCommand="+shellJoin([]string{executable, "ssh-proxy", machine.SSHGrantPath}))
 	}
 	if machine.sshPort() != 22 {
 		args = append(args, "-p", strconv.Itoa(machine.sshPort()))

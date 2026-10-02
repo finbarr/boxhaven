@@ -5,7 +5,10 @@ Original repository baseline: `14074a1`.
 
 Implemented foundation: stable backend resource IDs, transactional team resource
 events, authenticated snapshot/SSE APIs, bounded replay, and membership checks.
-Provider adapters, delegated transports, connection management, and desktop
+The shared SSH transport now supports TCP and scoped direct WebSockets, with a
+guest bridge and a real OpenSSH/TLS conformance smoke. Runtime grants expire
+existing streams; active membership revocation and seamless renewal remain open.
+Provider adapters, connection management, and desktop
 integration remain in progress; the provider research below is not a claim of
 shipped support.
 

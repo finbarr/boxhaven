@@ -564,6 +564,80 @@ install_boxhaven_agent() {
     install -m 0600 /dev/null /etc/boxhaven/agent.env
   fi
   install -d -m 0755 /usr/local/lib/boxhaven
+  # Image-build dependencies; user machines never install runtime packages.
+  npm install --prefix /usr/local/lib/boxhaven --omit=dev --no-audit --no-fund --save-exact ws@8.21.0 jose@6.2.3
+  cat > /usr/local/lib/boxhaven/ssh-bridge.mjs <<'EOF'
+import { createServer } from "node:http";
+import { connect } from "node:net";
+import { createHash } from "node:crypto";
+import { WebSocketServer, createWebSocketStream } from "ws";
+import { jwtVerify } from "jose";
+
+// Fixed-purpose transport: clients cannot select a destination host or port.
+// JWT authentication precedes any connection to sshd. SSH still authenticates
+// a backend-signed user certificate and pins the guest's host key end to end.
+const token = process.env.BOXHAVEN_AGENT_TOKEN;
+if (!token) throw new Error("SSH bridge requires a machine agent token");
+const key = createHash("sha256").update(token).digest();
+const server = createServer((_request, response) => { response.writeHead(404); response.end(); });
+const sockets = new WebSocketServer({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
+let pending = 0;
+server.on("upgrade", async (request, socket, head) => {
+  socket.on("error", () => {});
+  if (request.url !== "/ssh" || request.headers.origin || sockets.clients.size + pending >= 128) { socket.destroy(); return; }
+  pending++;
+  try {
+    const access = request.headers["x-boxhaven-access"];
+    if (typeof access !== "string" || access.length > 4096) throw new Error("missing grant");
+    const { payload } = await jwtVerify(access, key, { algorithms: ["HS256"], audience: "boxhaven-ssh-bridge", requiredClaims: ["exp", "iat", "sub"] });
+    const remaining = payload.exp * 1000 - Date.now();
+    if (remaining <= 0 || remaining > 3600000 || payload.exp - payload.iat > 3600) throw new Error("invalid lifetime");
+    if (socket.destroyed) return;
+    sockets.handleUpgrade(request, socket, head, ws => {
+      const target = connect({ host: "127.0.0.1", port: Number(process.env.BOXHAVEN_SSH_PORT || 22) });
+      target.setTimeout(90000, () => target.destroy());
+      const stream = createWebSocketStream(ws, { highWaterMark: 65536 });
+      const expiry = setTimeout(() => ws.terminate(), remaining).unref();
+      const stop = () => { clearTimeout(expiry); target.destroy(); stream.destroy(); ws.terminate(); };
+      ws.on("close", stop);
+      ws.on("error", stop);
+      ws.on("message", (_data, binary) => { if (!binary) stop(); });
+      target.on("error", stop);
+      stream.on("error", stop);
+      target.on("close", stop);
+      // Both directions propagate backpressure. SSH ServerAliveInterval sends
+      // traffic during idle sessions, and expiry also closes existing streams.
+      stream.pipe(target).pipe(stream);
+    });
+  } catch {
+    socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+  } finally { pending--; }
+});
+server.listen(Number(process.env.BOXHAVEN_SSH_BRIDGE_PORT || 9999), process.env.BOXHAVEN_SSH_BRIDGE_HOST || "0.0.0.0");
+const shutdown = () => { for (const ws of sockets.clients) ws.terminate(); server.close(() => process.exit(0)); };
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+EOF
+  cat > /etc/systemd/system/boxhaven-ssh-bridge.service <<'EOF'
+[Unit]
+Description=BoxHaven direct SSH WebSocket transport
+After=network-online.target ssh.service
+[Service]
+Type=simple
+User=boxhaven
+EnvironmentFile=/etc/boxhaven/agent.env
+ExecStart=/usr/bin/env node /usr/local/lib/boxhaven/ssh-bridge.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable boxhaven-ssh-bridge >/dev/null 2>&1 || true
   cat > /usr/local/lib/boxhaven/agent.mjs <<'EOF'
 #!/usr/bin/env node
 import { spawn } from "node:child_process";

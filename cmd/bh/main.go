@@ -41,6 +41,9 @@ func run() int {
 }
 
 func runCmd(args []string) error {
+	if len(args) > 0 && args[0] == "ssh-proxy" {
+		return runSSHProxy(args[1:])
+	}
 	if len(args) > 0 && args[0] == backgroundVersionCheckCommand {
 		runBackgroundVersionCheck()
 		return nil

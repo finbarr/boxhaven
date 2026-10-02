@@ -13,6 +13,7 @@ export type RemoteMachine = {
   provider?: string;
   provider_id?: string;
   public_ipv4?: string;
+  ssh_transport?: "websocket";
   region?: string;
   size?: string;
   size_shortcut?: string;
@@ -161,11 +162,17 @@ export type MachineProvider = {
   getMachine(machine: RemoteMachine): Promise<{ machine: RemoteMachine; status?: string }>;
   listMachines(request: ListProviderMachinesRequest): Promise<Array<{ machine: RemoteMachine; status?: string }>>;
   releaseMachine(machine: RemoteMachine): Promise<void>;
+  /** Returns resource-scoped credentials only. Account credentials stay here. */
+  issueSSHAccess?(machine: RemoteMachine, expiresAt: string): Promise<SSHAccess>;
   listImages?(): Promise<MachineImage[]>;
   createImage?(machine: RemoteMachine, name: string): Promise<MachineImage>;
   deleteImage?(imageID: string): Promise<void>;
   listPlans?(): Promise<MachinePlan[]>;
 };
+
+export type SSHAccess =
+  | { kind: "tcp"; host: string; port: number }
+  | { kind: "websocket"; url: string; headers: Record<string, string>; expires_at: string };
 
 export type TeamImageRecord = {
   id?: string;

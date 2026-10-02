@@ -16,6 +16,7 @@ import { ProviderRegistry, providerInfo } from "./providers.js";
 import { registerTeamSync } from "./team_sync.js";
 import { GitHubReleaseChecker, ReleaseUpdateChecker } from "./releases.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
+import { machineSSHAccess } from "./ssh_access.js";
 import { AmbiguousImageReferenceError, DeletionGuardError, MachineCleanupPendingError, StateStore, TeamDeletionBlockers } from "./state.js";
 import { CreateMachineRequest, MachineCreateError, MachineImage, MachinePlan, MachineProvider, MachineSizeOption, MachineSizeShortcut, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
 
@@ -641,7 +642,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       machine: decorateTeam(publicMachine(healed), auth.teams),
       status: refreshed.status || "leased",
       connect: {
-        transport: "direct_ssh_certificate",
+        transport: machine.ssh_transport === "websocket" ? "ssh_websocket_certificate" : "direct_ssh_certificate",
         cli: `bh connect ${machine.name}`,
         cli_run: `bh run ${machine.name}`,
       },
@@ -709,7 +710,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     }
     const normalized = normalizeMachine(options, machine);
     const principal = normalized.ssh_principal || sshPrincipalForMachine(normalized);
-    if (!normalized.public_ipv4) {
+    if (!normalized.public_ipv4 && !normalized.ssh_transport) {
       return reply.code(409).send({ id: "not_ready", message: "remote machine does not have a public IPv4 yet" });
     }
     const publicKey = request.body?.public_key?.trim() || "";
@@ -722,10 +723,13 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       identity: `boxhaven-${auth.userID}-${normalized.name}`,
       ttlSeconds: request.body?.ttl_seconds,
     });
+    const access = await machineSSHAccess(options.providers.forMachine(normalized), normalized, auth.userID, signed.expires_at);
+    reply.header("Cache-Control", "no-store");
     return {
       ...signed,
-      host: normalized.public_ipv4,
-      port: 22,
+      access,
+      host: access.kind === "tcp" ? access.host : `${normalized.resource_id}.boxhaven.invalid`,
+      port: access.kind === "tcp" ? access.port : 22,
       ssh_user: normalized.ssh_user || defaultSSHUser,
     };
   });

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -232,7 +233,7 @@ func writeBoxHavenSSHConfig(cfg Config, machines []remoteMachine) error {
 func sshConfigMachines(machines []remoteMachine) []remoteMachine {
 	configured := make([]remoteMachine, 0, len(machines))
 	for _, machine := range machines {
-		if validateRemoteName(machine.Name) != nil || net.ParseIP(strings.TrimSpace(machine.PublicIPv4)) == nil || !machine.BootstrapComplete {
+		if validateRemoteName(machine.Name) != nil || (net.ParseIP(strings.TrimSpace(machine.PublicIPv4)) == nil && machine.SSHTransport != "websocket") || !machine.BootstrapComplete {
 			continue
 		}
 		configured = append(configured, machine)
@@ -250,7 +251,12 @@ func renderBoxHavenSSHConfig(machines []remoteMachine, executable string, backen
 		certificatePath := "~/.boxhaven/ssh/certs/" + alias + "-cert.pub"
 		refreshCommand := "env BOXHAVEN_BACKEND_URL=" + shellQuote(backendURL) + " " + shellQuote(executable) + " ssh-config certificate " + shellQuote(machine.Name) + " >/dev/null"
 		fmt.Fprintf(&config, "Host %s\n", alias)
-		fmt.Fprintf(&config, "    HostName %s\n", machine.PublicIPv4)
+		if machine.SSHTransport == "websocket" {
+			fmt.Fprintf(&config, "    HostName %s.boxhaven.invalid\n", machine.ResourceID)
+			fmt.Fprintf(&config, "    ProxyCommand %s ssh-proxy \"$HOME/.boxhaven/ssh/certs/%s-cert.pub.access.json\"\n", shellQuote(executable), alias)
+		} else {
+			fmt.Fprintf(&config, "    HostName %s\n", machine.PublicIPv4)
+		}
 		fmt.Fprintf(&config, "    User %s\n", sshConfigUser(machine.SSHUser))
 		fmt.Fprintln(&config, "    Port 22")
 		fmt.Fprintln(&config, "    IdentityFile ~/.boxhaven/ssh/id_ed25519")
@@ -291,6 +297,21 @@ func refreshBoxHavenSSHCertificate(cfg Config, machine *remoteMachine) (string, 
 	}
 	if err := atomicWriteFile(certificatePath, []byte(strings.TrimSpace(cert.Certificate)+"\n"), 0o600); err != nil {
 		return "", fmt.Errorf("write BoxHaven SSH certificate: %w", err)
+	}
+	if cert.Access.Kind == "websocket" {
+		if err := validateSSHAccess(cert.Access); err != nil {
+			return "", err
+		}
+		grantPath := certificatePath + ".access.json"
+		data, err := json.Marshal(cert.Access)
+		if err != nil {
+			return "", err
+		}
+		if err := atomicWriteFile(grantPath, data, 0o600); err != nil {
+			return "", err
+		}
+		machine.SSHGrantPath = grantPath
+		machine.SSHTransport = "websocket"
 	}
 	machine.SSHKeyPath = privateKeyPath
 	machine.SSHCertificatePath = certificatePath

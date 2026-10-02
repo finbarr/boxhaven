@@ -51,6 +51,28 @@ The backend suite also checks these routes with real Better Auth membership.
 These APIs are the first connector foundation. New sandbox providers, shared
 terminal access, and desktop event subscriptions are separate implementation work.
 
+## Direct sandbox transports
+
+Providers can implement `issueSSHAccess` to return a resource-scoped WebSocket
+destination instead of a public TCP address. The backend's `ssh-cert` response
+includes that transport and a signed grant for the guest bridge. The CLI passes
+bytes directly to the provider; the backend never relays this connection.
+Both transports require an SSH user certificate and persistent host-key pinning.
+WebSocket grants live in mode-0600 files, never process arguments, and redirects
+are rejected. `SSL_CERT_FILE` can add private TLS certificate authorities.
+
+The image installer includes a bridge on port 9999 with one fixed destination:
+loopback SSH. It rejects missing, expired, or wrong-machine grants, limits frame
+size and concurrent streams, and propagates backpressure. Existing streams close
+at grant expiry (15 minutes by default, at most one hour); reconnect obtains a new
+grant and reattaches the persistent remote session. Revocation currently prevents
+new grants; already issued grants remain valid until expiry.
+
+Run `make build && node backend/scripts/smoke-ssh-transport.mjs` from the repository
+root. This starts temporary local OpenSSH and TLS servers and exercises the actual
+image bridge and CLI, including invalid certificates and established-stream expiry.
+It requires OpenSSH, Node, and OpenSSL. It does not certify any provider's proxy.
+
 ## Run Locally
 
 ```bash

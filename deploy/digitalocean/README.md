@@ -11,6 +11,12 @@ outside Docker. Replace `example.com` with a domain you control.
 The [BoxHaven desktop app](../../desktop/README.md) can connect to this deployment
 using the existing CLI login. No desktop-specific deployment changes are needed.
 
+The VM image installer also bakes the shared direct WebSocket SSH bridge and its
+pinned dependencies. Existing DigitalOcean access continues to use direct TCP
+SSH. Provider adapters that request the bridge require an image rebuilt from the
+committed runtime source; never install these dependencies on a user VM at connect
+time. See [transport configuration and verification](../../backend/README.md#direct-sandbox-transports).
+
 The docs build also generates `llms.txt` and each public page's `.md` source
 alongside its HTML. Caddy serves these from the same artifact; no extra service
 or route configuration is needed.
