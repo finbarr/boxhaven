@@ -23,6 +23,34 @@ accessible GitHub release banner when this self-hosted backend is behind. The
 endpoint caches GitHub release results for 24 hours, backs off failed checks
 for an hour, and returns quietly without an update when offline.
 
+## Team resource synchronization
+
+Every stored machine has a backend-generated `resource_id` that survives renames,
+provider refreshes, and team moves. Recreating a deleted box assigns a new ID.
+The database upgrade assigns IDs to existing machines.
+
+Authenticated clients can load `GET /v1/teams/:teamID/resources` to obtain a
+shared resource snapshot and its `cursor`, then subscribe to
+`GET /v1/teams/:teamID/events?cursor=<cursor>` with the same bearer login. The SSE
+stream sends `resource.changed`, `resource.removed`, and `sync.checkpoint` events.
+Resource events carry IDs and cursors; reload the snapshot to obtain current
+metadata. No provider credentials, command contents, or terminal bytes enter this
+stream. The snapshot reads stored state without polling the provider.
+
+Events commit in the same SQLite transaction as each resource change. The last
+10,000 events are retained across restarts. Reconnect using `Last-Event-ID`; a
+`409 cursor_expired` response or `sync.reset` event requires a fresh snapshot.
+Authorization is checked before each batch and at least every ten seconds while
+idle. `access.revoked` closes the stream after membership/session access is lost.
+Slow consumers are disconnected and can resume from their last cursor.
+
+Run `node --import tsx --test src/team_sync.test.ts` for real HTTP stream coverage
+with two clients, restart/rename identity, team isolation, and retention checks.
+The backend suite also checks these routes with real Better Auth membership.
+
+These APIs are the first connector foundation. New sandbox providers, shared
+terminal access, and desktop event subscriptions are separate implementation work.
+
 ## Run Locally
 
 ```bash

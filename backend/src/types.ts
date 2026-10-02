@@ -1,6 +1,8 @@
 import type { MachineLifecycleEvent } from "./policy.js";
 
 export type RemoteMachine = {
+  /** Backend identity, preserved across renames and team moves. */
+  resource_id?: string;
   name: string;
   user_id?: string;
   org_id?: string;

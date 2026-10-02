@@ -2256,6 +2256,31 @@ test("a compiled backend module migrates, authenticates routes, supplies policy,
   assert.equal(closed, true);
 });
 
+test("team resource snapshots use live Better Auth membership and stable backend IDs", async t => {
+  const { app, store, token } = await createTestBackend("sync-owner@example.com");
+  t.after(() => app.close());
+  const ownerHeaders = { authorization: `Bearer ${token}` };
+  const owner = (await app.inject({ url: "/v1/auth/whoami", headers: ownerHeaders })).json();
+  const memberToken = await signUp(app, "sync-member@example.com");
+  const memberHeaders = { authorization: `Bearer ${memberToken}` };
+  const member = (await app.inject({ url: "/v1/auth/whoami", headers: memberHeaders })).json();
+  const membershipID = randomUUID();
+  store.db.prepare("INSERT INTO member(id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'member', ?)")
+    .run(membershipID, owner.team.id, member.user.id, Date.now());
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers: ownerHeaders, payload: { name: "shared" } });
+  assert.equal(created.statusCode, 201, created.body);
+  const resourceID = created.json().machine.resource_id;
+  assert.match(resourceID, /^[0-9a-f-]{36}$/);
+  const path = `/v1/teams/${owner.team.id}/resources`;
+  const snapshot = await app.inject({ url: path, headers: memberHeaders });
+  assert.equal(snapshot.statusCode, 200, snapshot.body);
+  assert.equal(snapshot.json().resources[0].resource_id, resourceID);
+  assert.doesNotMatch(snapshot.body, /agent_token|ssh_principal|last_command/);
+  assert.equal((await app.inject(path)).statusCode, 401);
+  store.db.prepare("DELETE FROM member WHERE id = ?").run(membershipID);
+  assert.equal((await app.inject({ url: path, headers: memberHeaders })).statusCode, 403);
+});
+
 async function createTestBackend(
   email = "user@example.com",
   password = "password123",

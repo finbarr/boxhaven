@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
@@ -77,6 +78,7 @@ export type CapacityReservation =
 
 export class StateStore {
   readonly db: Database.Database;
+  private readonly changes = new EventEmitter().setMaxListeners(0);
   private pendingUpdate: Promise<void> = Promise.resolve();
 
   constructor(
@@ -99,7 +101,24 @@ export class StateStore {
   }
 
   close(): void {
+    this.changes.emit("close");
+    this.changes.removeAllListeners();
     if (this.db.open) this.db.close();
+  }
+
+  subscribeChanges(onChange: () => void, onClose: () => void): () => void {
+    this.changes.on("change", onChange);
+    this.changes.on("close", onClose);
+    return () => {
+      this.changes.off("change", onChange);
+      this.changes.off("close", onClose);
+    };
+  }
+
+  async getResource(resourceID: string): Promise<RemoteMachine | undefined> {
+    const row = this.db.prepare("SELECT payload_json FROM core_machines WHERE json_extract(payload_json, '$.resource_id') = ?")
+      .get(resourceID) as PayloadRow | undefined;
+    return row ? parsePayload<RemoteMachine>(row.payload_json, "machine") : undefined;
   }
 
   async load(): Promise<BackendState> {
@@ -197,6 +216,7 @@ export class StateStore {
           if (machines >= input.limit) return { status: "limit_reached" } as const;
         }
         const startedAt = new Date().toISOString();
+        input.machine.resource_id = randomUUID();
         this.db.prepare(`
           INSERT INTO core_machine_creates (
             operation_id, org_id, user_id, name, provider, provider_name, started_at
@@ -436,7 +456,12 @@ export class StateStore {
     if (machine.user_id !== userID) throw new Error("machine user_id does not match rename owner");
     await this.mutate(() => {
       if (this.machineCleanupRow(userID, fromName)) throw new MachineCleanupPendingError(fromName);
-      this.db.prepare("DELETE FROM core_machines WHERE user_id = ? AND name = ?").run(userID, fromName);
+      const existing = this.db.prepare("SELECT payload_json FROM core_machines WHERE user_id = ? AND name = ?")
+        .get(userID, fromName) as PayloadRow | undefined;
+      if (!existing) throw new Error("machine does not exist");
+      machine.resource_id = parsePayload<RemoteMachine>(existing.payload_json, "machine").resource_id;
+      this.db.prepare("UPDATE core_machines SET name = ? WHERE user_id = ? AND name = ?")
+        .run(machine.name, userID, fromName);
       this.writeMachine(machine);
     });
   }
@@ -641,7 +666,11 @@ export class StateStore {
   }
 
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
-    const update = this.pendingUpdate.then(fn);
+    const update = this.pendingUpdate.then(async () => {
+      const result = await fn();
+      this.changes.emit("change");
+      return result;
+    });
     this.pendingUpdate = update.then(() => {}, () => {});
     return update;
   }
@@ -649,6 +678,11 @@ export class StateStore {
   private writeMachine(machine: RemoteMachine): void {
     const userID = machine.user_id;
     if (!userID) throw new Error("machine user_id is required");
+    const existing = this.db.prepare("SELECT payload_json FROM core_machines WHERE user_id = ? AND name = ?")
+      .get(userID, machine.name) as PayloadRow | undefined;
+    machine.resource_id = existing
+      ? parsePayload<RemoteMachine>(existing.payload_json, "machine").resource_id
+      : machine.resource_id || randomUUID();
     const cleanup = this.machineCleanupRow(userID, machine.name);
     if (cleanup && (machine.org_id || userID) !== cleanup.team_id) {
       throw new MachineCleanupPendingError(machine.name);
@@ -831,6 +865,7 @@ export class StateStore {
     if (!row) {
       if (!createIfMissing) return;
       const recovered: RemoteMachine = {
+        resource_id: randomUUID(),
         name: reservation.name,
         user_id: reservation.user_id,
         org_id: reservation.org_id,
@@ -1008,6 +1043,56 @@ const coreMigrations: BackendDatabaseMigration[] = [{
     // Names are already unique per team. Keep the storage key independent of
     // provider IDs so a pending numeric name cannot collide with a ready image.
     database.exec("UPDATE core_images SET identity = 'name:' || name");
+  },
+}, {
+  version: 8,
+  migrate(database) {
+    for (const row of database.prepare("SELECT user_id, name, payload_json FROM core_machines").all() as Array<PayloadRow & { user_id: string; name: string }>) {
+      const machine = parsePayload<RemoteMachine>(row.payload_json, "machine");
+      machine.resource_id = randomUUID();
+      database.prepare("UPDATE core_machines SET payload_json = ? WHERE user_id = ? AND name = ?")
+        .run(JSON.stringify(machine), row.user_id, row.name);
+    }
+    database.exec(`
+      CREATE UNIQUE INDEX core_machine_resource_id ON core_machines(json_extract(payload_json, '$.resource_id'));
+      CREATE TABLE core_team_events (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+        team_id TEXT NOT NULL,
+        resource_id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK(kind IN ('resource.changed', 'resource.removed'))
+      );
+      CREATE INDEX core_team_events_team ON core_team_events(team_id, sequence);
+      INSERT INTO core_metadata(key, value) VALUES ('team_event_floor', '0');
+      CREATE TRIGGER core_resource_insert AFTER INSERT ON core_machines
+      WHEN NEW.org_id IS NOT NULL
+      BEGIN
+        INSERT INTO core_team_events(team_id, resource_id, kind)
+        VALUES (NEW.org_id, json_extract(NEW.payload_json, '$.resource_id'), 'resource.changed');
+      END;
+      CREATE TRIGGER core_resource_change AFTER UPDATE ON core_machines
+      WHEN json_remove(OLD.payload_json, '$.updated_at', '$.agent_last_seen_at', '$.agent_token_hash', '$.create_operation_id')
+        IS NOT json_remove(NEW.payload_json, '$.updated_at', '$.agent_last_seen_at', '$.agent_token_hash', '$.create_operation_id')
+      BEGIN
+        INSERT INTO core_team_events(team_id, resource_id, kind)
+          SELECT OLD.org_id, json_extract(OLD.payload_json, '$.resource_id'), 'resource.removed'
+          WHERE OLD.org_id IS NOT NULL AND OLD.org_id IS NOT NEW.org_id;
+        INSERT INTO core_team_events(team_id, resource_id, kind)
+          SELECT NEW.org_id, json_extract(NEW.payload_json, '$.resource_id'), 'resource.changed'
+          WHERE NEW.org_id IS NOT NULL;
+      END;
+      CREATE TRIGGER core_resource_delete AFTER DELETE ON core_machines
+      WHEN OLD.org_id IS NOT NULL
+      BEGIN
+        INSERT INTO core_team_events(team_id, resource_id, kind)
+        VALUES (OLD.org_id, json_extract(OLD.payload_json, '$.resource_id'), 'resource.removed');
+      END;
+      CREATE TRIGGER core_team_event_retention AFTER INSERT ON core_team_events
+      WHEN NEW.sequence > 10000
+      BEGIN
+        UPDATE core_metadata SET value = CAST(NEW.sequence - 10000 AS TEXT) WHERE key = 'team_event_floor';
+        DELETE FROM core_team_events WHERE sequence <= NEW.sequence - 10000;
+      END;
+    `);
   },
 }];
 

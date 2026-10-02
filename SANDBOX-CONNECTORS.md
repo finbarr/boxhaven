@@ -1,7 +1,13 @@
 # Sandbox connectors for BoxHaven Desktop
 
-Status: architecture proposal, not implemented. Research checked September 27,
-2026 (Pacific). Repository baseline: `14074a1`.
+Status: implementation in progress. Research checked September 27, 2026 (Pacific).
+Original repository baseline: `14074a1`.
+
+Implemented foundation: stable backend resource IDs, transactional team resource
+events, authenticated snapshot/SSE APIs, bounded replay, and membership checks.
+Provider adapters, delegated transports, connection management, and desktop
+integration remain in progress; the provider research below is not a claim of
+shipped support.
 
 ## 1. Recommendation
 

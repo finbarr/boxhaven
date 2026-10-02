@@ -13,6 +13,7 @@ import { BackendModule, BackendModuleContext, BackendModuleRuntime, BackendTeam,
 import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyActor, PolicyTeam, policyMachineIdentity } from "./policy.js";
 import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
+import { registerTeamSync } from "./team_sync.js";
 import { GitHubReleaseChecker, ReleaseUpdateChecker } from "./releases.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { AmbiguousImageReferenceError, DeletionGuardError, MachineCleanupPendingError, StateStore, TeamDeletionBlockers } from "./state.js";
@@ -178,6 +179,15 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   void app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
   registerCors(app, options.corsOrigins || []);
   const agents = new Map<string, AgentConnection>();
+  registerTeamSync(app, {
+    store: options.store,
+    authorize: async (headers, teamID) => {
+      const sink = { code: (_status: number) => ({ send: (_payload: unknown) => undefined }) };
+      const auth = await requireAuth(options, { headers }, sink);
+      if (!auth) return "unauthorized";
+      return auth.teams.some(team => team.id === teamID) ? "allowed" : "forbidden";
+    },
+  });
   app.after(() => {
     app.get("/v1/agent/connect", { websocket: true }, async (socket, request) => {
       await handleAgentConnection(options, agents, socket, request);
