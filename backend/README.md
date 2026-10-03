@@ -48,8 +48,57 @@ Run `node --import tsx --test src/team_sync.test.ts` for real HTTP stream covera
 with two clients, restart/rename identity, team isolation, and retention checks.
 The backend suite also checks these routes with real Better Auth membership.
 
-These APIs are the first connector foundation. New sandbox providers, shared
-terminal access, and desktop event subscriptions are separate implementation work.
+## Shared resource control
+
+These routes work with every configured provider through the same authorization
+layer. They use the stable resource UUID, including for a teammate's resource:
+
+| Route | Purpose |
+| --- | --- |
+| `GET /v1/resources/:resourceID` | Safe metadata, caller role, capabilities, and stable console URL |
+| `GET/PUT /v1/resources/:resourceID/sharing` | Owner/admin sharing policy with optimistic revision checks |
+| `POST /v1/resources/:resourceID/access/ssh` | Operator access using a public key and a 60–900 second certificate lifetime |
+| `GET /v1/resources/:resourceID/preview` | Operator-only preview descriptor; no traffic or account credentials |
+| `POST /v1/resources/:resourceID/sessions/prepare` | Durable, idempotent session preparation |
+| `GET /v1/resources/:resourceID/operations` | Last 50 session request outcomes, available to operators |
+
+All team members can view metadata. By default only the resource owner and team
+administrators can operate it or manage sharing. Managers can grant operator
+access to the team or specific memberships; individual viewer grants override
+the team default. Removing a member invalidates their grant, even if the same
+user later rejoins. Team moves clear the old sharing policy and operation records.
+Operator access permits commands and files under the resource's shared OS user.
+Resources stay in their team when their creator leaves. Existing name-based CLI
+routes also deny access after removal; listing boxes no longer transfers those
+resources into a former member's personal team. Team administrators retain access.
+
+Sharing updates require `{ team_id, revision, team_role, members: [{ member_id, role }] }`.
+Roles in that document are `viewer` or `operator`; management authority comes
+from ownership and Better Auth team roles. A stale revision or team returns `409`.
+
+Session preparation accepts `{ command: string[], attach: boolean }` and requires
+an `Idempotency-Key` header. A retry with the same arguments returns the original
+operation without another RPC. Reusing a key with different arguments returns
+`409`. Pending operations return `202`; completed requests return `200`. A lost
+RPC response or backend restart makes the outcome `unknown` (`409`): inspect the
+existing session before submitting new work. Commands are hashed for deduplication;
+the journal does not store their arguments. Completed preparation records are
+observations, not ongoing agent activity or task-completion signals.
+
+The stable console URL is `/resources/<UUID>` and requires team membership.
+It is a resource-sharing link, not a public preview grant. Existing public VM
+previews remain public; exe.dev previews still require provider login. Private
+BoxHaven-authorized preview URLs and direct native provider transports remain work
+in the [connector proposal](../SANDBOX-CONNECTORS.md).
+
+Revocation denies new credentials. WebSocket bridge streams close at grant expiry;
+ordinary SSH certificates limit new handshakes but do not terminate existing TCP
+sessions. Active revocation and renewal are not implemented. Migration 9 stores
+sharing, an operation journal, and credential-free access/sharing audit records.
+
+Verification: `npm test` covers authorization across TCP/WebSocket transports,
+membership removal/rejoin, duplicate requests, lost responses, and restart/move
+recovery.
 
 ## Direct sandbox transports
 

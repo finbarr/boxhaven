@@ -1,3 +1,5 @@
+export type { ResourceRole, ResourceSharing, ResourceOperation, SharedResource, ResourceResponse, FleetResponse } from "./resource_types.js";
+
 export type AuthProvidersResponse = {
   social_providers: string[];
 };
@@ -5,6 +7,7 @@ export type AuthProvidersResponse = {
 export type AuthUser = {
   id: string;
   email: string;
+  name?: string;
 };
 
 export type TeamInfo = {
@@ -150,6 +153,8 @@ export type APIRequestInit = {
   method?: string;
   body?: unknown;
   credentials?: RequestCredentials;
+  signal?: AbortSignal;
+  idempotencyKey?: string;
 };
 
 export class BoxHavenAPIError extends Error {
@@ -171,11 +176,13 @@ export async function apiRequest<T = unknown>(
 ): Promise<T> {
   const response = await fetch(`${baseURL.replace(/\/+$/, "")}${path}`, {
     method: init.method || "GET",
+    signal: init.signal,
     ...(init.credentials ? { credentials: init.credentials } : {}),
     headers: {
       "X-BoxHaven-Protocol": "1",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(init.idempotencyKey ? { "Idempotency-Key": init.idempotencyKey } : {}),
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });

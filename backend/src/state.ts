@@ -7,6 +7,7 @@ import { applyBackendMigrations, type BackendDatabaseMigration } from "./databas
 import { policyMachineIdentity } from "./policy.js";
 import type { MachineLifecycleAction, MachineLifecycleEvent } from "./policy.js";
 import { BackendState, MachineSizeShortcut, RemoteMachine, TeamImageRecord, stateVersion } from "./types.js";
+import type { ResourceOperation, ResourceSharing } from "./resource_types.js";
 
 type PayloadRow = { payload_json: string };
 type MetadataRow = { value: string };
@@ -119,6 +120,89 @@ export class StateStore {
     const row = this.db.prepare("SELECT payload_json FROM core_machines WHERE json_extract(payload_json, '$.resource_id') = ?")
       .get(resourceID) as PayloadRow | undefined;
     return row ? parsePayload<RemoteMachine>(row.payload_json, "machine") : undefined;
+  }
+
+  resourceSharing(resourceID: string): ResourceSharing {
+    const row = this.db.prepare("SELECT payload_json, team_id FROM core_resource_sharing WHERE resource_id = ?").get(resourceID) as (PayloadRow & { team_id: string }) | undefined;
+    if (row) return { ...parsePayload<ResourceSharing>(row.payload_json, "resource sharing"), team_id: row.team_id };
+    const machine = this.db.prepare("SELECT org_id FROM core_machines WHERE json_extract(payload_json, '$.resource_id') = ?")
+      .get(resourceID) as { org_id: string } | undefined;
+    return { team_id: machine?.org_id || "", revision: 0, team_role: "viewer", members: [] };
+  }
+
+  async invalidateResource(resourceID: string): Promise<void> {
+    await this.enqueue(async () => {
+      // Runtime connection state lives in memory. Persist just its invalidation
+      // so clients reload capabilities without publishing every heartbeat.
+      if (!this.db.open) return;
+      this.db.prepare(`INSERT INTO core_team_events(team_id, resource_id, kind)
+        SELECT org_id, ?, 'resource.changed' FROM core_machines
+        WHERE json_extract(payload_json, '$.resource_id') = ? AND org_id IS NOT NULL`).run(resourceID, resourceID);
+    });
+  }
+
+  async setResourceSharing(resourceID: string, teamID: string, actorID: string, sharing: ResourceSharing): Promise<boolean> {
+    return this.enqueue(async () => {
+      await this.beforeMutation();
+      return this.db.transaction(() => {
+        const machine = this.db.prepare("SELECT org_id FROM core_machines WHERE json_extract(payload_json, '$.resource_id') = ?")
+          .get(resourceID) as { org_id: string } | undefined;
+        if (machine?.org_id !== teamID || sharing.team_id !== teamID || this.resourceSharing(resourceID).revision !== sharing.revision) return false;
+        this.db.prepare(`INSERT INTO core_resource_sharing(resource_id, team_id, payload_json) VALUES (?, ?, ?)
+          ON CONFLICT(resource_id) DO UPDATE SET payload_json = excluded.payload_json`)
+          .run(resourceID, teamID, JSON.stringify({ ...sharing, revision: sharing.revision + 1 }));
+        this.db.prepare("INSERT INTO core_resource_audit(resource_id, team_id, actor_id, action, occurred_at) VALUES (?, ?, ?, 'sharing.updated', ?)")
+          .run(resourceID, teamID, actorID, new Date().toISOString());
+        this.touch();
+        return true;
+      })();
+    });
+  }
+
+  resourceOperations(resourceID: string): ResourceOperation[] {
+    return (this.db.prepare("SELECT payload_json FROM core_resource_operations WHERE resource_id = ? ORDER BY rowid DESC LIMIT 50")
+      .all(resourceID) as PayloadRow[]).map(row => parsePayload<ResourceOperation>(row.payload_json, "resource operation"));
+  }
+
+  resourceOperation(resourceID: string, actorID: string, key: string): { operation: ResourceOperation; requestHash: string } | undefined {
+    const row = this.db.prepare("SELECT payload_json, request_hash FROM core_resource_operations WHERE resource_id = ? AND actor_id = ? AND idempotency_key = ?")
+      .get(resourceID, actorID, key) as (PayloadRow & { request_hash: string }) | undefined;
+    return row ? { operation: parsePayload<ResourceOperation>(row.payload_json, "resource operation"), requestHash: row.request_hash } : undefined;
+  }
+
+  async reserveResourceOperation(resourceID: string, teamID: string, actorID: string, key: string, requestHash: string): Promise<ResourceOperation | undefined> {
+    return this.enqueue(async () => {
+      await this.beforeMutation();
+      return this.db.transaction(() => {
+        const machine = this.db.prepare("SELECT org_id FROM core_machines WHERE json_extract(payload_json, '$.resource_id') = ?")
+          .get(resourceID) as { org_id: string } | undefined;
+        if (machine?.org_id !== teamID) return undefined;
+        const now = new Date().toISOString();
+        const operation: ResourceOperation = { id: randomUUID(), resource_id: resourceID, actor_id: actorID, kind: "session.prepare", state: "pending", created_at: now, updated_at: now };
+        const inserted = this.db.prepare(`INSERT INTO core_resource_operations(id, resource_id, team_id, actor_id, idempotency_key, request_hash, payload_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(resource_id, actor_id, idempotency_key) DO NOTHING`)
+          .run(operation.id, resourceID, teamID, actorID, key, requestHash, JSON.stringify(operation));
+        if (!inserted.changes) return undefined;
+        this.touch();
+        return operation;
+      })();
+    });
+  }
+
+  async finishResourceOperation(operation: ResourceOperation): Promise<void> {
+    await this.enqueue(async () => {
+      await this.beforeMutation();
+      // A late RPC must not resurrect a moved/deleted resource or a recovered operation.
+      this.db.prepare("UPDATE core_resource_operations SET payload_json = ? WHERE id = ? AND json_extract(payload_json, '$.state') = 'pending'")
+        .run(JSON.stringify(operation), operation.id);
+      this.touch();
+    });
+  }
+
+  recoverResourceOperations(): void {
+    this.db.prepare(`UPDATE core_resource_operations SET payload_json = json_set(payload_json,
+      '$.state', 'unknown', '$.error_code', 'backend_restarted', '$.updated_at', ?)
+      WHERE json_extract(payload_json, '$.state') = 'pending'`).run(new Date().toISOString());
   }
 
   async load(): Promise<BackendState> {
@@ -1093,6 +1177,55 @@ const coreMigrations: BackendDatabaseMigration[] = [{
         DELETE FROM core_team_events WHERE sequence <= NEW.sequence - 10000;
       END;
     `);
+  },
+}, {
+  version: 9,
+  migrate(database) {
+    database.exec(`
+      CREATE TABLE core_resource_sharing (
+        resource_id TEXT PRIMARY KEY,
+        team_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL
+      );
+      CREATE TABLE core_resource_operations (
+        id TEXT PRIMARY KEY,
+        resource_id TEXT NOT NULL,
+        team_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        UNIQUE(resource_id, actor_id, idempotency_key)
+      );
+      CREATE INDEX core_resource_operations_resource ON core_resource_operations(resource_id);
+      CREATE TABLE core_resource_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        resource_id TEXT NOT NULL,
+        team_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        occurred_at TEXT NOT NULL
+      );
+      CREATE TRIGGER core_resource_overlay_delete AFTER DELETE ON core_machines
+      BEGIN
+        DELETE FROM core_resource_sharing WHERE resource_id = json_extract(OLD.payload_json, '$.resource_id');
+        DELETE FROM core_resource_operations WHERE resource_id = json_extract(OLD.payload_json, '$.resource_id');
+      END;
+      CREATE TRIGGER core_resource_overlay_move AFTER UPDATE OF org_id ON core_machines
+      WHEN OLD.org_id IS NOT NEW.org_id
+      BEGIN
+        DELETE FROM core_resource_sharing WHERE resource_id = json_extract(OLD.payload_json, '$.resource_id');
+        DELETE FROM core_resource_operations WHERE resource_id = json_extract(OLD.payload_json, '$.resource_id');
+      END;
+    `);
+    for (const table of ["core_resource_sharing", "core_resource_operations"]) {
+      for (const action of ["INSERT", "UPDATE"]) {
+        database.exec(`CREATE TRIGGER ${table}_${action.toLowerCase()} AFTER ${action} ON ${table}
+          BEGIN
+            INSERT INTO core_team_events(team_id, resource_id, kind) VALUES (NEW.team_id, NEW.resource_id, 'resource.changed');
+          END;`);
+      }
+    }
   },
 }];
 

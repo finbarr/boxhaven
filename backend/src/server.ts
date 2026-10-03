@@ -14,6 +14,7 @@ import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, Mach
 import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
 import { registerTeamSync } from "./team_sync.js";
+import { registerResourceControl } from "./resource_control.js";
 import { GitHubReleaseChecker, ReleaseUpdateChecker } from "./releases.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
 import { machineSSHAccess } from "./ssh_access.js";
@@ -180,6 +181,16 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   void app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
   registerCors(app, options.corsOrigins || []);
   const agents = new Map<string, AgentConnection>();
+  registerResourceControl(app, {
+    context: moduleContext,
+    runtimeConnected: machine => !!connectedAgent(agents, machine),
+    issueSSH: (machine, actorID, publicKey, ttl) => issueMachineSSHCertificate(options, machine, actorID, publicKey, ttl),
+    prepareSession: async (machine, command, attach) => {
+      const agent = connectedAgent(agents, machine);
+      if (!agent) throw new AgentRPCError("Resource runtime disconnected", "agent_disconnected");
+      return callAgentRPC(agent, "prepare_session", { ...machineRuntimePayload(options, machine), command, attach }, agentRPCDefaultTimeout);
+    },
+  });
   registerTeamSync(app, {
     store: options.store,
     authorize: async (headers, teamID) => {
@@ -591,7 +602,8 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     await syncProviderMachines(options, auth);
     const machines: TeamMachine[] = [];
     for (const machine of await options.store.listMachinesForUser(auth.userID)) {
-      const healed = await healMachineTeam(options, auth, machine);
+      if (machine.org_id && !auth.teams.some(team => team.id === machine.org_id)) continue;
+      const healed = await refreshMachineTeam(options, auth, machine);
       machines.push({ ...decorateTeam(publicMachine(normalizeMachine(options, healed)), auth.teams), owner_email: auth.email, owner_name: auth.name });
     }
     return { machines };
@@ -603,10 +615,10 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const name = request.params.name;
     const error = validateName(name);
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
-    let existing = await options.store.getMachine(auth.userID, name);
+    let existing = await ownedMachine(options, auth, name);
     if (!existing) {
       await syncProviderMachines(options, auth);
-      existing = await options.store.getMachine(auth.userID, name);
+      existing = await ownedMachine(options, auth, name);
     }
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     if (existing.create_state) return machineCreateRecoveryReply(existing, reply);
@@ -615,7 +627,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const refreshed = await provider.getMachine(existing);
     const machine = normalizeMachine(options, { ...mergeProviderMachine(existing, refreshed.machine), name, user_id: auth.userID });
     await options.store.putMachine(machine);
-    const healed = await healMachineTeam(options, auth, machine);
+    const healed = await refreshMachineTeam(options, auth, machine);
     return { machine: decorateTeam(publicMachine(healed), auth.teams), status: refreshed.status || "leased" };
   });
 
@@ -625,10 +637,10 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const name = request.params.name;
     const error = validateName(name);
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
-    let existing = await options.store.getMachine(auth.userID, name);
+    let existing = await ownedMachine(options, auth, name);
     if (!existing) {
       await syncProviderMachines(options, auth);
-      existing = await options.store.getMachine(auth.userID, name);
+      existing = await ownedMachine(options, auth, name);
     }
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     if (existing.create_state) return machineCreateRecoveryReply(existing, reply);
@@ -637,7 +649,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const refreshed = await provider.getMachine(existing);
     const machine = normalizeMachine(options, { ...mergeProviderMachine(existing, refreshed.machine), name, user_id: auth.userID });
     await options.store.putMachine(machine);
-    const healed = await healMachineTeam(options, auth, machine);
+    const healed = await refreshMachineTeam(options, auth, machine);
     return {
       machine: decorateTeam(publicMachine(healed), auth.teams),
       status: refreshed.status || "leased",
@@ -659,10 +671,10 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const toError = validateName(toName);
     if (toError) return reply.code(400).send({ id: "bad_request", message: toError });
 
-    let existing = await options.store.getMachine(auth.userID, fromName);
+    let existing = await ownedMachine(options, auth, fromName);
     if (!existing) {
       await syncProviderMachines(options, auth);
-      existing = await options.store.getMachine(auth.userID, fromName);
+      existing = await ownedMachine(options, auth, fromName);
     }
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
 
@@ -702,14 +714,13 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const name = request.params.name;
     const error = validateName(name);
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
-    const machine = await options.store.getMachine(auth.userID, name);
+    const machine = await ownedMachine(options, auth, name);
     if (!machine) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     if (machine.create_state) return machineCreateRecoveryReply(machine, reply);
     if (!machine.bootstrap_complete) {
       return reply.code(409).send({ id: "not_bootstrapped", message: "remote machine is not bootstrapped" });
     }
     const normalized = normalizeMachine(options, machine);
-    const principal = normalized.ssh_principal || sshPrincipalForMachine(normalized);
     if (!normalized.public_ipv4 && !normalized.ssh_transport) {
       return reply.code(409).send({ id: "not_ready", message: "remote machine does not have a public IPv4 yet" });
     }
@@ -717,21 +728,8 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (!/^ssh-[A-Za-z0-9-]+\s+\S+/.test(publicKey)) {
       return reply.code(400).send({ id: "bad_request", message: "valid SSH public key is required" });
     }
-    const signed = await options.sshCA.signUserPublicKey({
-      publicKey,
-      principal,
-      identity: `boxhaven-${auth.userID}-${normalized.name}`,
-      ttlSeconds: request.body?.ttl_seconds,
-    });
-    const access = await machineSSHAccess(options.providers.forMachine(normalized), normalized, auth.userID, signed.expires_at);
     reply.header("Cache-Control", "no-store");
-    return {
-      ...signed,
-      access,
-      host: access.kind === "tcp" ? access.host : `${normalized.resource_id}.boxhaven.invalid`,
-      port: access.kind === "tcp" ? access.port : 22,
-      ssh_user: normalized.ssh_user || defaultSSHUser,
-    };
+    return issueMachineSSHCertificate(options, normalized, auth.userID, publicKey, request.body?.ttl_seconds);
   });
 
   app.post<{ Params: { name: string }; Body: RemoteSetupRequest }>("/v1/machines/:name/setup", async (request, reply) => {
@@ -754,7 +752,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const name = request.params.name;
     const error = validateName(name);
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
-    const existing = await options.store.getMachine(auth.userID, name);
+    const existing = await ownedMachine(options, auth, name);
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     const body = normalizeWorkspaceRequest(request.body, existing);
     const now = new Date().toISOString();
@@ -817,7 +815,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const name = request.params.name;
     const error = validateName(name);
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
-    const existing = await options.store.getMachine(auth.userID, name);
+    const existing = await ownedMachine(options, auth, name);
     if (!existing) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     const machine = normalizeMachine(options, {
       ...existing,
@@ -836,10 +834,10 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const name = request.params.name;
     const error = validateName(name);
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
-    let existing = await options.store.getMachine(auth.userID, name);
+    let existing = await ownedMachine(options, auth, name);
     if (!existing) {
       await syncProviderMachines(options, auth);
-      existing = await options.store.getMachine(auth.userID, name);
+      existing = await ownedMachine(options, auth, name);
     }
     if (existing) {
       const provider = providerForMachine(options, existing, reply);
@@ -871,7 +869,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     const machineName = normalizeMachineName(bodyString(request.body?.machine));
     const nameError = validateName(machineName);
     if (nameError) return reply.code(400).send({ id: "bad_request", message: nameError });
-    const machine = await options.store.getMachine(auth.userID, machineName);
+    const machine = await ownedMachine(options, auth, machineName);
     if (!machine) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     if ((machine.org_id || auth.orgID) !== auth.orgID) {
       return reply.code(403).send({ id: "forbidden", message: "box is not in the active team" });
@@ -987,7 +985,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     if (error) return reply.code(400).send({ id: "bad_request", message: error });
     const reference = bodyString(request.body?.team).trim();
     if (!reference) return reply.code(400).send({ id: "bad_request", message: "target team is required" });
-    const machine = await options.store.getMachine(auth.userID, name);
+    const machine = await ownedMachine(options, auth, name);
     if (!machine) return reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     const found = findTeam(auth.teams, reference);
     if (found.error) {
@@ -1979,6 +1977,20 @@ function connectedAgent(agents: Map<string, AgentConnection>, machine: RemoteMac
   return agent?.socket.readyState === WebSocket.OPEN ? agent : undefined;
 }
 
+async function issueMachineSSHCertificate(options: BackendOptions, machine: RemoteMachine, actorID: string, publicKey: string, ttl?: number) {
+  const normalized = normalizeMachine(options, machine);
+  const signed = await options.sshCA.signUserPublicKey({
+    publicKey, principal: normalized.ssh_principal || sshPrincipalForMachine(normalized),
+    identity: `boxhaven-${actorID}-${normalized.resource_id}`, ttlSeconds: ttl,
+  });
+  const access = await machineSSHAccess(options.providers.forMachine(normalized), normalized, actorID, signed.expires_at);
+  return {
+    ...signed, access,
+    host: access.kind === "tcp" ? access.host : `${normalized.resource_id}.boxhaven.invalid`,
+    port: access.kind === "tcp" ? access.port : 22, ssh_user: normalized.ssh_user || defaultSSHUser,
+  };
+}
+
 async function waitForCreatedMachineReady(
   options: BackendOptions,
   agents: Map<string, AgentConnection>,
@@ -2091,7 +2103,7 @@ async function requireMachineAgentContext(
     reply.code(400).send({ id: "bad_request", message: error });
     return undefined;
   }
-  const machine = await options.store.getMachine(auth.userID, name);
+  const machine = await ownedMachine(options, auth, name);
   if (!machine?.user_id) {
     reply.code(404).send({ id: "not_found", message: "machine does not exist" });
     return undefined;
@@ -2267,13 +2279,21 @@ function decorateTeam(machine: RemoteMachine, teams: TeamInfo[]): TeamMachine {
   };
 }
 
-// Boxes whose team the owner can no longer see (the team was deleted, or the
-// owner left it) follow the owner back to their active team. auth.orgID is
-// membership-validated in requireAuth, so healing never targets a stale team.
-async function healMachineTeam(options: BackendOptions, auth: AuthContext, machine: RemoteMachine): Promise<RemoteMachine> {
+async function ownedMachine(options: BackendOptions, auth: AuthContext, name: string): Promise<RemoteMachine | undefined> {
+  const machine = await options.store.getMachine(auth.userID, name);
+  if (machine?.org_id && !auth.teams.some(team => team.id === machine.org_id)) {
+    // Name-based CLI routes obey the same membership boundary as UUID routes.
+    // Fail before provider discovery or control calls can run.
+    throw Object.assign(new Error("machine does not exist"), { statusCode: 404, code: "not_found" });
+  }
+  return machine;
+}
+
+// Refresh team display metadata without transferring resources after offboarding.
+async function refreshMachineTeam(options: BackendOptions, auth: AuthContext, machine: RemoteMachine): Promise<RemoteMachine> {
   const currentTeam = auth.teams.find((team) => team.id === machine.org_id);
   if (currentTeam && machine.org_name === currentTeam.name && machine.org_slug === currentTeam.slug) return machine;
-  if (!auth.orgID) return machine;
+  if (!auth.orgID || (machine.org_id && !currentTeam)) return machine;
   const team = currentTeam || auth.teams.find((candidate) => candidate.id === auth.orgID);
   const healed = {
     ...machine,
@@ -2347,7 +2367,10 @@ async function handleAgentConnection(
   });
   socket.on("close", () => {
     if (!agent) return;
-    if (agents.get(key) === agent) agents.delete(key);
+    if (agents.get(agent.machineKey) === agent) {
+      agents.delete(agent.machineKey);
+      void options.store.invalidateResource(agent.machine.resource_id!);
+    }
     for (const call of agent.calls.values()) {
       clearTimeout(call.timer);
       call.reject(new AgentRPCError("remote machine agent disconnected", "agent_disconnected"));
@@ -2381,6 +2404,7 @@ async function handleAgentConnection(
   };
   agents.set(key, agent);
   agent.machine = await markAgentSeen(options, machine);
+  await options.store.invalidateResource(machine.resource_id!);
   for (const message of pendingMessages.splice(0)) {
     void handleAgentMessage(options, agent, message);
   }
@@ -2803,7 +2827,7 @@ function registerCors(app: FastifyInstance, origins: string[]): void {
   if (allowed.size === 0) return;
   void app.register(cors, {
     credentials: true,
-    allowedHeaders: ["authorization", "content-type", "x-boxhaven-protocol"],
+    allowedHeaders: ["authorization", "content-type", "x-boxhaven-protocol", "idempotency-key"],
     exposedHeaders: ["x-boxhaven-protocol"],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     origin(origin, callback) {

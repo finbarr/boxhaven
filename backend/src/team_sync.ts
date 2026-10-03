@@ -1,19 +1,20 @@
 import type { FastifyInstance } from "fastify";
 import type { StateStore } from "./state.js";
 import type { RemoteMachine } from "./types.js";
+import type { SharedResource } from "./resource_types.js";
 
 type Headers = Record<string, string | string[] | undefined>;
 type TeamEvent = { sequence: number; team_id: string; resource_id: string; kind: "resource.changed" | "resource.removed" };
 
 /** Explicit allowlist: shared snapshots never contain agent credentials or commands. */
-export function teamResource(machine: RemoteMachine) {
+export function teamResource(machine: RemoteMachine): SharedResource {
   return {
     resource_id: machine.resource_id!, name: machine.name, team_id: machine.org_id,
     owner_id: machine.user_id, provider: machine.provider, provider_id: machine.provider_id,
     provider_label: machine.provider_label, region: machine.region, size: machine.size,
     image: machine.image, image_name: machine.image_name, created_at: machine.created_at,
     bootstrap_complete: machine.bootstrap_complete === true, create_state: machine.create_state,
-    preview_url: machine.preview_url, project_path: machine.project_path,
+    project_path: machine.project_path,
     runtime_protocol: machine.runtime_protocol, runtime_version: machine.runtime_version,
   };
 }

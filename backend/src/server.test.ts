@@ -2326,6 +2326,149 @@ test("team resource snapshots use live Better Auth membership and stable backend
   assert.equal((await app.inject({ url: path, headers: memberHeaders })).statusCode, 403);
 });
 
+test("resource permissions apply to TCP and WebSocket providers without provider inventory polling", async t => {
+  const sandbox = new FakeProvider("sandbox", "Sandbox Cloud");
+  let grants = 0;
+  (sandbox as MachineProvider).issueSSHAccess = async (_machine, expiresAt) => {
+    grants++;
+    return { kind: "websocket", url: "wss://sandbox.provider.test/ssh", headers: { Authorization: "Bearer sandbox-scoped" }, expires_at: expiresAt };
+  };
+  const { app, store, provider, token } = await createTestBackend("fleet-owner@example.com", "password123", { extraProviders: [sandbox] });
+  t.after(() => app.close());
+  const headers = { authorization: `Bearer ${token}` };
+  const owner = (await app.inject({ url: "/v1/auth/whoami", headers })).json();
+  const memberToken = await signUp(app, "fleet-member@example.com");
+  const memberHeaders = { authorization: `Bearer ${memberToken}` };
+  const member = (await app.inject({ url: "/v1/auth/whoami", headers: memberHeaders })).json();
+  const membershipID = randomUUID();
+  const join = (id: string) => store.db.prepare("INSERT INTO member(id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'member', ?)").run(id, owner.team.id, member.user.id, Date.now());
+  join(membershipID);
+  const ids: string[] = [];
+  for (const name of ["fake", "sandbox"]) {
+    const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: `fleet-${name}`, provider: name } });
+    assert.equal(created.statusCode, 201, created.body);
+    ids.push(created.json().machine.resource_id);
+  }
+  const wsMachine = (await store.getResource(ids[1]))!;
+  await store.putMachine({ ...wsMachine, public_ipv4: undefined, ssh_transport: "websocket", preview_transport: "provider", preview_url: "https://sandbox.provider.test" });
+  provider.failList = true;
+  sandbox.failList = true;
+  for (const id of ids) {
+    const path = `/v1/resources/${id}`;
+    const detail = await app.inject({ url: path, headers: memberHeaders });
+    assert.equal(detail.statusCode, 200, detail.body);
+    assert.equal(detail.json().role, "viewer");
+    assert.equal(detail.json().url, `https://app.hosted.test/resources/${id}`);
+    assert.doesNotMatch(detail.body, /agent_token|ssh_principal|preview_url/);
+    assert.equal((await app.inject({ method: "POST", url: `${path}/access/ssh`, headers: memberHeaders, payload: { public_key: testSSHUserPublicKey } })).statusCode, 403);
+    assert.equal((await app.inject({ url: `${path}/preview`, headers: memberHeaders })).statusCode, 403);
+    const sharing = { team_id: owner.team.id, revision: 0, team_role: "viewer", members: [{ member_id: membershipID, role: "operator" }] };
+    assert.equal((await app.inject({ method: "PUT", url: `${path}/sharing`, headers: memberHeaders, payload: sharing })).statusCode, 403);
+    const shared = await app.inject({ method: "PUT", url: `${path}/sharing`, headers, payload: sharing });
+    assert.equal(shared.statusCode, 200, shared.body);
+    assert.equal(shared.json().sharing.revision, 1);
+    assert.equal((await app.inject({ method: "PUT", url: `${path}/sharing`, headers, payload: sharing })).statusCode, 409);
+    const granted = await app.inject({ method: "POST", url: `${path}/access/ssh`, headers: memberHeaders, payload: { public_key: testSSHUserPublicKey } });
+    assert.equal(granted.statusCode, 200, granted.body);
+    assert.equal(granted.headers["cache-control"], "no-store");
+    assert.match(granted.json().grant.certificate, /^ssh-ed25519-cert/);
+    assert.equal(granted.json().grant.access.kind, id === ids[1] ? "websocket" : "tcp");
+  }
+  assert.equal(grants, 1);
+  const renamed = await app.inject({ method: "PATCH", url: "/v1/machines/fleet-fake", headers, payload: { name: "renamed-fleet" } });
+  assert.equal(renamed.statusCode, 200, renamed.body);
+  assert.equal((await app.inject({ url: `/v1/resources/${ids[0]}`, headers: memberHeaders })).json().resource.name, "renamed-fleet");
+  store.db.prepare("DELETE FROM member WHERE id = ?").run(membershipID);
+  assert.equal((await app.inject({ url: `/v1/resources/${ids[0]}`, headers: memberHeaders })).statusCode, 404);
+  join(randomUUID());
+  assert.equal((await app.inject({ url: `/v1/resources/${ids[0]}`, headers: memberHeaders })).json().role, "viewer");
+  assert.equal((await app.inject({ method: "POST", url: `/v1/resources/${ids[1]}/access/ssh`, headers: memberHeaders, payload: { public_key: testSSHUserPublicKey } })).statusCode, 403);
+  assert.equal(grants, 1);
+  const snapshot = await app.inject({ url: `/v1/teams/${owner.team.id}/resources`, headers: memberHeaders });
+  assert.equal(snapshot.json().resources.length, 2);
+});
+
+test("offboarding retains team resources and denies creator access through every name-based control path", async t => {
+  const { app, store, provider, token } = await createTestBackend("fleet-admin@example.com");
+  t.after(() => app.close());
+  const headers = { authorization: `Bearer ${token}` };
+  const owner = (await app.inject({ url: "/v1/auth/whoami", headers })).json();
+  const memberToken = await signUp(app, "fleet-creator@example.com");
+  const memberHeaders = { authorization: `Bearer ${memberToken}` };
+  const member = (await app.inject({ url: "/v1/auth/whoami", headers: memberHeaders })).json();
+  const membershipID = randomUUID();
+  store.db.prepare("INSERT INTO member(id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'member', ?)")
+    .run(membershipID, owner.team.id, member.user.id, Date.now());
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers: memberHeaders, payload: { name: "team-resource", team: owner.team.id } });
+  assert.equal(created.statusCode, 201, created.body);
+  const resourceID = created.json().machine.resource_id;
+  store.db.prepare("DELETE FROM member WHERE id = ?").run(membershipID);
+  for (const [method, suffix, payload] of [
+    ["GET", "", undefined], ["GET", "/connect", undefined],
+    ["PATCH", "", { name: "stolen-resource" }], ["DELETE", "", undefined],
+    ["POST", "/ssh-cert", { public_key: testSSHUserPublicKey }],
+    ["POST", "/setup", { commands: ["true"] }], ["POST", "/sync-complete", {}],
+    ["POST", "/sessions/boxhaven/prepare", { command: ["codex"] }],
+    ["POST", "/commands/ssh", { command: ["true"] }], ["POST", "/commands/record", { command: ["true"] }],
+    ["POST", "/move", { team: member.team.id }],
+  ] as const) {
+    const denied = await app.inject({ method, url: `/v1/machines/team-resource${suffix}`, headers: memberHeaders, ...(payload ? { payload } : {}) });
+    assert.equal(denied.statusCode, 404, `${method} ${suffix}: ${denied.body}`);
+  }
+  const ownList = await app.inject({ url: "/v1/machines", headers: memberHeaders });
+  assert.equal(ownList.statusCode, 200, ownList.body);
+  assert.equal(ownList.json().machines.length, 0);
+  assert.equal((await store.getResource(resourceID))!.org_id, owner.team.id);
+  assert.equal(provider.released.length, 0);
+  const adminView = await app.inject({ url: `/v1/resources/${resourceID}`, headers });
+  assert.equal(adminView.json().role, "manager");
+  const cert = await app.inject({ method: "POST", url: `/v1/resources/${resourceID}/access/ssh`, headers, payload: { public_key: testSSHUserPublicKey } });
+  assert.equal(cert.statusCode, 200, cert.body);
+});
+
+test("resource session operations survive retries and report disconnected RPCs as unknown", async t => {
+  const { app, store, provider, token } = await createTestBackend("fleet-session@example.com");
+  t.after(() => app.close());
+  const headers = { authorization: `Bearer ${token}`, "idempotency-key": "session-first-request" };
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "session-test" } });
+  const id = created.json().machine.resource_id;
+  const path = `/v1/resources/${id}/sessions/prepare`;
+  const payload = { command: ["codex"], attach: false };
+  const agent = await app.injectWS("/v1/agent/connect", { headers: { authorization: `Bearer ${provider.created[0].agent_token}`, host: "127.0.0.1" } });
+  t.after(() => agent.terminate());
+  agent.send(JSON.stringify({ type: "ping" }));
+  await nextWSMessage(agent);
+  let calls = 0;
+  agent.on("message", raw => { if (JSON.parse(raw.toString()).type === "rpc") calls++; });
+  const started = app.inject({ method: "POST", url: path, headers, payload });
+  const rpc = JSON.parse((await nextWSMessageWithTimeout(agent)).toString());
+  assert.equal(rpc.action, "prepare_session");
+  const retry = await app.inject({ method: "POST", url: path, headers, payload });
+  assert.equal(retry.statusCode, 202, retry.body);
+  assert.equal(retry.json().operation.state, "pending");
+  assert.equal(calls, 1);
+  agent.send(JSON.stringify({ type: "rpc_result", rpc_id: rpc.rpc_id, ok: true, result: { status: "started_detached", attach_command: "", record_command: true } }));
+  const result = await started;
+  assert.equal(result.statusCode, 200, result.body);
+  assert.equal(result.json().operation.id, retry.json().operation.id);
+  assert.equal((await app.inject({ method: "POST", url: path, headers, payload })).json().operation.id, result.json().operation.id);
+  assert.equal(calls, 1);
+  assert.equal((await app.inject({ method: "POST", url: path, headers, payload: { command: ["claude"], attach: false } })).statusCode, 409);
+  const disconnectHeaders = { ...headers, "idempotency-key": "session-disconnect-request" };
+  const interrupted = app.inject({ method: "POST", url: path, headers: disconnectHeaders, payload });
+  await nextWSMessageWithTimeout(agent);
+  agent.terminate();
+  const unknown = await interrupted;
+  assert.equal(unknown.statusCode, 409, unknown.body);
+  assert.equal(unknown.json().operation.state, "unknown");
+  const again = await app.inject({ method: "POST", url: path, headers: disconnectHeaders, payload });
+  assert.equal(again.json().operation.id, unknown.json().operation.id);
+  assert.equal(calls, 2);
+  const operations = store.resourceOperations(id);
+  assert.equal(operations.length, 2);
+  assert.doesNotMatch(JSON.stringify(operations), /codex|idempotency|request_hash|agent_token/);
+});
+
 async function createTestBackend(
   email = "user@example.com",
   password = "password123",
