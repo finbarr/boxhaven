@@ -69,10 +69,16 @@ apt_install() {
     libatk-bridge2.0-0t64 \
     libatk1.0-0t64 \
     libatspi2.0-0t64 \
+    libcairo2 \
+    libcups2t64 \
     libgbm1 \
+    libnspr4 \
+    libnss3 \
+    libpango-1.0-0 \
     libxcomposite1 \
     libxdamage1 \
     libxfixes3 \
+    libxkbcommon0 \
     libxrandr2 \
     fd-find \
     bat \
