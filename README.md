@@ -52,7 +52,7 @@ box’s terminal automatically. Rename from the sidebar overflow menu without
 disconnecting. Open its web preview from the header, or use the overflow menu
 to destroy it with confirmation.
 
-[Download BoxHaven for macOS Apple Silicon](https://github.com/finbarr/boxhaven/releases/download/desktop-v0.1.6/BoxHaven-0.1.6-mac-arm64.dmg).
+[Download BoxHaven for macOS Apple Silicon](https://github.com/finbarr/boxhaven/releases/download/desktop-v0.1.7/BoxHaven-0.1.7-mac-arm64.dmg).
 Open the signed, Apple-notarized DMG, drag BoxHaven to Applications, and sign in.
 The CLI is bundled; no development tools are required. Updates download in the
 background and prompt before restarting. See the [desktop guide](docs/desktop.md)

@@ -13,7 +13,7 @@ tracked in [SANDBOX-CONNECTORS.md](../SANDBOX-CONNECTORS.md).
 
 ## Install
 
-[Download the signed macOS Apple Silicon installer](https://github.com/finbarr/boxhaven/releases/download/desktop-v0.1.6/BoxHaven-0.1.6-mac-arm64.dmg).
+[Download the signed macOS Apple Silicon installer](https://github.com/finbarr/boxhaven/releases/download/desktop-v0.1.7/BoxHaven-0.1.7-mac-arm64.dmg).
 Open the DMG, drag BoxHaven to Applications, and sign in. The app includes its CLI
 and terminal runtime. Updates download automatically and offer Restart / Later.
 

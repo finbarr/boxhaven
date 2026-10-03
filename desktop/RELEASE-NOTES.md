@@ -1,9 +1,11 @@
-# BoxHaven Desktop 0.1.6
+# BoxHaven Desktop 0.1.7
 
-- Terminal sessions and file access route through the BoxHaven backend, with
-  short-lived access and live team permission checks.
-- Private previews obtain a fresh access link from the backend.
-- Includes the matching CLI and exe.dev provider support when configured on
-  your backend, alongside DigitalOcean and Hetzner.
+- Create E2B, Daytona, and Blaxel boxes when their credentials and prepared
+  runtimes are configured on your backend.
+- See provider plan details and sandbox deletion deadlines before losing work
+  to an account retention limit.
+- Terminal, file, and private preview access uses the existing backend relay
+  and team permissions. Includes the matching v0.6.0 CLI.
 
-Remote tmux sessions keep running while the desktop app restarts.
+Daytona requires outbound access to the backend under its organization network
+policy. Remote sessions keep running while the desktop app restarts.

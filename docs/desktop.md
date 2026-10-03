@@ -9,7 +9,7 @@ leaves your remote sessions running. Reopen the app to return to the selected bo
 
 ## Downloadable releases
 
-[Download BoxHaven 0.1.6 for macOS Apple Silicon](https://github.com/finbarr/boxhaven/releases/download/desktop-v0.1.6/BoxHaven-0.1.6-mac-arm64.dmg).
+[Download BoxHaven 0.1.7 for macOS Apple Silicon](https://github.com/finbarr/boxhaven/releases/download/desktop-v0.1.7/BoxHaven-0.1.7-mac-arm64.dmg).
 The app and installer are signed with Developer ID and notarized by Apple.
 
 The installer bundles the CLI and terminal runtime, so users do not need

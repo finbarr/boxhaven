@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## v0.6.0 - 2026-10-03
+
+### Added
+
+- E2B, Daytona, and Blaxel adapters in the existing Boxes interface, using the
+  backend for team permissions, terminals, file transfer, and private previews.
+- Prepared runtime image recipes and a reusable live sandbox smoke covering
+  sessions, backend restart, access revocation, previews, and cleanup.
+- E2B lease renewal and memory pause/resume; Blaxel provider expiry notices in
+  the console, desktop, and CLI.
+
+### Changed
+
+- Desktop 0.1.7 shows provider plan details and sandbox deletion deadlines,
+  and bundles the matching CLI.
+- Provider credentials and prepared images are configured per backend.
+  E2B and Blaxel passed live integration tests. Daytona's full live validation
+  requires an account policy that permits outbound access to the backend;
+  restricted accounts receive a clear setup error and recoverable box record.
+
+### Fixed
+
+- Runtime access is checked again after a sandbox resumes, preventing revoked
+  team members from starting work during a delayed resume.
+- Prepared runtimes include the libraries required by headless browser tests.
+
 ## v0.5.1 - 2026-10-03
 
 ### Added
