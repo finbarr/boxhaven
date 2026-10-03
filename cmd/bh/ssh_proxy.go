@@ -24,7 +24,12 @@ type sshAccess struct {
 
 func validateSSHAccess(access sshAccess) error {
 	u, err := url.Parse(access.URL)
-	if err != nil || access.Kind != "websocket" || u.Scheme != "wss" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil {
+		return fmt.Errorf("backend returned an invalid SSH WebSocket grant")
+	}
+	loopback := u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost" || u.Hostname() == "::1"
+	secure := u.Scheme == "wss" || (u.Scheme == "ws" && loopback)
+	if access.Kind != "websocket" || !secure || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return fmt.Errorf("backend returned an invalid SSH WebSocket grant")
 	}
 	if !access.ExpiresAt.After(time.Now()) || access.ExpiresAt.After(time.Now().Add(time.Hour+time.Minute)) {

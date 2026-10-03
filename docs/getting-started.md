@@ -128,7 +128,7 @@ signs you in automatically and returns you to the CLI approval page. The resulti
 `~/.config/boxhaven/config.toml`. `BOXHAVEN_BACKEND_URL` and `BOXHAVEN_TOKEN`
 override the stored config when set.
 
-## Enable Direct SSH
+## Enable SSH access
 
 Install managed OpenSSH aliases once after logging in:
 
@@ -203,8 +203,8 @@ rsync -az ./fixtures/ bh-work:/opt/boxhaven/project/fixtures/
 
 The same alias works with tools that read OpenSSH configuration, including VS
 Code Remote SSH. Each invocation transparently obtains a new short-lived
-certificate from the backend; the SSH connection itself goes directly to the
-box.
+certificate from the backend; the SSH connection travels through the backend relay to the
+box. Reconnect after a grant expires; remote work remains running.
 
 ## Run Commands
 
@@ -250,8 +250,10 @@ and `bh list` shows which boxes are online.
 
 ## Open A Web Preview
 
-In the console, click a box's **Public preview** link, or open its details and
-click **Open preview**. The app opens in a new tab. Each box gets its own small
+In **Boxes**, use the **Preview** column to open a public preview in a new tab.
+For a **Private preview**, open the box's details, choose **Get preview link**,
+then **Open preview**. BoxHaven checks team access and relays the private preview;
+the link expires after 15 minutes. Each box gets its own small
 character inspired by the BoxHaven logo, which stays the same when you rename
 the box or move it to another team.
 

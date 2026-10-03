@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { BackendModuleContext } from "./module.js";
-import type { ResourceOperation, ResourceResponse, ResourceRole, ResourceSharing } from "./resource_types.js";
-import { teamResource } from "./team_sync.js";
+import type { ResourceOperation, ResourceResponse, ResourceRole, ResourceSharing, SharedResource } from "./resource_types.js";
 import type { RemoteMachine } from "./types.js";
 
 type Member = { id: string; role: string };
@@ -10,6 +9,8 @@ type ResourceRequest = FastifyRequest<{ Params: { resourceID: string } }>;
 
 export function registerResourceControl(app: FastifyInstance, options: {
   context: BackendModuleContext;
+  describe(machine: RemoteMachine): SharedResource;
+  preview(machine: RemoteMachine, actorID: string): Promise<{ url: string; authentication: string }>;
   runtimeConnected(machine: RemoteMachine): boolean;
   issueSSH(machine: RemoteMachine, actorID: string, publicKey: string, ttl?: number): Promise<unknown>;
   prepareSession(machine: RemoteMachine, command: string[], attach: boolean): Promise<unknown>;
@@ -44,15 +45,16 @@ export function registerResourceControl(app: FastifyInstance, options: {
     const auth = await authorize(request, reply);
     if (!auth) return;
     const { machine } = auth;
+    const resource = options.describe(machine);
     return {
-      resource: teamResource(machine), role: auth.role,
-      url: `${context.appPublicURL.replace(/\/+$/, "")}/resources/${machine.resource_id}`,
+      resource, role: auth.role,
+      url: `${context.appPublicURL.replace(/\/+$/, "")}/boxes/${machine.resource_id}`,
       capabilities: {
         terminal: !machine.bootstrap_complete || machine.create_state ? "unavailable"
-          : machine.ssh_transport === "websocket" ? "ssh-websocket-certificate" : machine.public_ipv4 ? "ssh-certificate" : "unavailable",
+          : machine.ssh_transport || machine.public_ipv4 ? "backend-ssh-relay" : "unavailable",
         session_prepare: machine.bootstrap_complete === true && !machine.create_state && options.runtimeConnected(machine),
-        preview: !machine.preview_url ? "unavailable" : machine.preview_transport === "provider" ? "provider-login" : "public",
-        active_access_expiry: machine.ssh_transport === "websocket" ? "lease" : "not-enforced",
+        preview: resource.preview,
+        active_access_expiry: "lease",
       },
     };
   });
@@ -99,9 +101,9 @@ export function registerResourceControl(app: FastifyInstance, options: {
   app.get<{ Params: { resourceID: string } }>("/v1/resources/:resourceID/preview", async (request, reply) => {
     const auth = await authorize(request, reply, "operator");
     if (!auth) return;
-    if (!auth.machine.preview_url) return reply.code(409).send({ id: "not_ready", message: "Resource has no preview endpoint." });
-    // This is a control response, never a traffic proxy or a provider credential.
-    return { url: auth.machine.preview_url, authentication: auth.machine.preview_transport === "provider" ? "provider-login" : "public" };
+    const resource = options.describe(auth.machine);
+    if (resource.preview === "unavailable") return reply.code(409).send({ id: "not_ready", message: "Resource has no preview endpoint." });
+    return resource.preview === "team" ? options.preview(auth.machine, auth.user.userID) : { url: resource.preview_url, authentication: "public" };
   });
 
   app.get<{ Params: { resourceID: string } }>("/v1/resources/:resourceID/operations", async (request, reply) => {

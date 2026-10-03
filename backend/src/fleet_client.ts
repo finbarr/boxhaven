@@ -16,9 +16,9 @@ export async function watchTeamResources(baseURL: string, teamID: string, token:
       if (response.status === 409) { await response.body?.cancel(); continue; }
       if (!response.ok) {
         await response.body?.cancel();
-        throw new BoxHavenAPIError("Fleet subscription is unavailable.", response.status);
+        throw new BoxHavenAPIError("Boxes subscription is unavailable.", response.status);
       }
-      if (!response.body) throw new Error("Fleet subscription has no event stream.");
+      if (!response.body) throw new Error("Boxes subscription has no event stream.");
       retry = 1000;
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -28,7 +28,7 @@ export async function watchTeamResources(baseURL: string, teamID: string, token:
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          if (buffer.length > 256 * 1024) throw new Error("Fleet event buffer exceeded its limit.");
+          if (buffer.length > 256 * 1024) throw new Error("Boxes event buffer exceeded its limit.");
           let reset = false, changed = false, boundary: number;
           while ((boundary = buffer.indexOf("\n\n")) >= 0) {
             const event = buffer.slice(0, boundary);

@@ -42,11 +42,13 @@ test("resource IDs survive rename, team move, and restart; replacement gets a ne
 
 test("team snapshots and event payloads exclude secrets and other teams", async t => {
   const { store } = await fixture(t);
-  await store.putMachine({ ...box(), agent_token_hash: "private-agent-hash", last_command: ["env", "KEY=private-command"], source_path: "/private/laptop" });
+  await store.putMachine({ ...box(), agent_token_hash: "private-agent-hash", last_command: ["env", "KEY=private-command"], source_path: "/private/laptop", preview_transport: "provider", preview_url: "https://private.provider.test" });
   await store.putMachine(box("secret", "carol", "team-b"));
   const snapshot = teamSnapshot(store, "team-a");
   assert.equal(snapshot.resources.length, 1);
   assert.equal(snapshot.resources[0].name, "work");
+  assert.equal(snapshot.resources[0].preview, "team");
+  assert.equal(snapshot.resources[0].preview_url, undefined);
   assert.doesNotMatch(JSON.stringify(snapshot), /private|carol|secret/);
   const events = store.db.prepare("SELECT * FROM core_team_events WHERE team_id = ?").all("team-a");
   assert.equal(events.length, 1);

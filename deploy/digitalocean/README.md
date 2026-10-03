@@ -11,11 +11,11 @@ outside Docker. Replace `example.com` with a domain you control.
 The [BoxHaven desktop app](../../desktop/README.md) can connect to this deployment
 using the existing CLI login. No desktop-specific deployment changes are needed.
 
-The VM image installer also bakes the shared direct WebSocket SSH bridge and its
-pinned dependencies. Existing DigitalOcean access continues to use direct TCP
-SSH. Provider adapters that request the bridge require an image rebuilt from the
+The VM image installer also bakes the shared backend WebSocket SSH bridge and its
+pinned dependencies. The backend relays DigitalOcean SSH over TCP and sandbox SSH over the provider
+gateway. Budget backend bandwidth and concurrent connections for these streams. Provider adapters that request the bridge require an image rebuilt from the
 committed runtime source; never install these dependencies on a user VM at connect
-time. See [transport configuration and verification](../../backend/README.md#direct-sandbox-transports).
+time. See [transport configuration and verification](../../backend/README.md#backend-sandbox-relay).
 
 The docs build also generates `llms.txt` and each public page's `.md` source
 alongside its HTML. Caddy serves these from the same artifact; no extra service
@@ -66,7 +66,7 @@ boxhaven SSH certificates instead. The backend SSH user CA is stored at
 `/opt/boxhaven/data/backend/ssh_ca_ed25519` and is included in the backend data
 backups. User-side `bh ssh-config install` creates managed `bh-<name>` OpenSSH
 aliases; ordinary `ssh` and `scp` commands refresh a certificate through the
-backend before connecting directly to the VM.
+backend before opening its authenticated relay.
 Set `BOXHAVEN_DOCS_HOST` to the documentation hostname, `BOXHAVEN_DOCS_URL`
 to the public URL the console should link to, and
 `BOXHAVEN_PREVIEW_BASE_DOMAIN` to the wildcard domain above. The default

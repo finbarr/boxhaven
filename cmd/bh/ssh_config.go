@@ -45,7 +45,7 @@ func runSSHConfig(args []string) error {
 		if err := installBoxHavenSSHConfigInclude(); err != nil {
 			return err
 		}
-		success("Installed direct SSH configuration for %d box(es)", len(sshConfigMachines(machines)))
+		success("Installed SSH configuration for %d box(es)", len(sshConfigMachines(machines)))
 		info("Connect with `ssh bh-<name>`; scp, rsync, and VS Code Remote SSH use the same aliases")
 		return nil
 	case "refresh":
@@ -57,7 +57,7 @@ func runSSHConfig(args []string) error {
 			return err
 		}
 		if !installed {
-			return fmt.Errorf("direct SSH configuration is not installed; run `bh ssh-config install`")
+			return fmt.Errorf("SSH configuration is not installed; run `bh ssh-config install`")
 		}
 		cfg, err := loadSetupDefaults()
 		if err != nil {
@@ -70,7 +70,7 @@ func runSSHConfig(args []string) error {
 		if err := writeBoxHavenSSHConfig(cfg, machines); err != nil {
 			return err
 		}
-		success("Refreshed direct SSH configuration for %d box(es)", len(sshConfigMachines(machines)))
+		success("Refreshed SSH configuration for %d box(es)", len(sshConfigMachines(machines)))
 		return nil
 	case "uninstall":
 		if len(args) != 1 {
@@ -86,7 +86,7 @@ func runSSHConfig(args []string) error {
 		if err := os.Remove(configPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("remove generated SSH config: %w", err)
 		}
-		success("Uninstalled direct SSH configuration")
+		success("Uninstalled SSH configuration")
 		return nil
 	case "certificate":
 		if len(args) != 2 {
@@ -251,12 +251,13 @@ func renderBoxHavenSSHConfig(machines []remoteMachine, executable string, backen
 		certificatePath := "~/.boxhaven/ssh/certs/" + alias + "-cert.pub"
 		refreshCommand := "env BOXHAVEN_BACKEND_URL=" + shellQuote(backendURL) + " " + shellQuote(executable) + " ssh-config certificate " + shellQuote(machine.Name) + " >/dev/null"
 		fmt.Fprintf(&config, "Host %s\n", alias)
-		if machine.SSHTransport == "websocket" {
-			fmt.Fprintf(&config, "    HostName %s.boxhaven.invalid\n", machine.ResourceID)
-			fmt.Fprintf(&config, "    ProxyCommand %s ssh-proxy \"$HOME/.boxhaven/ssh/certs/%s-cert.pub.access.json\"\n", shellQuote(executable), alias)
-		} else {
+		if machine.PublicIPv4 != "" {
 			fmt.Fprintf(&config, "    HostName %s\n", machine.PublicIPv4)
+		} else {
+			fmt.Fprintf(&config, "    HostName %s.boxhaven.invalid\n", machine.ResourceID)
 		}
+		fmt.Fprintf(&config, "    ProxyCommand %s ssh-proxy \"$HOME/.boxhaven/ssh/certs/%s-cert.pub.access.json\"\n", shellQuote(executable), alias)
+
 		fmt.Fprintf(&config, "    User %s\n", sshConfigUser(machine.SSHUser))
 		fmt.Fprintln(&config, "    Port 22")
 		fmt.Fprintln(&config, "    IdentityFile ~/.boxhaven/ssh/id_ed25519")

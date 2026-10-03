@@ -6,6 +6,11 @@ const state = JSON.parse(readFileSync(file, 'utf8'));
 if (args[0] === 'list') {
   if (state.error) { console.error(state.error); process.exit(1); }
   console.log(JSON.stringify({ machines: state.machines }));
+} else if (args[0] === 'preview') {
+  const box = state.machines.find(box => box.name === args[1]);
+  if (!box?.preview_url) { console.error('Preview unavailable'); process.exit(1); }
+  appendFileSync(`${file}.previews`, `${JSON.stringify(args)}\n`);
+  console.log(JSON.stringify({ url: box.preview_url, authentication: 'public' }));
 } else if (args[0] === 'size') {
   setTimeout(() => {
     if (state.catalogError) { console.error(state.catalogError); process.exit(1); }

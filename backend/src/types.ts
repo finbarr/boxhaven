@@ -164,6 +164,7 @@ export type MachineProvider = {
   listMachines(request: ListProviderMachinesRequest): Promise<Array<{ machine: RemoteMachine; status?: string }>>;
   releaseMachine(machine: RemoteMachine): Promise<void>;
   /** Returns resource-scoped credentials only. Account credentials stay here. */
+  issuePreviewAccess?(machine: RemoteMachine, expiresAt: string): Promise<{ url: string; headers: Record<string, string> }>;
   issueSSHAccess?(machine: RemoteMachine, expiresAt: string): Promise<SSHAccess>;
   listImages?(): Promise<MachineImage[]>;
   createImage?(machine: RemoteMachine, name: string): Promise<MachineImage>;

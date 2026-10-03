@@ -18,13 +18,11 @@ import { Route as AuthGithubRouteImport } from './routes/auth.github'
 import { Route as ConsoleTeamsRouteImport } from './routes/_console/teams'
 import { Route as ConsoleSecurityRouteImport } from './routes/_console/security'
 import { Route as ConsoleImagesRouteImport } from './routes/_console/images'
-import { Route as ConsoleFleetRouteImport } from './routes/_console/fleet'
 import { Route as ConsoleDeviceRouteImport } from './routes/_console/device'
 import { Route as ConsoleAccountRouteImport } from './routes/_console/account'
 import { Route as ConsoleTeamIndexRouteImport } from './routes/_console/team.index'
 import { Route as ConsoleTeamTeamRouteImport } from './routes/_console/team.$team'
-import { Route as ConsoleResourcesResourceIDRouteImport } from './routes/_console/resources.$resourceID'
-import { Route as ConsoleBoxesNameRouteImport } from './routes/_console/boxes.$name'
+import { Route as ConsoleBoxesResourceIDRouteImport } from './routes/_console/boxes.$resourceID'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -70,11 +68,6 @@ const ConsoleImagesRoute = ConsoleImagesRouteImport.update({
   path: '/images',
   getParentRoute: () => ConsoleRouteRoute,
 } as any)
-const ConsoleFleetRoute = ConsoleFleetRouteImport.update({
-  id: '/fleet',
-  path: '/fleet',
-  getParentRoute: () => ConsoleRouteRoute,
-} as any)
 const ConsoleDeviceRoute = ConsoleDeviceRouteImport.update({
   id: '/device',
   path: '/device',
@@ -95,15 +88,9 @@ const ConsoleTeamTeamRoute = ConsoleTeamTeamRouteImport.update({
   path: '/team/$team',
   getParentRoute: () => ConsoleRouteRoute,
 } as any)
-const ConsoleResourcesResourceIDRoute =
-  ConsoleResourcesResourceIDRouteImport.update({
-    id: '/resources/$resourceID',
-    path: '/resources/$resourceID',
-    getParentRoute: () => ConsoleRouteRoute,
-  } as any)
-const ConsoleBoxesNameRoute = ConsoleBoxesNameRouteImport.update({
-  id: '/boxes/$name',
-  path: '/boxes/$name',
+const ConsoleBoxesResourceIDRoute = ConsoleBoxesResourceIDRouteImport.update({
+  id: '/boxes/$resourceID',
+  path: '/boxes/$resourceID',
   getParentRoute: () => ConsoleRouteRoute,
 } as any)
 
@@ -114,13 +101,11 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/account': typeof ConsoleAccountRoute
   '/device': typeof ConsoleDeviceRoute
-  '/fleet': typeof ConsoleFleetRoute
   '/images': typeof ConsoleImagesRoute
   '/security': typeof ConsoleSecurityRoute
   '/teams': typeof ConsoleTeamsRoute
   '/auth/github': typeof AuthGithubRoute
-  '/boxes/$name': typeof ConsoleBoxesNameRoute
-  '/resources/$resourceID': typeof ConsoleResourcesResourceIDRoute
+  '/boxes/$resourceID': typeof ConsoleBoxesResourceIDRoute
   '/team/$team': typeof ConsoleTeamTeamRoute
   '/team/': typeof ConsoleTeamIndexRoute
 }
@@ -130,14 +115,12 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/account': typeof ConsoleAccountRoute
   '/device': typeof ConsoleDeviceRoute
-  '/fleet': typeof ConsoleFleetRoute
   '/images': typeof ConsoleImagesRoute
   '/security': typeof ConsoleSecurityRoute
   '/teams': typeof ConsoleTeamsRoute
   '/auth/github': typeof AuthGithubRoute
   '/': typeof ConsoleIndexRoute
-  '/boxes/$name': typeof ConsoleBoxesNameRoute
-  '/resources/$resourceID': typeof ConsoleResourcesResourceIDRoute
+  '/boxes/$resourceID': typeof ConsoleBoxesResourceIDRoute
   '/team/$team': typeof ConsoleTeamTeamRoute
   '/team': typeof ConsoleTeamIndexRoute
 }
@@ -149,14 +132,12 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/_console/account': typeof ConsoleAccountRoute
   '/_console/device': typeof ConsoleDeviceRoute
-  '/_console/fleet': typeof ConsoleFleetRoute
   '/_console/images': typeof ConsoleImagesRoute
   '/_console/security': typeof ConsoleSecurityRoute
   '/_console/teams': typeof ConsoleTeamsRoute
   '/auth/github': typeof AuthGithubRoute
   '/_console/': typeof ConsoleIndexRoute
-  '/_console/boxes/$name': typeof ConsoleBoxesNameRoute
-  '/_console/resources/$resourceID': typeof ConsoleResourcesResourceIDRoute
+  '/_console/boxes/$resourceID': typeof ConsoleBoxesResourceIDRoute
   '/_console/team/$team': typeof ConsoleTeamTeamRoute
   '/_console/team/': typeof ConsoleTeamIndexRoute
 }
@@ -169,13 +150,11 @@ export interface FileRouteTypes {
     | '/signup'
     | '/account'
     | '/device'
-    | '/fleet'
     | '/images'
     | '/security'
     | '/teams'
     | '/auth/github'
-    | '/boxes/$name'
-    | '/resources/$resourceID'
+    | '/boxes/$resourceID'
     | '/team/$team'
     | '/team/'
   fileRoutesByTo: FileRoutesByTo
@@ -185,14 +164,12 @@ export interface FileRouteTypes {
     | '/signup'
     | '/account'
     | '/device'
-    | '/fleet'
     | '/images'
     | '/security'
     | '/teams'
     | '/auth/github'
     | '/'
-    | '/boxes/$name'
-    | '/resources/$resourceID'
+    | '/boxes/$resourceID'
     | '/team/$team'
     | '/team'
   id:
@@ -203,14 +180,12 @@ export interface FileRouteTypes {
     | '/signup'
     | '/_console/account'
     | '/_console/device'
-    | '/_console/fleet'
     | '/_console/images'
     | '/_console/security'
     | '/_console/teams'
     | '/auth/github'
     | '/_console/'
-    | '/_console/boxes/$name'
-    | '/_console/resources/$resourceID'
+    | '/_console/boxes/$resourceID'
     | '/_console/team/$team'
     | '/_console/team/'
   fileRoutesById: FileRoutesById
@@ -288,13 +263,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleImagesRouteImport
       parentRoute: typeof ConsoleRouteRoute
     }
-    '/_console/fleet': {
-      id: '/_console/fleet'
-      path: '/fleet'
-      fullPath: '/fleet'
-      preLoaderRoute: typeof ConsoleFleetRouteImport
-      parentRoute: typeof ConsoleRouteRoute
-    }
     '/_console/device': {
       id: '/_console/device'
       path: '/device'
@@ -323,18 +291,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleTeamTeamRouteImport
       parentRoute: typeof ConsoleRouteRoute
     }
-    '/_console/resources/$resourceID': {
-      id: '/_console/resources/$resourceID'
-      path: '/resources/$resourceID'
-      fullPath: '/resources/$resourceID'
-      preLoaderRoute: typeof ConsoleResourcesResourceIDRouteImport
-      parentRoute: typeof ConsoleRouteRoute
-    }
-    '/_console/boxes/$name': {
-      id: '/_console/boxes/$name'
-      path: '/boxes/$name'
-      fullPath: '/boxes/$name'
-      preLoaderRoute: typeof ConsoleBoxesNameRouteImport
+    '/_console/boxes/$resourceID': {
+      id: '/_console/boxes/$resourceID'
+      path: '/boxes/$resourceID'
+      fullPath: '/boxes/$resourceID'
+      preLoaderRoute: typeof ConsoleBoxesResourceIDRouteImport
       parentRoute: typeof ConsoleRouteRoute
     }
   }
@@ -343,13 +304,11 @@ declare module '@tanstack/react-router' {
 interface ConsoleRouteRouteChildren {
   ConsoleAccountRoute: typeof ConsoleAccountRoute
   ConsoleDeviceRoute: typeof ConsoleDeviceRoute
-  ConsoleFleetRoute: typeof ConsoleFleetRoute
   ConsoleImagesRoute: typeof ConsoleImagesRoute
   ConsoleSecurityRoute: typeof ConsoleSecurityRoute
   ConsoleTeamsRoute: typeof ConsoleTeamsRoute
   ConsoleIndexRoute: typeof ConsoleIndexRoute
-  ConsoleBoxesNameRoute: typeof ConsoleBoxesNameRoute
-  ConsoleResourcesResourceIDRoute: typeof ConsoleResourcesResourceIDRoute
+  ConsoleBoxesResourceIDRoute: typeof ConsoleBoxesResourceIDRoute
   ConsoleTeamTeamRoute: typeof ConsoleTeamTeamRoute
   ConsoleTeamIndexRoute: typeof ConsoleTeamIndexRoute
 }
@@ -357,13 +316,11 @@ interface ConsoleRouteRouteChildren {
 const ConsoleRouteRouteChildren: ConsoleRouteRouteChildren = {
   ConsoleAccountRoute: ConsoleAccountRoute,
   ConsoleDeviceRoute: ConsoleDeviceRoute,
-  ConsoleFleetRoute: ConsoleFleetRoute,
   ConsoleImagesRoute: ConsoleImagesRoute,
   ConsoleSecurityRoute: ConsoleSecurityRoute,
   ConsoleTeamsRoute: ConsoleTeamsRoute,
   ConsoleIndexRoute: ConsoleIndexRoute,
-  ConsoleBoxesNameRoute: ConsoleBoxesNameRoute,
-  ConsoleResourcesResourceIDRoute: ConsoleResourcesResourceIDRoute,
+  ConsoleBoxesResourceIDRoute: ConsoleBoxesResourceIDRoute,
   ConsoleTeamTeamRoute: ConsoleTeamTeamRoute,
   ConsoleTeamIndexRoute: ConsoleTeamIndexRoute,
 }

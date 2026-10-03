@@ -8,25 +8,28 @@ request one. When unset, the first configured provider is the default
 (DigitalOcean when both are configured).
 
 An exe.dev adapter is also implemented and has passed the live provider smoke.
-It uses a prepared OCI image and direct WebSocket transport. E2B,
+It uses a prepared OCI image and backend WebSocket transport. E2B,
 Daytona, Blaxel, and Boat remain planned.
 
-## One team fleet
+## All providers in Boxes
 
-Open **Fleet** in the web console to see your team's resources across configured
-providers. Updates sync between browsers through the backend. Each resource has
+Open **Boxes** in the web console to see all of your team's boxes across configured
+providers, including boxes created by teammates. Choose **New box**, select a
+provider, size, and optional image, then create it in the active team. The provider
+menu lists the adapters configured on your backend; new adapters use the same flow. Updates sync between browsers through the backend. Each resource has
 a stable link that survives renames, plus the same sharing controls regardless
 of provider. The owner and team administrators can grant operator access to the
 whole team or individual members. Viewers can see metadata; operators can run
 commands and access files on the resource.
 Resources remain with the team when their creator leaves; the creator loses
-access through both Fleet and the CLI until they are a team member again.
+access through both Boxes and the CLI until they are a team member again.
 
 The resource link requires team membership. Preview access remains controlled
 by the existing preview transport: VM previews are public, and exe.dev previews
-require provider login. Resource sharing does not change those preview settings.
+use BoxHaven team access through the backend relay. Obtain a private preview
+link in Boxes or with `bh preview work`; the desktop requests one automatically.
 Session request history records what the backend confirmed; it does not report
-live agent activity. Desktop fleet subscriptions and the additional sandbox
+live agent activity. Desktop team subscriptions and the additional sandbox
 adapters are still being implemented.
 
 `GET /v1/providers` lists what a backend has configured, and `bh create`
@@ -97,18 +100,18 @@ bh connect work
 ```
 
 The backend manages lifecycle, authorization, and shared team metadata. Terminal
-and file traffic goes directly through exe.dev's authenticated WebSocket proxy
-to the guest's certificate-authenticated SSH service. No public IPv4 is needed.
+and file traffic passes through BoxHaven's backend, then exe.dev's authenticated
+WebSocket proxy to the guest's certificate-authenticated SSH service. No public IPv4 is needed.
 The account key stays on the backend. Expiring grants close active connections
 after 15 minutes by default; reconnect to reattach the persistent session.
 
 The built-in sizes request 2/4/8 CPUs and 4/8/16 GB RAM with 20 GB disks. Billing
 depends on the account's capacity; hourly estimates are unavailable. exe.dev uses
-the account's default region, so per-machine `--region` is rejected. Previews keep
-exe.dev's private login flow. Image snapshots, pause, desktop preview delegation,
+the account's default region, so per-machine `--region` is rejected. Private previews require a configured BoxHaven preview domain and a team-scoped
+15-minute lease. Image snapshots, pause,
 and team-specific provider-account connections are not yet implemented.
 
-The live smoke verifies creation, guest readiness, direct certificate SSH and
+The live smoke verifies creation, guest readiness, relayed certificate SSH and
 file transfer, detached session recovery, active grant expiry, private previews,
 and confirmed deletion. See the repository's
 [image recipe and live smoke](https://github.com/finbarr/boxhaven/tree/master/deploy/exedev)

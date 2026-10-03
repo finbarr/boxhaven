@@ -104,6 +104,12 @@ export class ExeDevProvider implements MachineProvider {
     return { kind: "websocket", url: `wss://${name}.exe.xyz:9898/ssh`, headers: { "X-Exedev-Authorization": `Bearer ${token}` }, expires_at: expiresAt };
   }
 
+  async issuePreviewAccess(machine: RemoteMachine, expiresAt: string) {
+    const name = this.vmName(machine);
+    const token = await exeDevToken(this.config.signingKey, `v0@${name}.exe.xyz`, { exp: Math.floor(Date.parse(expiresAt)/1000) });
+    return { url: `https://${name}.exe.xyz`, headers: { "X-Exedev-Authorization": `Bearer ${token}` } };
+  }
+
   private machine(vm: VM): RemoteMachine {
     if (!validVMName(vm.vm_name)) throw new Error("exe.dev returned an invalid VM name");
     return { name: vm.vm_name, provider: this.name, provider_id: vm.vm_name, ssh_transport: "websocket", ssh_user: defaultSSHUser,

@@ -11,19 +11,23 @@ export function teamResource(machine: RemoteMachine): SharedResource {
   return {
     resource_id: machine.resource_id!, name: machine.name, team_id: machine.org_id,
     owner_id: machine.user_id, provider: machine.provider, provider_id: machine.provider_id,
-    provider_label: machine.provider_label, region: machine.region, size: machine.size,
+    provider_label: machine.provider_label, region: machine.region, size: machine.size, size_shortcut: machine.size_shortcut,
     image: machine.image, image_name: machine.image_name, created_at: machine.created_at,
+    updated_at: machine.updated_at,
+    agent_last_seen_at: machine.agent_last_seen_at, last_synced_at: machine.last_synced_at,
+    preview: !machine.preview_url ? "unavailable" : machine.preview_transport === "provider" ? "team" : "public",
+    preview_url: machine.preview_transport === "provider" ? undefined : machine.preview_url,
     bootstrap_complete: machine.bootstrap_complete === true, create_state: machine.create_state,
     project_path: machine.project_path,
     runtime_protocol: machine.runtime_protocol, runtime_version: machine.runtime_version,
   };
 }
 
-export function teamSnapshot(store: StateStore, teamID: string) {
+export function teamSnapshot(store: StateStore, teamID: string, describe: (machine: RemoteMachine) => SharedResource = teamResource) {
   return store.db.transaction(() => ({
     cursor: eventHead(store),
     resources: (store.db.prepare("SELECT payload_json FROM core_machines WHERE org_id = ? ORDER BY name, user_id")
-      .all(teamID) as Array<{ payload_json: string }>).map(row => teamResource(JSON.parse(row.payload_json))),
+      .all(teamID) as Array<{ payload_json: string }>).map(row => describe(JSON.parse(row.payload_json))),
   }))();
 }
 
@@ -37,6 +41,7 @@ function eventFloor(store: StateStore): number {
 
 export function registerTeamSync(app: FastifyInstance, options: {
   store: StateStore;
+  describe?: (machine: RemoteMachine) => SharedResource;
   authorize(headers: Headers, teamID: string): Promise<"allowed" | "unauthorized" | "forbidden">;
 }) {
   const { store, authorize } = options;
@@ -47,7 +52,7 @@ export function registerTeamSync(app: FastifyInstance, options: {
     const access = await authorize(request.headers, request.params.teamID);
     if (access !== "allowed") return reply.code(access === "unauthorized" ? 401 : 403).send({ id: access, message: "Team access is required." });
     reply.header("Cache-Control", "no-store");
-    return teamSnapshot(store, request.params.teamID);
+    return teamSnapshot(store, request.params.teamID, options.describe);
   });
 
   app.get<{ Params: { teamID: string }; Querystring: { cursor?: string } }>("/v1/teams/:teamID/events", async (request, reply) => {

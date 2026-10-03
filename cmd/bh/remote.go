@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -113,6 +114,8 @@ func runRemote(args []string, projectDir string) error {
 		return runRemoteSync(args[1:], projectDir)
 	case "list":
 		return runRemoteList(args[1:], projectDir)
+	case "preview":
+		return runRemotePreview(args[1:], projectDir)
 	case "status":
 		return runRemoteStatus(args[1:], projectDir)
 	case "rename":
@@ -437,7 +440,7 @@ func runRemoteList(args []string, projectDir string) error {
 		return err
 	}
 	if err := refreshInstalledSSHConfig(cfg, machines); err != nil {
-		warn("Could not refresh direct SSH aliases: %v", err)
+		warn("Could not refresh SSH aliases: %v", err)
 	}
 	sort.Slice(machines, func(i, j int) bool {
 		return machines[i].Name < machines[j].Name
@@ -496,6 +499,33 @@ func remoteListURL(machine remoteMachine) string {
 	return "-"
 }
 
+// Return a fresh preview launch link; provider credentials remain on the backend.
+func runRemotePreview(args []string, projectDir string) error {
+	if len(args) < 1 || len(args) > 2 || (len(args) == 2 && args[1] != "--json") {
+		return fmt.Errorf("usage: bh preview <name> [--json]")
+	}
+	name := args[0]
+	if err := validateRemoteName(name); err != nil {
+		return err
+	}
+	cfg, err := loadConfig(projectDir)
+	if err != nil {
+		return err
+	}
+	var result struct {
+		URL            string `json:"url"`
+		Authentication string `json:"authentication"`
+	}
+	if err := remoteBackendRequest(cfg, "GET", "/v1/machines/"+name+"/preview", nil, &result); err != nil {
+		return err
+	}
+	if len(args) == 2 {
+		return json.NewEncoder(os.Stdout).Encode(result)
+	}
+	fmt.Println(result.URL)
+	return nil
+}
+
 func runRemoteStatus(args []string, projectDir string) error {
 	cfg, err := loadConfig(projectDir)
 	if err != nil {
@@ -513,7 +543,7 @@ func runRemoteStatus(args []string, projectDir string) error {
 		return err
 	}
 	if err := refreshInstalledSSHConfigFromBackend(cfg); err != nil {
-		warn("Could not refresh direct SSH aliases: %v", err)
+		warn("Could not refresh SSH aliases: %v", err)
 	}
 
 	fmt.Printf("%sname:%s %s\n", colorBold, colorReset, machine.Name)
@@ -580,7 +610,7 @@ func runRemoteDestroy(args []string, projectDir string) error {
 		return err
 	}
 	if err := refreshInstalledSSHConfigFromBackend(cfg); err != nil {
-		warn("Could not refresh direct SSH aliases: %v", err)
+		warn("Could not refresh SSH aliases: %v", err)
 	}
 	success("Destroyed remote %s", name)
 	return nil
@@ -607,7 +637,7 @@ func runRemoteRename(args []string, projectDir string) error {
 		return err
 	}
 	if err := refreshInstalledSSHConfigFromBackend(cfg); err != nil {
-		warn("Could not refresh direct SSH aliases: %v", err)
+		warn("Could not refresh SSH aliases: %v", err)
 	}
 	success("Renamed remote %s to %s", fromName, machine.Name)
 	return nil
@@ -693,7 +723,7 @@ func createRemoteMachine(cfg Config, projectDir string, opts remoteProvisionOpti
 		}
 	}
 	if err := refreshInstalledSSHConfigFromBackend(cfg); err != nil {
-		warn("Could not refresh direct SSH aliases: %v", err)
+		warn("Could not refresh SSH aliases: %v", err)
 	}
 	printRemoteReady(machine)
 	return machine, nil

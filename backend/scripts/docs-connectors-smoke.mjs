@@ -24,17 +24,24 @@ const executablePath=[process.env.BOXHAVEN_PLAYWRIGHT_EXECUTABLE,"/Applications/
 assert.ok(executablePath,"Chrome is required");
 const browser=await chromium.launch({executablePath,headless:true});
 try {
-  for(const [name,path] of [["home","/","#documentation"],["providers","/providers","#exe-dev"],["self-hosting","/self-hosting",null]]) {
+  for(const [name,path] of [["home","/","#documentation"],["providers","/providers","#exe-dev"],["self-hosting","/self-hosting"],["security","/security"],["getting-started","/getting-started"],["commands","/commands"]]) {
     for(const [size,viewport] of Object.entries({desktop:{width:1440,height:1000},mobile:{width:390,height:844}})) {
       const page=await browser.newPage({viewport});
       const response=await page.goto(`http://127.0.0.1:${server.address().port}${path}`,{waitUntil:"networkidle"});
       assert.ok(response.ok());
       if(name==="providers") {
-        await page.locator("h2#one-team-fleet").scrollIntoViewIfNeeded();
-        await page.screenshot({path:resolve(out,`fleet-${size}.png`)});
+        await page.locator("h2#all-providers-in-boxes").evaluate(heading => window.scrollTo({ top: window.scrollY + heading.getBoundingClientRect().top - 150, behavior: "instant" }));
+        await page.screenshot({path:resolve(out,`boxes-${size}.png`)});
         const heading=page.locator("h2#exe-dev");await heading.scrollIntoViewIfNeeded();
         assert.match(await page.locator(".vp-doc").innerText(),/live smoke verifies creation/);
-      } else if(name==="self-hosting") await page.getByText("EXE_DEV_SIGNING_KEY",{exact:false}).first().scrollIntoViewIfNeeded();
+      } else if(name==="self-hosting") await page.locator("h2#backend-relay-capacity").scrollIntoViewIfNeeded();
+      else if(name==="security") await page.locator("h1").scrollIntoViewIfNeeded();
+      else if(name==="getting-started") {
+        await page.locator("h2#open-a-web-preview").evaluate(heading => window.scrollTo({ top: window.scrollY + heading.getBoundingClientRect().top - 150, behavior: "instant" }));
+        await page.screenshot({path:resolve(out,`preview-guide-${size}.png`)});
+        await page.locator("h2#enable-ssh-access").scrollIntoViewIfNeeded();
+      }
+      else if(name==="commands") await page.locator("h2#bh-preview").scrollIntoViewIfNeeded();
       else { const link=page.getByRole("link",{name:"Cloud providers",exact:true}); await link.last().scrollIntoViewIfNeeded(); }
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${name}/${size} overflow`);
       await page.screenshot({path:resolve(out,`${name}-${size}.png`)});

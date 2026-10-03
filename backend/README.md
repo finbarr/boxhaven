@@ -48,7 +48,12 @@ Run `node --import tsx --test src/team_sync.test.ts` for real HTTP stream covera
 with two clients, restart/rename identity, team isolation, and retention checks.
 The backend suite also checks these routes with real Better Auth membership.
 
-The console's **Fleet** page consumes these APIs through `src/fleet_client.ts`.
+The console's **Boxes** page consumes these APIs through `src/fleet_client.ts`.
+The same table includes every owner and provider in the active team. **New box**
+uses the configured provider catalog with provider-specific plans and images.
+Box details use `/boxes/<UUID>` for rename-stable sharing, session controls, and
+private previews. Name-based CLI commands and rename/move/destroy controls are
+shown only to the creator; teammates use the shared resource controls.
 It displays the team's resources across providers and updates from events rather
 than polling each provider. The desktop's existing box list still uses the CLI;
 migrating its inventory and terminal attachment to resource IDs is separate work.
@@ -90,43 +95,56 @@ existing session before submitting new work. Commands are hashed for deduplicati
 the journal does not store their arguments. Completed preparation records are
 observations, not ongoing agent activity or task-completion signals.
 
-The stable console URL is `/resources/<UUID>` and requires team membership.
+The stable console URL is `/boxes/<UUID>` and requires team membership.
 It is a resource-sharing link, not a public preview grant. Existing public VM
-previews remain public; exe.dev previews still require provider login. Private
-BoxHaven-authorized preview URLs and direct native provider transports remain work
+previews remain public; exe.dev previews use short-lived BoxHaven team access
+through isolated preview hostnames. Native provider transports remain work
 in the [connector proposal](../SANDBOX-CONNECTORS.md).
 
-Revocation denies new credentials. WebSocket bridge streams close at grant expiry;
-ordinary SSH certificates limit new handshakes but do not terminate existing TCP
-sessions. Active revocation and renewal are not implemented. Migration 9 stores
+Revocation denies new credentials and closes active relays within the one-second
+permission check interval. Expiry closes active relays; reconnect renews access.
+Seamless renewal is not implemented. Migration 9 stores
 sharing, an operation journal, and credential-free access/sharing audit records.
 
 Verification: `npm test` covers authorization across TCP/WebSocket transports,
 membership removal/rejoin, duplicate requests, lost responses, and restart/move
 recovery. `npm run smoke:console` checks two live browser pages plus desktop/mobile
-Fleet and sharing screenshots. `npm run build` includes console TypeScript checks.
+Boxes and sharing screenshots. `npm run build` includes console TypeScript checks.
 
-## Direct sandbox transports
+## Backend sandbox relay
 
 Provider price data may be absent for shared subscription capacity such as
 exe.dev. `PolicyMachine.provider_hourly_price` is optional; commercial modules
 must supply an explicit rate or decline an unsupported plan instead of treating
 an absent provider quote as free.
 
-Providers can implement `issueSSHAccess` to return a resource-scoped WebSocket
-destination instead of a public TCP address. The backend's `ssh-cert` response
-includes that transport and a signed grant for the guest bridge. The CLI passes
-bytes directly to the provider; the backend never relays this connection.
-Both transports require an SSH user certificate and persistent host-key pinning.
-WebSocket grants live in mode-0600 files, never process arguments, and redirects
-are rejected. `SSL_CERT_FILE` can add private TLS certificate authorities.
+Providers can implement `issueSSHAccess` to return an upstream WebSocket instead
+of a TCP destination. The client always receives a backend WebSocket lease at
+`/v1/resources/<id>/relay/ssh`, bound to its actor, membership, team, and runtime.
+Provider and runtime credentials remain on the backend. SSH certificates and
+persistent host-key pinning still authenticate the guest end to end. Grants are
+stored in mode-0600 files; credentials never appear in process arguments.
+`SSL_CERT_FILE` can add private TLS certificate authorities. TLS is required,
+except for explicitly configured loopback development backends.
+
+Relays use stream backpressure, a 15-second upstream connection deadline,
+heartbeats, grant expiry, and live permission checks. Limits per backend process
+are 128 total attachments, 32 per team, and 8 per actor. Connection duration and
+byte totals are operational logs; billing requires a separate durable ledger.
+Backend restart disconnects attachments while guest work continues.
+
+Private provider previews use `issuePreviewAccess` on the backend and isolated
+preview hostnames. Boxes and `bh preview <name>` issue a 15-minute launch link.
+Its fragment becomes a Secure, HttpOnly host-only cookie; provider credentials
+remain server-side. HTTP and WebSocket requests enforce current team access.
+Configure `BOXHAVEN_PREVIEW_BASE_DOMAIN` and wildcard DNS/TLS before using them.
 
 The image installer includes a bridge on port 9999 with one fixed destination:
 loopback SSH. It rejects missing, expired, or wrong-machine grants, limits frame
 size and concurrent streams, and propagates backpressure. Existing streams close
 at grant expiry (15 minutes by default, at most one hour); reconnect obtains a new
-grant and reattaches the persistent remote session. Revocation currently prevents
-new grants; already issued grants remain valid until expiry.
+grant and reattaches the persistent remote session. The backend additionally closes
+relays when current membership or permissions change. Provider tokens are only used on the backend-to-guest connection.
 
 Run `make build && node backend/scripts/smoke-ssh-transport.mjs` from the repository
 root. This starts temporary local OpenSSH and TLS servers and exercises the actual
@@ -333,7 +351,7 @@ Environment:
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
 - `EXE_DEV_SIGNING_KEY`: backend path to a dedicated registered exe.dev signing key. Configures the exe.dev adapter; the key must be unencrypted and restricted to the backend user.
 - `EXE_DEV_REGISTRY_AUTH`: optional pull-only `USERNAME:PASSWORD` for the prepared exe.dev image's private registry. This credential is sent only in provider creation requests and is excluded from resource metadata.
-- `BOXHAVEN_REMOTE_IMAGE_EXEDEV`: required prepared OCI image for exe.dev. See [image setup and validation limits](../deploy/exedev/README.md). Provisioning requires outbound SSH to `exe.dev:22` with a pinned provider host key; inventory and deletion use HTTPS. The adapter uses the account's default region, private provider previews, and direct WebSocket SSH.
+- `BOXHAVEN_REMOTE_IMAGE_EXEDEV`: required prepared OCI image for exe.dev. See [image setup and validation limits](../deploy/exedev/README.md). Provisioning requires outbound SSH to `exe.dev:22` with a pinned provider host key; inventory and deletion use HTTPS. The adapter uses the account's default region, private provider previews, and backend WebSocket SSH.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event, reconciliation, and policy-requested machine cleanup retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: full active-machine reconciliation and lifecycle-policy evaluation interval, default `300000`.
 - `BOXHAVEN_MAX_TEAMS_PER_USER`: optional positive cap on teams a user owns. Pending creates reserve a slot so concurrent requests cannot exceed it.
@@ -584,8 +602,8 @@ through `POST /v1/machines/:name/ssh-cert` only after authenticating the machine
 owner. The CLI keeps one local device key under `~/.boxhaven/ssh`; after
 `bh ssh-config install`, normal `ssh`, `scp`, and `rsync` commands use managed
 `bh-<name>` aliases that transparently request a fresh short-lived certificate.
-Connections go directly to the VM public IP, so user SSH bytes do not flow
-through the backend. CLI-side host-key pinning lives in
+Connections use the backend WebSocket relay; the backend opens the upstream
+TCP or provider WebSocket connection. SSH payloads remain encrypted end to end. CLI-side host-key pinning lives in
 `~/.boxhaven/remote_known_hosts`.
 Project sync excludes common dependency/cache directories by default and reads
 additional rsync-style exclude patterns from `.boxhavenignore`. Sync completion
@@ -593,7 +611,7 @@ reports elapsed time, network bytes, changed bytes, and file counts.
 
 The remote image also includes a GitHub HTTPS credential helper. When the CLI
 detects a GitHub project or an immediate child GitHub repository in a
-multi-repository workspace, it writes GitHub auth over direct SSH to
+multi-repository workspace, it writes GitHub auth over SSH through the backend relay to
 `/run/boxhaven/session.env` on the VM. `GH_TOKEN` or `GITHUB_TOKEN` are used when
 set; otherwise the CLI falls back to the local GitHub CLI via `gh auth token`.
 The machine agent sources that tmpfs file before setup commands, direct
@@ -601,9 +619,9 @@ commands, and tmux session launches. The file is readable only by the remote SSH
 user and root. The backend does not persist those GitHub tokens.
 
 The CLI also forwards selected local Codex and Claude login/config files over
-direct SSH when a remote session is created, connected, run, or synced up. Those
+SSH through the backend relay when a remote session is created, connected, run, or synced up. Those
 files are written into the remote SSH user's home so users do not need to repeat
-agent login flows on every new VM. The backend does not receive or store these
+agent login flows on every new VM. The backend relays encrypted SSH bytes without decrypting or storing these
 files.
 
 The CLI also forwards only the effective local Git author identity,

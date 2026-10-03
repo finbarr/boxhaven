@@ -578,15 +578,16 @@ test("WebSocket machines receive scoped grants without public IPv4 and preserve 
   assert.equal(cert.headers["cache-control"], "no-store");
   assert.equal(cert.json().access.kind, "websocket");
   assert.match(cert.json().certificate, /^ssh-ed25519-cert-v01@openssh.com /);
-  assert.ok(cert.json().access.headers["X-BoxHaven-Access"]);
+  assert.ok(cert.json().access.headers.Authorization);
+  assert.doesNotMatch(cert.body, /vm-scoped-token|X-Exedev|X-BoxHaven-Access|exe.xyz:9898/);
   const connected = await app.inject({ method: "GET", url: "/v1/machines/sandbox/connect", headers });
-  assert.equal(connected.json().machine.preview_url, "https://boxhaven-sandbox.exe.xyz");
-  assert.equal(connected.json().connect.transport, "ssh_websocket_certificate");
+  assert.match(connected.json().machine.preview_url, /^https:\/\/.*\.hosted\.test$/);
+  assert.equal(connected.json().connect.transport, "backend_ssh_relay");
   assert.doesNotMatch(connected.body, /vm-scoped-token|X-BoxHaven-Access/);
   const otherToken = await signUp(app, "sandbox-outsider@example.com");
   const denied = await app.inject({ method: "POST", url: "/v1/machines/sandbox/ssh-cert", headers: { authorization: `Bearer ${otherToken}` }, payload: { public_key: testSSHUserPublicKey } });
   assert.equal(denied.statusCode, 404);
-  assert.equal(accesses, 1);
+  assert.equal(accesses, 0);
 });
 
 test("subscription plans preserve unknown provider prices instead of quoting zero", async () => {
@@ -656,7 +657,7 @@ test("backend imports provider machines for the authenticated user", async () =>
 
   const connect = await app.inject({ method: "GET", url: "/v1/machines/already-there/connect", headers });
   assert.equal(connect.statusCode, 200);
-  assert.equal(connect.json().connect.transport, "direct_ssh_certificate");
+  assert.equal(connect.json().connect.transport, "backend_ssh_relay");
   assert.equal(connect.json().connect.cli, "bh connect already-there");
   assert.equal(connect.json().connect.cli_run, "bh run already-there");
 });
@@ -758,6 +759,51 @@ test("backend registers preview hostnames and proxies them to the machine", asyn
   } finally {
     await new Promise<void>((resolve, reject) => upstream.close((error) => error ? reject(error) : resolve()));
   }
+});
+
+test("private previews require scoped team access and keep provider credentials behind the backend", async t => {
+  const { app, provider, store, token } = await createTestBackend("private-preview@example.com");
+  t.after(() => app.close());
+  const headers = { authorization: `Bearer ${token}` };
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "private-preview" } });
+  const machine = (await store.getResource(created.json().machine.resource_id))!;
+  await store.putMachine({ ...machine, preview_transport: "provider" });
+  let requests = 0;
+  (provider as MachineProvider).issuePreviewAccess = async () => ({ url: "https://private.provider.test", headers: { "X-Exedev-Authorization": "provider-secret" } });
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (input, options) => {
+    assert.equal(new URL(String(input)).origin, "https://private.provider.test");
+    assert.equal(options?.redirect, "manual");
+    const forwarded = new Headers(options?.headers);
+    assert.equal(forwarded.get("X-Exedev-Authorization"), "provider-secret");
+    assert.equal(forwarded.get("authorization"), null);
+    assert.doesNotMatch(forwarded.get("cookie") || "", /boxhaven_preview/);
+    requests++;
+    return new Response("private-app", { headers: { "cache-control": "public, max-age=3600" } });
+  };
+  const launchResponse = await app.inject({ url: `/v1/resources/${machine.resource_id}/preview`, headers });
+  assert.equal(launchResponse.statusCode, 200, launchResponse.body);
+  assert.doesNotMatch(launchResponse.body, /provider-secret/);
+  const launch = new URL(launchResponse.json().url);
+  const base = `/v1/preview/proxy/${launch.hostname}`;
+  const host = { host: launch.hostname };
+  assert.equal((await app.inject({ url: `${base}/`, headers: host })).statusCode, 403);
+  const page = await app.inject({ url: `${base}/_boxhaven/access`, headers: host });
+  assert.equal(page.statusCode, 200); assert.match(page.body, /history.replaceState/);
+  const authorization = `Bearer ${launch.hash.slice(1)}`;
+  assert.equal((await app.inject({ method: "POST", url: `${base}/_boxhaven/session`, headers: { ...host, authorization, origin: "https://attacker.test" } })).statusCode, 403);
+  const session = await app.inject({ method: "POST", url: `${base}/_boxhaven/session`, headers: { ...host, authorization, origin: launch.origin } });
+  assert.equal(session.statusCode, 200, session.body);
+  assert.match(String(session.headers["set-cookie"]), /Secure; HttpOnly; SameSite=Strict/);
+  const cookie = String(session.headers["set-cookie"]).split(";")[0];
+  const result = await app.inject({ url: `${base}/`, headers: { ...host, cookie, authorization: "Bearer do-not-forward" } });
+  assert.equal(result.statusCode, 200, result.body); assert.equal(result.body, "private-app");
+  assert.equal(result.headers["cache-control"], "private, no-store");
+  assert.equal((await app.inject({ url: `${base}/`, headers: { cookie, host: "app.hosted.test" } })).statusCode, 403);
+  store.db.prepare("DELETE FROM member WHERE organizationId = ? AND userId = ?").run(machine.org_id, machine.user_id);
+  assert.equal((await app.inject({ url: `${base}/`, headers: { ...host, cookie } })).statusCode, 403);
+  assert.equal(requests, 1);
 });
 
 test("backend proxies preview websocket upgrades to the machine", async () => {
@@ -2358,8 +2404,12 @@ test("resource permissions apply to TCP and WebSocket providers without provider
     const detail = await app.inject({ url: path, headers: memberHeaders });
     assert.equal(detail.statusCode, 200, detail.body);
     assert.equal(detail.json().role, "viewer");
-    assert.equal(detail.json().url, `https://app.hosted.test/resources/${id}`);
-    assert.doesNotMatch(detail.body, /agent_token|ssh_principal|preview_url/);
+    assert.equal(detail.json().url, `https://app.hosted.test/boxes/${id}`);
+    assert.doesNotMatch(detail.body, /agent_token|ssh_principal|last_command|source_path/);
+    assert.equal(detail.json().resource.owner_name, "fleet-owner");
+    assert.equal(detail.json().resource.preview, id === ids[1] ? "team" : "public");
+    if (id === ids[1]) assert.equal(detail.json().resource.preview_url, undefined, "private provider endpoints stay out of shared metadata");
+    else assert.match(detail.json().resource.preview_url, /^https:\/\/.*\.hosted\.test$/);
     assert.equal((await app.inject({ method: "POST", url: `${path}/access/ssh`, headers: memberHeaders, payload: { public_key: testSSHUserPublicKey } })).statusCode, 403);
     assert.equal((await app.inject({ url: `${path}/preview`, headers: memberHeaders })).statusCode, 403);
     const sharing = { team_id: owner.team.id, revision: 0, team_role: "viewer", members: [{ member_id: membershipID, role: "operator" }] };
@@ -2372,9 +2422,9 @@ test("resource permissions apply to TCP and WebSocket providers without provider
     assert.equal(granted.statusCode, 200, granted.body);
     assert.equal(granted.headers["cache-control"], "no-store");
     assert.match(granted.json().grant.certificate, /^ssh-ed25519-cert/);
-    assert.equal(granted.json().grant.access.kind, id === ids[1] ? "websocket" : "tcp");
+    assert.equal(granted.json().grant.access.kind, "websocket");
   }
-  assert.equal(grants, 1);
+  assert.equal(grants, 0);
   const renamed = await app.inject({ method: "PATCH", url: "/v1/machines/fleet-fake", headers, payload: { name: "renamed-fleet" } });
   assert.equal(renamed.statusCode, 200, renamed.body);
   assert.equal((await app.inject({ url: `/v1/resources/${ids[0]}`, headers: memberHeaders })).json().resource.name, "renamed-fleet");
@@ -2383,9 +2433,10 @@ test("resource permissions apply to TCP and WebSocket providers without provider
   join(randomUUID());
   assert.equal((await app.inject({ url: `/v1/resources/${ids[0]}`, headers: memberHeaders })).json().role, "viewer");
   assert.equal((await app.inject({ method: "POST", url: `/v1/resources/${ids[1]}/access/ssh`, headers: memberHeaders, payload: { public_key: testSSHUserPublicKey } })).statusCode, 403);
-  assert.equal(grants, 1);
+  assert.equal(grants, 0);
   const snapshot = await app.inject({ url: `/v1/teams/${owner.team.id}/resources`, headers: memberHeaders });
   assert.equal(snapshot.json().resources.length, 2);
+  assert.equal(snapshot.json().resources.find((resource: { resource_id: string }) => resource.resource_id === ids[1]).preview_url, undefined);
 });
 
 test("offboarding retains team resources and denies creator access through every name-based control path", async t => {

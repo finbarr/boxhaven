@@ -13,7 +13,6 @@ import {
   MachinePlan,
   MachinePlanPrice,
   MachineResponse,
-  MachinesResponse,
   ProvidersResponse,
   SizesResponse,
   slugName,
@@ -24,23 +23,23 @@ import { BoxAvatar, CreatorBadge, BoxStatus } from "./box-avatar";
 import { CostEstimate } from "./cost-estimate";
 import { Drawer } from "./drawer";
 import { WorkspaceHead } from "./shell";
+import { BoxAccess, useTeamBoxes } from "./box-access";
+import type { ResourceResponse, SharedResource } from "../../src/client";
 
-type ConnectResponse = MachineResponse & {
-  connect: {
-    transport?: string;
-    cli: string;
-    cli_run: string;
-  };
-};
+function boxFromResource(resource: SharedResource, teams: TeamInfo[]): Machine & { resource_id: string } {
+  const team = teams.find(team => team.id === resource.team_id);
+  return { ...resource, user_id: resource.owner_id, org_id: resource.team_id,
+    team_name: team?.name, team_slug: team?.slug, image: resource.image_name || resource.image,
+    preview_transport: resource.preview === "team" ? "provider" : undefined,
+    preview_hostname: resource.preview_url ? new URL(resource.preview_url).hostname : undefined };
+}
 
 function imageValue(image: MachineImage): string {
   return image.id || image.name;
 }
 
-// Boxes section. The selected box lives in the URL (/boxes/$name) and drives
-// the detail drawer; "/" renders the table with no drawer open. The "New box"
-// button opens a create drawer.
-export function Dashboard({ selectedName }: { selectedName?: string }) {
+// All providers and owners share one team inventory and stable box links.
+export function Dashboard({ selectedResourceID }: { selectedResourceID?: string }) {
   const { token, teams, activeTeam, user } = useConsole();
   const navigate = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
@@ -56,16 +55,26 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
     queryKey: ["providers"],
     queryFn: () => apiFetch<ProvidersResponse>("/v1/providers", token),
   });
-  const machines = useQuery({
-    queryKey: ["machines", token],
-    queryFn: () => apiFetch<MachinesResponse>("/v1/machines", token),
-    refetchInterval: 15000,
-  });
   const providerList = providers.data?.providers || [];
   const defaultProvider = providerList.find((option) => option.default)?.name || providerList[0]?.name || "";
   const selectedProvider = provider || defaultProvider;
   const defaultTeam = activeTeam ? activeTeam.slug || activeTeam.id : teams[0]?.slug || teams[0]?.id || "";
-  const activeTeamID = activeTeam?.id || "";
+  const activeTeamID = activeTeam?.id || teams[0]?.id || "";
+  const inventory = useTeamBoxes(activeTeamID);
+  const detail = useQuery({
+    queryKey: ["resource", token, selectedResourceID],
+    enabled: Boolean(selectedResourceID),
+    queryFn: () => apiFetch<ResourceResponse>(`/v1/resources/${encodeURIComponent(selectedResourceID!)}`, token),
+    retry: false,
+  });
+  // A shared link may belong to another team the user is also a member of.
+  const linkedTeam = useTeamBoxes(detail.data?.resource.team_id !== activeTeamID ? detail.data?.resource.team_id : undefined);
+  const detailError = detail.error?.message || linkedTeam.error || (detail.data?.resource.team_id === activeTeamID ? inventory.error : undefined);
+  const selectedResource = !detailError ? detail.data : undefined;
+  const selectedMachine = selectedResource ? boxFromResource(selectedResource.resource, teams) : undefined;
+  const ownsSelected = !!selectedMachine && selectedMachine.user_id === user?.id;
+  const machineList = useMemo(() => (inventory.snapshot?.resources || []).map(resource => boxFromResource(resource, teams)), [inventory.snapshot, teams]);
+
   const sizes = useQuery({
     queryKey: ["sizes", token, activeTeamID, selectedProvider],
     enabled: Boolean(activeTeamID && selectedProvider),
@@ -93,7 +102,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
       setImage("");
       setAddOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["machines", token] });
-      void navigate({ to: "/boxes/$name", params: { name: data.machine.name } });
+      void navigate({ to: "/boxes/$resourceID", params: { resourceID: data.machine.resource_id! } });
     },
   });
   const saveShortcut = useMutation({
@@ -125,7 +134,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
   });
   const renameMachine = useMutation({
     mutationFn: ({ from, name }: { from: string; name: string }) => apiFetch(`/v1/machines/${encodeURIComponent(from)}`, token, { method: "PATCH", body: { name } }),
-    onSuccess: (_, { name }) => { void queryClient.invalidateQueries({ queryKey: ["machines", token] }); void navigate({ to: "/boxes/$name", params: { name } }); },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["resource", token, selectedResourceID] }); },
   });
   const moveMachine = useMutation({
     mutationFn: (input: { machineName: string; team: string }) => apiFetch<MachineResponse>(`/v1/machines/${encodeURIComponent(input.machineName)}/move`, token, {
@@ -137,25 +146,12 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
       void navigate({ to: "/" });
     },
   });
-  const allMachines = useMemo(() => [...(machines.data?.machines || [])].map(machine => ({ ...machine, ...(machine.user_id === user?.id ? { owner_name: user?.name, owner_email: user?.email } : {}) })).sort((a, b) => a.name.localeCompare(b.name)), [machines.data, user]);
-  const machineList = useMemo(() => {
-    if (!activeTeamID) return allMachines;
-    return allMachines.filter((machine) => (machine.team_id || machine.org_id) === activeTeamID);
-  }, [activeTeamID, allMachines]);
-  const selectedMachine = selectedName ? machineList.find((machine) => machine.name === selectedName) : undefined;
-  const missingName = selectedName && machines.data && !selectedMachine ? selectedName : undefined;
-  const connect = useQuery({
-    queryKey: ["connect", selectedMachine?.name, token],
-    enabled: Boolean(selectedMachine && !selectedMachine.create_state),
-    queryFn: () => apiFetch<ConnectResponse>(`/v1/machines/${encodeURIComponent(selectedMachine?.name || "")}/connect`, token),
-  });
-
   const createError = createMachine.error ? (createMachine.error as Error).message : "";
   useEffect(() => {
     if (image && !imageOptions.some((option) => imageValue(option) === image)) setImage("");
   }, [image, imageOptions]);
   useEffect(() => {
-    if (sizes.data && !sizes.data.sizes.some((option) => option.name === size)) setSize("small");
+    if (sizes.data && !sizes.data.sizes.some((option) => option.name === size)) setSize(sizes.data.sizes[0]?.name || "");
   }, [size, sizes.data]);
 
   const selectedSize = sizes.data?.sizes.find((option) => option.name === size);
@@ -185,25 +181,25 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
       />
 
       <div className="workspace-body">
-        {machineList.length ? (
+        {inventory.error ? <p className="error" role="alert">{inventory.error}</p> : machineList.length ? (
           <div className="panel table-panel">
             <table className="data-table boxes-table rows-clickable">
               <thead>
                 <tr>
                   <th>Box</th>
                   <th aria-label="Creator">◎</th><th>Status</th><th>Location</th>
-                  <th>Public preview</th>
+                  <th>Preview</th>
                 </tr>
               </thead>
               <tbody>
                 {machineList.map((machine) => (
                   <tr
-                    key={machine.name}
-                    className={machine.name === selectedName ? "selected" : undefined}
-                    onClick={() => void navigate({ to: "/boxes/$name", params: { name: machine.name } })}
+                    key={machine.resource_id}
+                    className={machine.resource_id === selectedResourceID ? "selected" : undefined}
+                    onClick={() => void navigate({ to: "/boxes/$resourceID", params: { resourceID: machine.resource_id } })}
                   >
                     <td>
-                      <Link className="box-name" to="/boxes/$name" params={{ name: machine.name }} onClick={(event) => event.stopPropagation()}>
+                      <Link className="box-name" to="/boxes/$resourceID" params={{ resourceID: machine.resource_id }} onClick={(event) => event.stopPropagation()}>
                         <BoxAvatar machine={machine} />
                         <strong>{machine.name}</strong>
                       </Link>
@@ -214,7 +210,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
                         ? <span className="recovery-label"><TriangleAlert size={14} /> destroy and recreate</span>
                         : machine.create_state === "provisioning"
                           ? <span className="hint">Creating…</span>
-                          : machine.preview_url
+                          : machine.preview_url || machine.preview_transport === "provider"
                             ? <PreviewLink machine={machine} />
                             : <span className="hint">Not configured</span>}
                     </td>
@@ -223,13 +219,9 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
               </tbody>
             </table>
           </div>
-        ) : machines.isLoading ? (
+        ) : !inventory.snapshot && activeTeamID ? (
           <div className="panel">
             <div className="empty"><Server size={22} /><span>Loading boxes</span></div>
-          </div>
-        ) : allMachines.length ? (
-          <div className="panel">
-            <NoTeamBoxes teamName={activeTeam?.name || "this team"} onCreate={() => setAddOpen(true)} />
           </div>
         ) : (
           <div className="panel"><GettingStarted onCreate={() => setAddOpen(true)} /></div>
@@ -242,10 +234,10 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
             Machine name
             <input value={name} onChange={(event) => setName(slugName(event.target.value))} placeholder="porch" required />
           </label>
-          {providerList.length > 1 ? (
+          {providerList.length ? (
             <label>
               Provider
-              <select value={selectedProvider} onChange={(event) => { setProvider(event.target.value); setSize("small"); setShortcutPlan(""); }}>
+              <select aria-label="Provider" value={selectedProvider} onChange={(event) => { setProvider(event.target.value); setSize("small"); setShortcutPlan(""); setImage(""); }}>
                 {providerList.map((option) => (
                   <option value={option.name} key={option.name}>{option.label}{option.default ? " (default)" : ""}</option>
                 ))}
@@ -254,7 +246,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
           ) : null}
           <label>
             Size
-            <select value={size} onChange={(event) => setSize(event.target.value)} disabled={sizes.isLoading}>
+            <select aria-label="Size" value={size} onChange={(event) => setSize(event.target.value)} disabled={sizes.isLoading}>
               {(sizes.data?.sizes || []).map((option) => (
                 <option value={option.name} key={option.name}>{option.name} - {planHardware(option.plan)}</option>
               ))}
@@ -303,7 +295,7 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
           {imageOptions.length ? (
             <label>
               Image
-              <select value={image} onChange={(event) => setImage(event.target.value)}>
+              <select aria-label="Image" value={image} onChange={(event) => setImage(event.target.value)}>
                 <option value="">BoxHaven default</option>
                 {imageOptions.map((option) => (
                   <option value={imageValue(option)} key={`${option.provider || "provider"}/${imageValue(option)}`}>
@@ -319,21 +311,25 @@ export function Dashboard({ selectedName }: { selectedName?: string }) {
               <strong>{activeTeam?.name || teams[0]?.name || "Team"}</strong>
             </div>
           ) : null}
-          <button className="primary-button" type="submit" disabled={createMachine.isPending}>
+          <button className="primary-button" type="submit" disabled={createMachine.isPending || !activeTeamID || !selectedProvider || !selectedSize || sizes.isFetching}>
             <Plus size={16} />
             {createMachine.isPending ? "Creating" : "Create box"}
           </button>
+          {[providers.error, sizes.error, images.error].filter(Boolean).map((error, index) => <p className="error" key={index}>{(error as Error).message}</p>)}
+          {providers.isSuccess && !providerList.length ? <p className="error">No providers are configured. Ask your administrator to connect a provider.</p> : null}
           {createError ? <p className="error">{createError}</p> : null}
         </form>
       </Drawer>
 
       <BoxDrawer
-        open={Boolean(selectedName)}
+        open={Boolean(selectedResourceID)}
         machine={selectedMachine}
-        missingName={missingName}
+        error={detailError}
         teams={teams}
-        connect={connect.data}
-        loading={machines.isLoading || (Boolean(selectedMachine) && connect.isLoading)}
+        resource={selectedResource}
+        isOwner={ownsSelected}
+        actionError={destroyMachine.error?.message || ""}
+        loading={detail.isPending}
         onClose={() => void navigate({ to: "/" })}
         onRename={(from, name) => renameMachine.mutateAsync({ from, name })}
         onDestroy={(machineName) => destroyMachine.mutate(machineName)}
@@ -392,22 +388,14 @@ function GettingStarted({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-function NoTeamBoxes({ teamName, onCreate }: { teamName: string; onCreate: () => void }) {
-  return (
-    <div className="empty empty-action">
-      <Server size={22} />
-      <span>No boxes in {teamName}.</span>
-      <button className="link-button" type="button" onClick={onCreate}>Create one</button>
-    </div>
-  );
-}
-
-function BoxDrawer({ open, machine, onRename, missingName, teams, connect, loading, onClose, onDestroy, destroying, onMove, moving, moveError }: {
+function BoxDrawer({ open, machine, onRename, error, teams, resource, isOwner, actionError, loading, onClose, onDestroy, destroying, onMove, moving, moveError }: {
   open: boolean;
   machine?: Machine;
-  missingName?: string;
+  error?: string;
   teams: TeamInfo[];
-  connect?: ConnectResponse;
+  resource?: ResourceResponse;
+  isOwner: boolean;
+  actionError: string;
   loading: boolean;
   onClose: () => void;
   onRename: (from: string, name: string) => Promise<unknown>;
@@ -430,11 +418,12 @@ function BoxDrawer({ open, machine, onRename, missingName, teams, connect, loadi
         onClose={onClose}
         title={machine.name}
         headingIcon={<BoxAvatar machine={machine} />}
-        actions={<details className="box-overflow"><summary aria-label="Box actions">•••</summary><div><button className="danger-button" disabled={destroying} onClick={() => { if (window.confirm(`Destroy ${machine.name}?`)) onDestroy(machine.name); }}>{destroying ? "Destroying…" : "Destroy box…"}</button></div></details>}
+        actions={isOwner ? <details className="box-overflow"><summary aria-label="Box actions">•••</summary><div><button className="danger-button" disabled={destroying} onClick={() => { if (window.confirm(`Destroy ${machine.name}?`)) onDestroy(machine.name); }}>{destroying ? "Destroying…" : "Destroy box…"}</button></div></details> : undefined}
 
       >
-        <div className="box-detail-actions"><CreatorBadge machine={machine} /><BoxStatus machine={machine} /><button className="secondary-button" onClick={() => { setNextName(machine.name); setRenaming(true); }}>Rename</button></div>
-        {renaming ? <form className="rename-form" onSubmit={async event => { event.preventDefault(); setSaving(true); setRenameError(""); try { await onRename(machine.name, nextName); setRenaming(false); } catch (error) { setRenameError((error as Error).message); } finally { setSaving(false); } }}><label>Box name<input required maxLength={63} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={nextName} onChange={event => setNextName(event.target.value)} /></label><button className="primary-button" disabled={saving}>Save</button><button type="button" className="secondary-button" onClick={() => setRenaming(false)}>Cancel</button>{renameError ? <p role="alert">{renameError}</p> : null}</form> : null}
+        <div className="box-detail-actions"><CreatorBadge machine={machine} /><BoxStatus machine={machine} />{isOwner && <button className="secondary-button" onClick={() => { setNextName(machine.name); setRenaming(true); }}>Rename</button>}</div>
+        {actionError && <p className="error" role="alert">{actionError}</p>}
+        {isOwner && renaming ? <form className="rename-form" onSubmit={async event => { event.preventDefault(); setSaving(true); setRenameError(""); try { await onRename(machine.name, nextName); setRenaming(false); } catch (error) { setRenameError((error as Error).message); } finally { setSaving(false); } }}><label>Box name<input required maxLength={63} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={nextName} onChange={event => setNextName(event.target.value)} /></label><button className="primary-button" disabled={saving}>Save</button><button type="button" className="secondary-button" onClick={() => setRenaming(false)}>Cancel</button>{renameError ? <p role="alert">{renameError}</p> : null}</form> : null}
         {machine.create_state === "recovery_required" ? (
           <div className="recovery-notice" role="alert">
             <TriangleAlert size={18} />
@@ -454,34 +443,34 @@ function BoxDrawer({ open, machine, onRename, missingName, teams, connect, loadi
         {machine.create_state ? null : (
           <>
             {machine.preview_url ? <PreviewLink machine={machine} prominent /> : null}
-            <CommandBlock label="Preview" value={machine.preview_url || ""} />
-            <CommandBlock label="Connect" value={connect?.connect.cli || `bh connect ${machine.name}`} />
-            <CommandBlock label="Run" value={connect?.connect.cli_run || `bh run ${machine.name}`} />
+            {isOwner && <>
+              <CommandBlock label="Connect" value={`bh connect ${machine.name}`} />
+              <CommandBlock label="Run" value={`bh run ${machine.name}`} />
+            </>}
           </>
         )}
         <dl className="meta">
           <div><dt>Team</dt><dd>{machine.team_name || machine.team_slug || "-"}</dd></div>
           <div><dt>Provider ID</dt><dd>{machine.provider_id || "-"}</dd></div>
           <div><dt>Project path</dt><dd>{machine.project_path || "/opt/boxhaven/project"}</dd></div>
-          <div><dt>Repo</dt><dd>{machine.repo_url || "-"}</dd></div>
-          <div><dt>Branch</dt><dd>{machine.branch || "-"}</dd></div>
           <div><dt>Last sync</dt><dd>{formatDate(machine.last_synced_at)}</dd></div>
           <div><dt>Updated</dt><dd>{formatDate(machine.updated_at)}</dd></div>
         </dl>
-        {machine.create_state === "recovery_required" ? null : (
+        {!isOwner || machine.create_state === "recovery_required" ? null : (
           <MoveTeamControl key={`${machine.name}:${machine.team_id || ""}`} machine={machine} teams={teams} onMove={onMove} moving={moving} moveError={moveError} />
         )}
+        {resource && <BoxAccess key={`${resource.resource.resource_id}:${resource.resource.team_id}:${resource.role}`} data={resource} />}
       </Drawer>
     );
   }
 
   return (
-    <Drawer wide open={open} onClose={onClose} eyebrow="box" title={missingName || "Box"}>
-      {missingName ? (
+    <Drawer wide open={open} onClose={onClose} eyebrow="box" title="Box">
+      {error ? (
         <div className="detail-notfound">
           <Server size={32} />
-          <strong>No box named "{missingName}"</strong>
-          <span>It may have been destroyed, renamed, or never existed.</span>
+          <strong>Box unavailable</strong>
+          <span role="alert">{error}</span>
           <button className="link-button" type="button" onClick={onClose}>Back to all boxes</button>
         </div>
       ) : (
@@ -495,13 +484,13 @@ function PreviewLink({ machine, prominent = false }: { machine: Machine; promine
   return (
     <a
       className={prominent ? "primary-button preview-link" : "preview-link"}
-      href={machine.preview_url}
+      href={machine.preview_transport === "provider" ? `/boxes/${machine.resource_id}` : machine.preview_url}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`Open public preview for ${machine.name} (new tab)`}
+      aria-label={`Open ${machine.preview_transport === "provider" ? "private preview access" : "public preview"} for ${machine.name} (new tab)`}
       onClick={(event) => event.stopPropagation()}
     >
-      {prominent ? "Open preview" : <span>{machine.preview_hostname || machine.preview_url}</span>}
+      {prominent ? "Open preview" : <span>{machine.preview_transport === "provider" ? "Private preview" : machine.preview_hostname || machine.preview_url}</span>}
       <ExternalLink size={14} aria-hidden="true" />
     </a>
   );

@@ -4,7 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
-import Fastify, { FastifyInstance } from "fastify";
+import Fastify, { FastifyInstance, type FastifyReply } from "fastify";
 import { WebSocket } from "ws";
 import { BackendAuth } from "./auth.js";
 import type { OrgMachinesResponse } from "./client.js";
@@ -13,11 +13,12 @@ import { BackendModule, BackendModuleContext, BackendModuleRuntime, BackendTeam,
 import { AllowAllCommercialPolicy, CommercialPolicy, MachineLifecycleEvent, MachineLifecycleFact, PolicyActor, PolicyTeam, policyMachineIdentity } from "./policy.js";
 import { PolicyEventDelivery } from "./policy_delivery.js";
 import { ProviderRegistry, providerInfo } from "./providers.js";
-import { registerTeamSync } from "./team_sync.js";
+import { registerTeamSync, teamResource } from "./team_sync.js";
 import { registerResourceControl } from "./resource_control.js";
 import { GitHubReleaseChecker, ReleaseUpdateChecker } from "./releases.js";
 import { SSHCertificateAuthority } from "./ssh_ca.js";
-import { machineSSHAccess } from "./ssh_access.js";
+import { Readable } from "node:stream";
+import { SSHRelay, type RelayLease } from "./ssh_relay.js";
 import { AmbiguousImageReferenceError, DeletionGuardError, MachineCleanupPendingError, StateStore, TeamDeletionBlockers } from "./state.js";
 import { CreateMachineRequest, MachineCreateError, MachineImage, MachinePlan, MachineProvider, MachineSizeOption, MachineSizeShortcut, RemoteMachine, TeamImageRecord, defaultProjectPath, defaultSSHUser } from "./types.js";
 
@@ -181,10 +182,19 @@ export function createBackend(options: BackendOptions): FastifyInstance {
   void app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
   registerCors(app, options.corsOrigins || []);
   const agents = new Map<string, AgentConnection>();
+  const relay = new SSHRelay(options.store, options.providers, options.auth.$context.then(context => context.secret), options.apiPublicURL || "http://localhost:8787");
+  const describeResource = (machine: RemoteMachine) => {
+    const owner = options.store.db.prepare("SELECT name, email FROM user WHERE id = ?").get(machine.user_id || "") as { name: string; email: string } | undefined;
+    return { ...teamResource(normalizeMachine(options, machine)), owner_name: owner?.name, owner_email: owner?.email,
+      updated_at: machine.updated_at,
+      status: machine.bootstrap_complete && !machine.create_state ? (connectedAgent(agents, machine) ? "online" : "offline") : undefined };
+  };
   registerResourceControl(app, {
+    describe: describeResource,
     context: moduleContext,
+    preview: (machine, actorID) => relay.preview(normalizeMachine(options, machine), actorID),
     runtimeConnected: machine => !!connectedAgent(agents, machine),
-    issueSSH: (machine, actorID, publicKey, ttl) => issueMachineSSHCertificate(options, machine, actorID, publicKey, ttl),
+    issueSSH: (machine, actorID, publicKey, ttl) => issueMachineSSHCertificate(options, relay, machine, actorID, publicKey, ttl),
     prepareSession: async (machine, command, attach) => {
       const agent = connectedAgent(agents, machine);
       if (!agent) throw new AgentRPCError("Resource runtime disconnected", "agent_disconnected");
@@ -192,6 +202,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     },
   });
   registerTeamSync(app, {
+    describe: describeResource,
     store: options.store,
     authorize: async (headers, teamID) => {
       const sink = { code: (_status: number) => ({ send: (_payload: unknown) => undefined }) };
@@ -204,7 +215,8 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     app.get("/v1/agent/connect", { websocket: true }, async (socket, request) => {
       await handleAgentConnection(options, agents, socket, request);
     });
-    registerPreviewProxyRoutes(app, options);
+    relay.register(app);
+    registerPreviewProxyRoutes(app, options, relay);
   });
 
   app.get("/healthz", async () => "ok\n");
@@ -654,7 +666,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       machine: decorateTeam(publicMachine(healed), auth.teams),
       status: refreshed.status || "leased",
       connect: {
-        transport: machine.ssh_transport === "websocket" ? "ssh_websocket_certificate" : "direct_ssh_certificate",
+        transport: "backend_ssh_relay",
         cli: `bh connect ${machine.name}`,
         cli_run: `bh run ${machine.name}`,
       },
@@ -708,6 +720,17 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     return { machine: publicMachine(renamed), status: "renamed" };
   });
 
+  app.get<{ Params: { name: string } }>("/v1/machines/:name/preview", async (request, reply) => {
+    const auth = await requireAuth(options, request, reply);
+    if (!auth) return;
+    const machine = await ownedMachine(options, auth, request.params.name);
+    if (!machine) return reply.code(404).send({ id: "not_found", message: "Machine is unavailable" });
+    const normalized = normalizeMachine(options, machine);
+    reply.header("Cache-Control", "no-store");
+    if (!normalized.preview_url) return reply.code(409).send({ id: "not_ready", message: "Preview is unavailable" });
+    return normalized.preview_transport === "provider" ? relay.preview(normalized, auth.userID) : { url: normalized.preview_url, authentication: "public" };
+  });
+
   app.post<{ Params: { name: string }; Body: SSHCertificateRequest }>("/v1/machines/:name/ssh-cert", async (request, reply) => {
     const auth = await requireAuth(options, request, reply);
     if (!auth) return;
@@ -729,7 +752,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       return reply.code(400).send({ id: "bad_request", message: "valid SSH public key is required" });
     }
     reply.header("Cache-Control", "no-store");
-    return issueMachineSSHCertificate(options, normalized, auth.userID, publicKey, request.body?.ttl_seconds);
+    return issueMachineSSHCertificate(options, relay, normalized, auth.userID, publicKey, request.body?.ttl_seconds);
   });
 
   app.post<{ Params: { name: string }; Body: RemoteSetupRequest }>("/v1/machines/:name/setup", async (request, reply) => {
@@ -1468,7 +1491,7 @@ function normalizeMachine(options: BackendOptions, machine: RemoteMachine): Remo
   const now = new Date().toISOString();
   const name = machine.name.trim().toLowerCase();
   const preview = previewOptions(options);
-  const previewHostname = machine.preview_transport === "provider" ? "" : preview && machine.user_id
+  const previewHostname = preview && machine.user_id
     ? normalizeHostname(machine.preview_hostname || generatedPreviewHostname(machine.user_id, name, preview.baseDomain))
     : normalizeHostname(machine.preview_hostname || "");
   const provider = options.providers.get(machine.provider);
@@ -1977,17 +2000,17 @@ function connectedAgent(agents: Map<string, AgentConnection>, machine: RemoteMac
   return agent?.socket.readyState === WebSocket.OPEN ? agent : undefined;
 }
 
-async function issueMachineSSHCertificate(options: BackendOptions, machine: RemoteMachine, actorID: string, publicKey: string, ttl?: number) {
+async function issueMachineSSHCertificate(options: BackendOptions, relay: SSHRelay, machine: RemoteMachine, actorID: string, publicKey: string, ttl?: number) {
   const normalized = normalizeMachine(options, machine);
   const signed = await options.sshCA.signUserPublicKey({
     publicKey, principal: normalized.ssh_principal || sshPrincipalForMachine(normalized),
     identity: `boxhaven-${actorID}-${normalized.resource_id}`, ttlSeconds: ttl,
   });
-  const access = await machineSSHAccess(options.providers.forMachine(normalized), normalized, actorID, signed.expires_at);
+  const access = await relay.issue(normalized, actorID, signed.expires_at);
   return {
     ...signed, access,
-    host: access.kind === "tcp" ? access.host : `${normalized.resource_id}.boxhaven.invalid`,
-    port: access.kind === "tcp" ? access.port : 22, ssh_user: normalized.ssh_user || defaultSSHUser,
+    host: normalized.public_ipv4 || `${normalized.resource_id}.boxhaven.invalid`,
+    port: 22, ssh_user: normalized.ssh_user || defaultSSHUser,
   };
 }
 
@@ -2641,26 +2664,31 @@ async function findMachineByPreviewHostname(options: BackendOptions, hostname: s
   return undefined;
 }
 
-function registerPreviewProxyRoutes(app: FastifyInstance, options: BackendOptions): void {
-  app.route<{ Params: { hostname: string; "*": string } }>({
-    method: "GET",
-    url: "/v1/preview/proxy/:hostname/*",
-    handler: async (request, reply) => proxyPreviewRequest(options, request, reply),
-    wsHandler: async (socket, request) => proxyPreviewWebSocketRequest(options, socket, request),
-  });
-  for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+function registerPreviewProxyRoutes(app: FastifyInstance, options: BackendOptions, relay: SSHRelay): void {
+  void app.register(async app => {
+    app.removeAllContentTypeParsers();
+    app.addContentTypeParser("*", (_request, payload, done) => done(null, payload));
     app.route<{ Params: { hostname: string; "*": string } }>({
-      method,
+      method: "GET",
       url: "/v1/preview/proxy/:hostname/*",
-      handler: async (request, reply) => proxyPreviewRequest(options, request, reply),
+      handler: async (request, reply) => proxyPreviewRequest(options, relay, request, reply),
+      wsHandler: async (socket, request) => proxyPreviewWebSocketRequest(options, relay, socket, request),
     });
-  }
+    for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      app.route<{ Params: { hostname: string; "*": string } }>({
+        method,
+        url: "/v1/preview/proxy/:hostname/*",
+        handler: async (request, reply) => proxyPreviewRequest(options, relay, request, reply),
+      });
+    }
+  });
 }
 
 async function proxyPreviewRequest(
   options: BackendOptions,
+  relay: SSHRelay,
   request: { method: string; url: string; headers: Record<string, string | string[] | undefined>; params: { hostname: string }; body?: unknown },
-  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown }; header: (name: string, value: string) => unknown; send: (payload: Buffer | string) => unknown },
+  reply: FastifyReply,
 ): Promise<unknown> {
   const preview = previewOptions(options);
   const hostname = normalizeHostname(request.params.hostname);
@@ -2668,43 +2696,88 @@ async function proxyPreviewRequest(
   if (!preview || !machine) {
     return reply.code(404).send({ id: "not_found", message: "preview hostname is not registered" });
   }
-  if (!machine.public_ipv4) {
-    return reply.code(503).send({ id: "not_ready", message: "preview machine does not have a public IPv4 yet" });
+  const suffix = previewTargetSuffix(request.url, hostname);
+  let privateLease: RelayLease | undefined;
+  if (machine.preview_transport === "provider") {
+    if (request.headers.host !== hostname) return reply.code(403).send("Private previews require their dedicated hostname");
+    if (suffix === "/_boxhaven/access" && request.method === "GET") {
+      reply.header("Content-Type", "text/html; charset=utf-8");
+      reply.header("Cache-Control", "no-store"); reply.header("Referrer-Policy", "no-referrer");
+      reply.header("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'");
+      return reply.send(previewLoginPage);
+    }
+    if (suffix === "/_boxhaven/session" && request.method === "POST") {
+      if (request.headers.origin !== `https://${hostname}`) return reply.code(403).send("Preview origin denied");
+      try {
+        const token = String(request.headers.authorization || "").replace(/^Bearer /, "");
+        const lease = await relay.authorize(token, machine.resource_id!, "preview");
+        reply.header("Set-Cookie", `__Host-boxhaven_preview=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${Math.max(0, Math.floor((lease.expires-Date.now())/1000))}`);
+        reply.header("Cache-Control", "no-store"); return reply.send("ok");
+      } catch { return reply.code(403).send("Preview access expired or was revoked"); }
+    }
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && request.headers.origin !== `https://${hostname}`) return reply.code(403).send("Preview origin denied");
+    try { privateLease = await relay.authorize(previewCookie(request.headers), machine.resource_id!, "preview"); }
+    catch {
+      reply.header("Cache-Control", "no-store");
+      return reply.code(403).send("Open this private preview from its BoxHaven box page to request team access.");
+    }
   }
-
-  const targetURL = new URL(previewTargetSuffix(request.url, hostname), `http://${machine.public_ipv4}:${preview.targetPort}`);
+  let upstreamAccess;
+  try { upstreamAccess = await previewUpstream(options, machine); }
+  catch { return reply.code(503).send("Preview upstream is unavailable"); }
+  // Concatenate the path so a //host path cannot replace the trusted provider host.
+  const targetURL = new URL(upstreamAccess.url + suffix);
   const headers = previewProxyHeaders(request.headers, hostname);
+  for (const [name, value] of Object.entries(upstreamAccess.headers)) headers.set(name, value);
+  const abort = new AbortController();
+  let checking = false;
+  const check = privateLease ? setInterval(() => {
+    if (checking) return; checking = true;
+    void relay.current(privateLease!).then(machine => { if (!machine) abort.abort(); }).catch(() => abort.abort()).finally(() => { checking = false; });
+  }, 1000) : undefined;
+  const cleanup = () => { clearInterval(check); abort.abort(); };
+  reply.raw.once("close", cleanup);
+  reply.raw.once("finish", cleanup);
   const init: RequestInit = {
     method: request.method,
-    headers,
+    headers, redirect: "manual",
+    signal: AbortSignal.any([abort.signal, AbortSignal.timeout(60000)]),
   };
   if (request.method !== "GET" && request.method !== "HEAD" && request.body !== undefined) {
-    init.body = previewProxyBody(request.body);
+    init.body = request.body instanceof Readable ? request.body as unknown as BodyInit : previewProxyBody(request.body);
+    if (request.body instanceof Readable) (init as RequestInit & { duplex: string }).duplex = "half";
   }
 
   let upstream: Response;
   try {
     upstream = await fetch(targetURL, init);
   } catch (error) {
-    return reply.code(502).send({ id: "preview_unreachable", message: `preview upstream is unreachable: ${(error as Error).message}` });
+    return reply.code(502).send({ id: "preview_unreachable", message: "preview upstream is unreachable" });
   }
 
   reply.code(upstream.status);
+  if (machine.preview_transport === "provider") reply.header("Cache-Control", "private, no-store");
   upstream.headers.forEach((value, name) => {
-    if (!hopByHopHeaders.has(name.toLowerCase())) {
+    if (!hopByHopHeaders.has(name.toLowerCase()) && !["content-encoding", "content-length", "set-cookie"].includes(name.toLowerCase())
+      && !(machine.preview_transport === "provider" && name.toLowerCase() === "cache-control")) {
       reply.header(name, value);
     }
   });
+  const cookies = upstream.headers.getSetCookie().filter(value => !value.startsWith("__Host-boxhaven_preview="));
+  if (cookies.length) reply.header("set-cookie", cookies);
   reply.header("x-boxhaven-preview-machine", machine.name);
   if (request.method === "HEAD") return reply.send("");
-  return reply.send(Buffer.from(await upstream.arrayBuffer()));
+  return reply.send(upstream.body ? Readable.fromWeb(upstream.body as import("node:stream/web").ReadableStream) : "");
 }
 
 async function proxyPreviewWebSocketRequest(
   options: BackendOptions,
+  relay: SSHRelay,
   client: WebSocket,
   request: { url: string; headers: Record<string, string | string[] | undefined>; params: { hostname: string } },
 ): Promise<void> {
+  client.pause();
+  client.on("error", () => {});
   const preview = previewOptions(options);
   const hostname = normalizeHostname(request.params.hostname);
   const machine = await findMachineByPreviewHostname(options, hostname);
@@ -2712,18 +2785,32 @@ async function proxyPreviewWebSocketRequest(
     closePreviewWebSocket(client, 1008, "preview hostname is not registered");
     return;
   }
-  if (!machine.public_ipv4) {
-    closePreviewWebSocket(client, 1011, "preview machine has no public IPv4");
-    return;
+  let lease;
+  if (machine.preview_transport === "provider") {
+    try {
+      if (request.headers.host !== hostname || request.headers.origin !== `https://${hostname}`) throw new Error("origin");
+      lease = await relay.authorize(previewCookie(request.headers), machine.resource_id!, "preview");
+    } catch { closePreviewWebSocket(client, 1008, "Preview access denied"); return; }
   }
-
-  const targetURL = new URL(previewTargetSuffix(request.url, hostname), `ws://${machine.public_ipv4}:${preview.targetPort}`);
-  const headers = previewProxyWebSocketHeaders(request.headers, hostname);
+  let access;
+  try { access = await previewUpstream(options, machine); }
+  catch { closePreviewWebSocket(client, 1011, "Preview unavailable"); return; }
+  if (client.readyState !== WebSocket.OPEN) return;
+  const targetURL = new URL(access.url + previewTargetSuffix(request.url, hostname));
+  targetURL.protocol = targetURL.protocol === "https:" ? "wss:" : "ws:";
+  const headers = { ...previewProxyWebSocketHeaders(request.headers, hostname), ...access.headers };
+  let checking = false;
+  const check = lease ? setInterval(() => {
+    if (checking) return; checking = true;
+    void relay.current(lease!).then(machine => { if (!machine) client.terminate(); }).catch(() => client.terminate()).finally(() => { checking = false; });
+  }, 1000) : undefined;
+  client.once("close", () => clearInterval(check));
   const protocols = previewWebSocketProtocols(request.headers["sec-websocket-protocol"]);
   const upstream = protocols.length > 0
-    ? new WebSocket(targetURL, protocols, { headers })
-    : new WebSocket(targetURL, { headers });
+    ? new WebSocket(targetURL, protocols, { headers, handshakeTimeout: 15000, maxPayload: 1024 * 1024, perMessageDeflate: false })
+    : new WebSocket(targetURL, { headers, handshakeTimeout: 15000, maxPayload: 1024 * 1024, perMessageDeflate: false });
   const pending: Array<{ data: WebSocket.RawData; isBinary: boolean }> = [];
+  let pendingBytes = 0;
 
   upstream.on("open", () => {
     while (pending.length > 0 && upstream.readyState === WebSocket.OPEN) {
@@ -2732,14 +2819,20 @@ async function proxyPreviewWebSocketRequest(
     }
   });
   upstream.on("message", (data, isBinary) => {
+    if (client.bufferedAmount > 1024 * 1024) { client.terminate(); return; }
     if (client.readyState === WebSocket.OPEN) client.send(data, { binary: isBinary });
   });
   client.on("message", (data, isBinary) => {
     if (upstream.readyState === WebSocket.OPEN) {
+      if (upstream.bufferedAmount > 1024 * 1024) { client.terminate(); return; }
       upstream.send(data, { binary: isBinary });
       return;
     }
-    if (upstream.readyState === WebSocket.CONNECTING) pending.push({ data, isBinary });
+    if (upstream.readyState === WebSocket.CONNECTING) {
+      pendingBytes += Array.isArray(data) ? data.reduce((n, b) => n + b.length, 0) : data.byteLength;
+      if (pendingBytes > 1024 * 1024) { client.terminate(); return; }
+      pending.push({ data, isBinary });
+    }
   });
   upstream.on("close", (code, reason) => closePreviewWebSocket(client, code || 1000, reason.toString()));
   client.on("close", (code, reason) => closePreviewWebSocket(upstream, code || 1000, reason.toString()));
@@ -2749,14 +2842,38 @@ async function proxyPreviewWebSocketRequest(
     response.resume();
     closePreviewWebSocket(client, 1011, `preview upstream websocket rejected ${response.statusCode || ""}`.trim());
   });
+  client.resume();
+}
+
+const previewLoginPage = `<!doctype html><meta name="referrer" content="no-referrer"><title>Opening BoxHaven preview</title><p id="status">Opening your private preview…</p><script>
+const token=location.hash.slice(1); history.replaceState(null,"","/_boxhaven/access");
+fetch("/_boxhaven/session",{method:"POST",headers:{Authorization:"Bearer "+token}}).then(r=>{if(!r.ok)throw Error();location.replace("/");}).catch(()=>{document.getElementById("status").textContent="Access expired. Open the preview again from Boxes in BoxHaven.";});
+</script>`;
+
+function previewCookie(headers: Record<string, string | string[] | undefined>): string {
+  return String(headers.cookie || "").split(";").map(part => part.trim()).find(part => part.startsWith("__Host-boxhaven_preview="))?.slice(24) || "";
+}
+
+async function previewUpstream(options: BackendOptions, machine: RemoteMachine): Promise<{ url: string; headers: Record<string, string> }> {
+  if (machine.preview_transport === "provider") {
+    const provider = options.providers.forMachine(machine);
+    if (!provider.issuePreviewAccess) throw new Error("Provider has no preview relay");
+    const access = await provider.issuePreviewAccess(machine, new Date(Date.now() + 900000).toISOString());
+    const url = new URL(access.url);
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error("Unsafe preview upstream");
+    return { ...access, url: url.origin };
+  }
+  if (!machine.public_ipv4) throw new Error("Machine has no preview address");
+  return { url: `http://${machine.public_ipv4}:${previewOptions(options)!.targetPort}`, headers: {} };
 }
 
 function previewProxyWebSocketHeaders(input: Record<string, string | string[] | undefined>, hostname: string): Record<string, string> {
   const headers: Record<string, string> = {};
   for (const [name, rawValue] of Object.entries(input)) {
     const lower = name.toLowerCase();
-    if (hopByHopHeaders.has(lower) || lower === "host" || lower.startsWith("sec-websocket-")) continue;
-    const values = Array.isArray(rawValue) ? rawValue : rawValue === undefined ? [] : [rawValue];
+    if (lower === "authorization" || lower.startsWith("x-exedev-") || lower.startsWith("x-boxhaven-") || hopByHopHeaders.has(lower) || lower === "host" || lower.startsWith("sec-websocket-")) continue;
+    const value = name.toLowerCase() === "cookie" ? String(rawValue || "").split(";").filter(part => !part.trim().startsWith("__Host-boxhaven_preview=")).join(";") : rawValue;
+    const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
     if (values.length > 0) headers[name] = values.join(", ");
   }
   headers["x-forwarded-host"] = hostname;
@@ -2771,6 +2888,7 @@ function previewWebSocketProtocols(value: string | string[] | undefined): string
 
 function closePreviewWebSocket(socket: WebSocket, code: number, reason: string): void {
   if (socket.readyState === WebSocket.OPEN) {
+    socket.resume();
     socket.close(validPreviewWebSocketCloseCode(code) ? code : 1000, reason.slice(0, 120));
     return;
   }
@@ -2796,8 +2914,9 @@ function previewProxyHeaders(input: Record<string, string | string[] | undefined
   const headers = new Headers();
   for (const [name, rawValue] of Object.entries(input)) {
     const lower = name.toLowerCase();
-    if (hopByHopHeaders.has(lower) || lower === "host") continue;
-    const values = Array.isArray(rawValue) ? rawValue : rawValue === undefined ? [] : [rawValue];
+    if (lower === "authorization" || lower.startsWith("x-exedev-") || lower.startsWith("x-boxhaven-") || hopByHopHeaders.has(lower) || lower === "host") continue;
+    const value = name.toLowerCase() === "cookie" ? String(rawValue || "").split(";").filter(part => !part.trim().startsWith("__Host-boxhaven_preview=")).join(";") : rawValue;
+    const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
     for (const value of values) headers.append(name, value);
   }
   headers.set("x-forwarded-host", hostname);

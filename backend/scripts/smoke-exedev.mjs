@@ -1,11 +1,12 @@
 // Real provider conformance, with an isolated local backend and private temporary
-// image registry. Only agent callbacks and authenticated image reads are exposed.
+// image registry. Only authenticated image reads, agent callbacks, and scoped SSH relay upgrades are exposed.
 // Run from backend: node --import tsx scripts/smoke-exedev.mjs
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { appendFileSync } from "node:fs";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { chromium } from "playwright-core";
+import { appendFileSync, existsSync } from "node:fs";
+import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { createServer, request as httpRequest } from "node:http";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
@@ -17,7 +18,7 @@ import { ExeDevProvider } from "../src/exedev.ts";
 import { exeDevHostFingerprint, exeDevSSHCommand } from "../src/exedev_ssh.ts";
 import { ProviderRegistry } from "../src/providers.ts";
 import { createBackend } from "../src/server.ts";
-import { machineSSHAccess } from "../src/ssh_access.ts";
+import { SSHRelay } from "../src/ssh_relay.ts";
 import { SSHCertificateAuthority } from "../src/ssh_ca.ts";
 import { StateStore } from "../src/state.ts";
 
@@ -54,6 +55,13 @@ try {
   registryStarted = true;
   const mapping = JSON.parse((await exec("docker", ["inspect", registryName])).stdout)[0].NetworkSettings.Ports["5000/tcp"][0];
   const registryPort = Number(mapping.HostPort);
+  // A fresh container can be mapped before the registry and VM port forwarding are ready.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${registryPort}/v2/`, { signal: AbortSignal.timeout(2000) });
+      assert.equal(response.status, 200); await response.body.cancel(); break;
+    } catch (error) { if (attempt >= 30) throw error; await delay(500); }
+  }
   const localRef = `127.0.0.1:${registryPort}/boxhaven/exedev:smoke`;
   await exec("docker", ["tag", image, localRef]);
   console.log("Uploading the runtime to the private local test registry");
@@ -77,7 +85,7 @@ try {
   });
   gateway.on("connection", socket => { sockets.add(socket); socket.on("close", () => sockets.delete(socket)); });
   gateway.on("upgrade", (req, socket, head) => {
-    if (req.url !== "/v1/agent/connect" || !backendPort || !req.headers.authorization) { socket.destroy(); return; }
+    if (!(req.url === "/v1/agent/connect" || /^\/v1\/resources\/[a-f0-9-]+\/relay\/ssh$/.test(req.url)) || !backendPort || !req.headers.authorization) { socket.destroy(); return; }
     const upstream = connect(backendPort, "127.0.0.1", () => {
       upstream.write(`${req.method} ${req.url} HTTP/1.1\r\n${Object.entries(req.headers).map(([k,v]) => `${k}: ${v}`).join("\r\n")}\r\n\r\n`);
       if (head.length) upstream.write(head);
@@ -126,7 +134,7 @@ try {
   const authOptions = { baseURL: "http://127.0.0.1/v1/auth", databasePath, secret: randomBytes(32).toString("hex"), email: { async send(message) { emails.push(message); } } };
   await migrateBackendAuth(authOptions);
   const sshCA = new SSHCertificateAuthority(join(temp, "ca"));
-  app = createBackend({ auth: createBackendAuth(authOptions), providers, store, sshCA, apiPublicURL: publicURL, machineReadyTimeoutMs: 300000, maxMachinesPerUser: 1 });
+  app = createBackend({ auth: createBackendAuth(authOptions), providers, store, sshCA, apiPublicURL: publicURL, previewBaseDomain: "preview.smoke.test", machineReadyTimeoutMs: 300000, maxMachinesPerUser: 1 });
   await app.listen({ host: "127.0.0.1", port: 0 }); backendPort = app.server.address().port;
   const email = `smoke-${suffix}@example.com`, password = randomBytes(24).toString("hex");
   ok(await app.inject({ method: "POST", url: "/v1/auth/sign-up/email", payload: { email, password, name: "exe.dev smoke" } }));
@@ -145,6 +153,8 @@ try {
   assert.equal(detail.role, "manager"); assert.equal(detail.capabilities.session_prepare, true);
   const { grant } = ok(await api("POST", `/v1/resources/${resourceID}/access/ssh`, { public_key: await readFile(join(temp, "device.pub"), "utf8") }));
   assert.equal(grant.access.kind, "websocket");
+  assert.equal(new URL(grant.access.url).host, new URL(publicURL).host);
+  assert.deepEqual(Object.keys(grant.access.headers), ["Authorization"]);
   await new Promise((resolve, reject) => {
     const ws = new WebSocket(grant.access.url, { headers: grant.access.headers, handshakeTimeout: 15000 });
     ws.on("open", () => { ws.close(); resolve(); });
@@ -167,7 +177,7 @@ try {
   assert.equal((await remote("sha256sum /opt/boxhaven/project/payload.bin")).stdout.split(" ")[0], digest(payload));
   await exec("rsync", ["-a", "-e", rsyncSSH, `${destination}:/opt/boxhaven/project/payload.bin`, join(temp, "download.bin")], { timeout: 60000 });
   assert.equal(digest(await readFile(join(temp, "download.bin"))), digest(payload));
-  console.log("PASS: direct certificate SSH, pinned host, and file upload");
+  console.log("PASS: backend-relayed certificate SSH, pinned host, and file upload");
   const prepared = ok(await api("POST", `/v1/resources/${resourceID}/sessions/prepare`, { command: ["bash", "-lc", "sleep 2; printf persistent-session-ok > /opt/boxhaven/project/result.txt; sleep 30"], attach: false }));
   assert.equal(prepared.operation.state, "completed");
   await delay(3000);
@@ -175,7 +185,8 @@ try {
   assert.equal(await readFile(join(temp, "result.txt"), "utf8"), "persistent-session-ok");
   console.log("PASS: durable session preparation, detached work, reconnect, and file download");
   const machine = await store.getResource(resourceID);
-  const short = await machineSSHAccess(provider, machine, machine.user_id, new Date(Date.now() + 10000).toISOString());
+  const relay = new SSHRelay(store, providers, Promise.resolve(authOptions.secret), publicURL);
+  const short = await relay.issue(machine, machine.user_id, new Date(Date.now() + 10000).toISOString());
   await new Promise((resolve, reject) => {
     const ws = new WebSocket(short.url, { headers: short.headers }); let opened = false;
     const timeout = setTimeout(() => { ws.terminate(); reject(new Error("Hosted stream remained open after expiry")); }, 15000);
@@ -187,10 +198,64 @@ try {
       else resolve();
     });
   });
+  // Exercise a real HTTP app through exe.dev and the authenticated backend proxy.
+  await writeFile(join(temp, "preview.cjs"), `
+const http = require('node:http');
+const {WebSocketServer} = require('/usr/local/lib/boxhaven/node_modules/ws');
+const server = http.createServer((req,res) => {res.setHeader('content-type','text/html');res.end('<h1>Private BoxHaven preview</h1><p>persistent-session-ok</p>');});
+const wss = new WebSocketServer({server}); wss.on('connection', ws => ws.on('message', data => ws.send(data)));
+server.listen(80,'0.0.0.0');
+`);
+  await exec("rsync", ["-a", "-e", rsyncSSH, join(temp, "preview.cjs"), `${destination}:/opt/boxhaven/project/preview.cjs`], { timeout: 30000 });
+  await remote("nohup node /opt/boxhaven/project/preview.cjs >/tmp/bh-preview-smoke.log 2>&1 </dev/null &");
+  await delay(1000);
   const preview = ok(await api("GET", `/v1/resources/${resourceID}/preview`));
-  const anonymous = await fetch(preview.url, { redirect: "manual", signal: AbortSignal.timeout(15000) });
-  assert.ok([301, 302, 303, 307, 308, 401, 403].includes(anonymous.status), `Anonymous preview status ${anonymous.status}`); await anonymous.body.cancel();
-  console.log("PASS: hosted WebSocket expiry and private preview");
+  assert.equal(preview.authentication, "team");
+  const cliPreview = JSON.parse((await exec(join(root, "bh"), ["preview", machineName, "--json"], {
+    cwd: temp, env: { ...process.env, BOXHAVEN_BACKEND_URL: `http://127.0.0.1:${backendPort}`, BOXHAVEN_TOKEN: token }, timeout: 30000,
+  })).stdout);
+  assert.equal(cliPreview.authentication, "team");
+  assert.equal(new URL(cliPreview.url).hostname, new URL(preview.url).hostname);
+  const launch = new URL(preview.url), previewPath = `/v1/preview/proxy/${launch.hostname}`;
+  assert.equal((await app.inject({ url: `${previewPath}/result.txt`, headers: { host: launch.hostname } })).statusCode, 403);
+  const session = await app.inject({ method: "POST", url: `${previewPath}/_boxhaven/session`, headers: {
+    host: launch.hostname, origin: launch.origin, authorization: `Bearer ${launch.hash.slice(1)}`,
+  } });
+  ok(session);
+  const cookie = String(session.headers["set-cookie"]).split(";")[0];
+  const page = await app.inject({ url: `${previewPath}/result.txt`, headers: { host: launch.hostname, cookie } });
+  assert.equal(page.statusCode, 200); assert.match(page.body, /persistent-session-ok/);
+  const ws = await app.injectWS(`${previewPath}/hmr`, { headers: { host: launch.hostname, cookie, origin: launch.origin } });
+  const echoed = new Promise((resolve, reject) => { ws.once("message", data => resolve(data.toString())); ws.once("error", reject); });
+  ws.send("private-hmr-ok"); assert.equal(await echoed, "private-hmr-ok");
+  const executablePath = [process.env.BOXHAVEN_PLAYWRIGHT_EXECUTABLE, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/google-chrome", "/usr/bin/chromium"].find(path => path && existsSync(path));
+  assert.ok(executablePath, "Chrome is required for the private preview browser smoke");
+  const browser = await chromium.launch({ executablePath, headless: true });
+  try {
+    const tab = await browser.newPage();
+    // Intercept only the test hostname; exercise the real backend handlers and
+    // browser cookie/fragment behavior without changing production DNS or TLS.
+    await tab.route(`https://${launch.hostname}/**`, async route => {
+      const req = route.request(), url = new URL(req.url());
+      const response = await app.inject({ method: req.method(), url: previewPath + url.pathname + url.search,
+        headers: { ...req.headers(), host: launch.hostname }, ...(req.postDataBuffer() ? { payload: req.postDataBuffer() } : {}) });
+      await route.fulfill({ status: response.statusCode, headers: Object.fromEntries(Object.entries(response.headers).filter(([name]) => !["content-length", "transfer-encoding", "connection"].includes(name)).map(([name,value]) => [name, Array.isArray(value) ? value.join("\n") : String(value)])), body: response.rawPayload });
+    });
+    await tab.goto(preview.url);
+    await tab.getByRole("heading", { name: "Private BoxHaven preview" }).waitFor();
+    assert.equal(new URL(tab.url()).hash, "");
+    const out = join(root, "backend/.artifacts/exedev-relay"); await mkdir(out, { recursive: true });
+    await tab.screenshot({ path: join(out, "private-preview.png"), fullPage: true });
+    console.log("PASS: browser exchanges launch fragment for a private preview cookie");
+  } finally { await browser.close(); }
+  const revoked = new Promise(resolve => ws.once("close", resolve));
+  // Removing membership revokes the same preview lease and SSH access.
+  store.db.prepare("DELETE FROM member WHERE organizationId = ? AND userId = ?").run(machine.org_id, machine.user_id);
+  assert.equal((await app.inject({ url: `${previewPath}/result.txt`, headers: { host: launch.hostname, cookie } })).statusCode, 403);
+  await revoked;
+  store.db.prepare("INSERT INTO member(id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'owner', ?)").run(`restored-${suffix}`, machine.org_id, machine.user_id, Date.now());
+  console.log("PASS: backend relay expiry, private HTTP/WebSocket previews, anonymous rejection, and membership revocation");
+
 } catch (error) {
   process.exitCode = 1;
   await writeFile(join(temp, "tunnel.log"), tunnelLog, { mode: 0o600 });

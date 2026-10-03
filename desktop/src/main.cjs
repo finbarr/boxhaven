@@ -99,7 +99,10 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
     const box = machines.get(name);
     if (!box?.previewURL) throw new Error('This box has no web preview URL.');
     if (destructions.get(name)?.confirmed) throw new Error('This box is being destroyed.');
-    await shell.openExternal(box.previewURL);
+    const preview = JSON.parse(await runCLI(cliPath, ["preview", name, "--json"], { cwd, env }));
+    const url = new URL(preview.url);
+    if (url.protocol !== "https:" || url.username || url.password) throw new Error("Invalid preview URL.");
+    await shell.openExternal(url.href);
   });
   handle('boxes:destroy', (name, identity) => {
     if (renaming) throw new Error('Wait for the rename to finish.');

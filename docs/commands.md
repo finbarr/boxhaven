@@ -102,7 +102,7 @@ bh run work claude --continue
 bh connect <name>
 ```
 
-Attaches to the box's managed tmux session over direct SSH, starting a shell
+Attaches to the box's managed tmux session over SSH through the backend relay, starting a shell
 session if none exists. Disconnecting leaves the session running.
 
 ## bh ssh-config
@@ -343,3 +343,14 @@ update the whole app. Existing remote sessions continue running.
 `bh status NAME` also reports the box's runtime protocol and agent fingerprint.
 Use these when diagnosing an incompatible runtime; existing boxes keep their
 installed runtime after golden-image updates.
+
+## `bh preview`
+
+```bash
+bh preview work
+bh preview work --json
+```
+
+Returns a preview launch URL. Private exe.dev previews use a 15-minute BoxHaven
+team lease; reopen the link through this command after expiry. The desktop
+requests a fresh link automatically. Provider credentials stay on the backend.

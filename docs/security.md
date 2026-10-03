@@ -1,8 +1,8 @@
 # Security Model
 
 This page describes how access to boxes works and exactly which credentials
-the CLI forwards to a box. The backend does not proxy user shell traffic:
-file sync and command bytes go directly over SSH from the CLI to the VM.
+the CLI forwards to a box. The backend relays shell and file traffic. SSH remains encrypted between the
+CLI and VM; provider credentials stay on the backend.
 
 ## SSH Certificates
 
@@ -18,8 +18,8 @@ per-machine authorized principal to provider user data, and signs device
 public keys through `POST /v1/machines/:name/ssh-cert` only after
 authenticating the machine owner. `bh ssh-config install` adds managed
 `bh-<name>` aliases to OpenSSH; each `ssh`, `scp`, or `rsync` invocation obtains
-a fresh short-lived certificate before connecting directly to the VM public
-IP. User SSH bytes do not flow through the backend. CLI-side host-key pinning
+a fresh short-lived certificate before connecting through the backend relay. Active relays close on expiry or
+when membership, permissions, team, or runtime identity changes. CLI-side host-key pinning
 lives in `~/.boxhaven/remote_known_hosts`.
 
 On DigitalOcean, the backend uses a one-time no-login key during create only
@@ -64,9 +64,8 @@ session.
 local agent login files for Claude, Codex, Gemini, GitHub Copilot, and
 opencode (for example `~/.codex/auth.json`, `~/.claude.json`,
 `~/.claude/.credentials.json` on Linux, and `~/.claude/settings.json`). These
-files go directly to the VM over SSH; this avoids repeated agent logins on
-fresh boxes without sending those files through the backend. The backend does
-not receive or store these files.
+files travel inside the encrypted SSH stream through the relay. The backend
+does not decrypt or store their contents.
 
 Recent claude/codex sessions for the current project are forwarded when you
 start those agents so they can resume; broader histories, caches, and

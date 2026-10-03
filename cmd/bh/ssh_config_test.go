@@ -30,6 +30,7 @@ func TestRenderBoxHavenSSHConfig(t *testing.T) {
 	for _, want := range []string{
 		"Host bh-alpha",
 		"HostName 203.0.113.10",
+		`ProxyCommand '/Applications/Box Haven/bh' ssh-proxy "$HOME/.boxhaven/ssh/certs/bh-alpha-cert.pub.access.json"`,
 		"User ubuntu",
 		"CertificateFile ~/.boxhaven/ssh/certs/bh-alpha-cert.pub",
 		"HostKeyAlias boxhaven-alpha-100",

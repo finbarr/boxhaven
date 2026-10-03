@@ -371,3 +371,12 @@ This command supports the core distribution with all persistent state in
 `/data`. It refuses unlabelled/custom distributions. Hosted billing and other
 modules must use their complete distribution's deployment and backup procedure.
 Source-based development continues to use `docker-compose.backend.yml`.
+
+## Backend relay capacity
+
+Terminals and file transfers pass through the backend over WebSockets. Allow
+WebSocket upgrades on the API proxy and outbound TCP 22 / HTTPS to providers.
+Budget bandwidth and connections for this traffic. SSH contents remain encrypted
+between the client and guest. A backend restart disconnects attachments; remote
+work continues and users can reconnect. Private exe.dev previews also use the
+backend and require `BOXHAVEN_PREVIEW_BASE_DOMAIN` with wildcard DNS/TLS.

@@ -102,10 +102,10 @@ When you start `claude` or `codex` with `bh run`, bh forwards your newest
 local sessions for the project, so `claude --continue` on the box picks up
 the conversation exactly where your laptop left it. Agent commands use the
 machine's managed tmux session: they attach with a terminal and start detached
-without one. Other commands run over direct SSH. Inspect session output before
+without one. Other commands run over SSH through the backend relay. Inspect session output before
 calling an agent working; a successful detached launch is not task completion.
 
-## Direct SSH
+## SSH access
 
 Run the one-time setup after logging in to add managed `bh-<name>` aliases to
 your normal OpenSSH configuration:
@@ -130,7 +130,7 @@ device key stored under `~/.boxhaven/ssh`. Remove the managed include with
 - Project sync to `/opt/boxhaven/project` with explicit sync up/down commands.
 - A managed tmux session per box for long-running AI agent sessions.
 - Mouse-wheel scrolling through tmux history in interactive sessions.
-- Direct SSH using backend-signed short-lived user certificates.
+- SSH access using backend-signed short-lived user certificates.
 - GitHub HTTPS credential forwarding from local `GH_TOKEN` or `GITHUB_TOKEN`.
 - Git safe-directory configuration for the synced project path.
 - Optional preview hostnames for HTTP services running on the box.
@@ -138,7 +138,7 @@ device key stored under `~/.boxhaven/ssh`. Remove the managed include with
   [exe.dev connector with a prepared runtime image](deploy/exedev/README.md).
 - Provider plan discovery with team-owned size shortcuts.
 - Team-owned boxes with roles, shareable invite links, and per-team visibility.
-- A shared Fleet console with stable resource links, viewer/operator permissions,
+- A shared Boxes console with stable resource links, viewer/operator permissions,
   and durable session requests across configured providers.
 - Admin-managed golden images that become the default for new boxes.
 - An open-source Fastify/Better Auth backend.

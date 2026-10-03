@@ -7,11 +7,11 @@ import logoURL from "./assets/boxhaven-logo.png";
 export const repoURL = "https://github.com/finbarr/boxhaven";
 export const docsURL = (import.meta.env.VITE_BOXHAVEN_DOCS_URL || "https://docs.boxhaven.dev").replace(/\/+$/, "");
 
-export type ConsoleSection = "boxes" | "fleet" | "team" | "teams" | "images" | "account" | "security";
+export type ConsoleSection = "boxes" | "team" | "teams" | "images" | "account" | "security";
 
 // Authed console frame: a persistent left nav sidebar plus the workspace where
 // each section renders its full-width tables. activeSection drives the
-// highlighted nav item (so /boxes/$name keeps "Boxes" lit).
+// highlighted nav item (so /boxes/$resourceID keeps "Boxes" lit).
 export function ConsoleShell({ activeSection, email, teams = [], activeTeam, teamSwitching = false, teamSwitchError = "", account, onTeamSwitch, onNewTeam, onLogout, children }: {
   activeSection: ConsoleSection;
   email?: string;
@@ -51,10 +51,6 @@ export function ConsoleShell({ activeSection, email, teams = [], activeTeam, tea
           <Link to="/team" className={activeSection === "team" ? "active" : undefined}>
             <Users size={17} />
             Members
-          </Link>
-          <Link to="/fleet" className={activeSection === "fleet" ? "active" : undefined}>
-            <Layers size={17} />
-            Fleet
           </Link>
           <Link to="/images" className={activeSection === "images" ? "active" : undefined}>
             <Layers size={17} />

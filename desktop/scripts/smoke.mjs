@@ -35,7 +35,8 @@ try {
   let terminal = page.locator('.terminal-pane:not([hidden])');
   await expect(terminal).toContainText('Desktop PTY fixture');
   await page.getByRole('button', { name: 'Open preview' }).click();
-  assert.deepEqual(await app.evaluate(() => global.desktopSmoke.opened), ['https://api-cleanup.example.com/']);
+  await expect.poll(() => app.evaluate(() => global.desktopSmoke.opened)).toEqual(['https://api-cleanup.example.com/']);
+  assert.deepEqual(JSON.parse(readFileSync(`${stateFile}.previews`, 'utf8').trim()), ['preview', 'api-cleanup', '--json']);
   await assert.rejects(page.evaluate(() => window.boxhaven.openPreview('https://attacker.example')), /no web preview/);
   await app.evaluate(() => { global.desktopSmoke.openError = true; });
   await page.getByRole('button', { name: 'Open preview' }).click();

@@ -5,10 +5,10 @@ sidebar to attach to its persistent `boxhaven` tmux session on the right.
 Switching boxes preserves each open terminal. Closing the app disconnects local
 SSH clients; it does not stop remote tmux sessions or destroy boxes.
 
-The backend and web console now have a shared **Fleet** view with resource UUIDs,
+The backend and web console now have a shared **Boxes** view with resource UUIDs,
 team permissions, sharing links, and session-operation records across configured
 providers. This desktop still uses the CLI's owner/name inventory and attachment
-paths. Its migration to the shared fleet APIs and native sandbox transports is
+paths. Its migration to the shared team APIs and native sandbox transports is
 tracked in [SANDBOX-CONNECTORS.md](../SANDBOX-CONNECTORS.md).
 
 ## Install

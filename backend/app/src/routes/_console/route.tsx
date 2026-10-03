@@ -29,15 +29,14 @@ function ConsoleLayout() {
   const authenticated = Boolean(token && session.data?.authenticated);
   const isAdmin = Boolean(session.data?.admin);
   const onHome = Boolean(matchRoute({ to: "/", fuzzy: false }));
-  const onBox = Boolean(matchRoute({ to: "/boxes/$name" }));
+  const onBox = Boolean(matchRoute({ to: "/boxes/$resourceID" }));
   const onDevice = Boolean(matchRoute({ to: "/device" }));
   const onTeam = Boolean(matchRoute({ to: "/team" }) || matchRoute({ to: "/team/$team" }));
   const onTeams = Boolean(matchRoute({ to: "/teams" }));
   const onImages = Boolean(matchRoute({ to: "/images" }));
-  const onFleet = Boolean(matchRoute({ to: "/fleet" }) || matchRoute({ to: "/resources/$resourceID" }));
   const onAccount = Boolean(matchRoute({ to: "/account" }));
   const onSecurity = Boolean(matchRoute({ to: "/security" }));
-  const activeSection: ConsoleSection = onFleet ? "fleet" : onTeam ? "team" : onTeams ? "teams" : onImages ? "images" : onAccount ? "account" : onSecurity ? "security" : "boxes";
+  const activeSection: ConsoleSection = onTeam ? "team" : onTeams ? "teams" : onImages ? "images" : onAccount ? "account" : onSecurity ? "security" : "boxes";
   // Surfaced in the sign-in hint when someone deep-links to /device.
   const deviceUserCode = typeof search.user_code === "string" ? search.user_code : "";
   const switchTeam = useMutation({
@@ -57,8 +56,6 @@ function ConsoleLayout() {
         void navigate({ to: "/images" });
       } else if (onBox) {
         void navigate({ to: "/" });
-      } else if (onFleet) {
-        void navigate({ to: "/fleet" });
       }
     },
   });

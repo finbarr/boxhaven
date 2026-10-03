@@ -20,6 +20,10 @@
       "types": "./dist/browser-session.d.ts",
       "import": "./dist/browser-session.js"
     },
+    "./team-sync-client": {
+      "types": "./dist/fleet_client.d.ts",
+      "import": "./dist/fleet_client.js"
+    },
     "./console.css": "./dist/console.css",
     "./console-logo.png": "./dist/console-logo.png",
     "./box-art": {
