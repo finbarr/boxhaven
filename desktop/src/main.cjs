@@ -147,7 +147,8 @@ async function startApp({ cliPath, cwd = homedir(), userData } = {}) {
       // the New box action promises. Never sync the desktop's home directory.
       const current = parseMachines(await runCLI(cliPath, ['list', '--json'], { cwd, env }));
       if (current.some(box => box.name === name)) throw new Error(`A box named ${name} already exists. Choose another name or select it in the sidebar.`);
-      await runCLI(cliPath, args, { cwd, env, timeout: 10 * 60 * 1000 });
+      // The CLI allows 25 minutes for cold-image provisioning, plus local sync.
+      await runCLI(cliPath, args, { cwd, env, timeout: 30 * 60 * 1000 });
       creation = { name, status: 'complete', message: `${name} is ready.` };
     })().catch(error => {
       creation = { name, status: 'error', message: error.message };

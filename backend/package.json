@@ -51,6 +51,7 @@
     "better-sqlite3": "^12.10.0",
     "fastify": "^5.12.3",
     "jose": "6.2.3",
+    "ssh2": "1.17.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {
@@ -61,6 +62,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
+    "@types/ssh2": "1.15.6",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.2",
     "lucide-react": "^1.16.0",

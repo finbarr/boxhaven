@@ -85,6 +85,9 @@ any other server type.
 Set `EXE_DEV_SIGNING_KEY` to the backend's dedicated registered SSH signing key
 and `BOXHAVEN_REMOTE_IMAGE_EXEDEV` to a prepared OCI image. Set
 `BOXHAVEN_BACKEND_PROVIDER=exedev` to make it the default.
+For a private image registry, set `EXE_DEV_REGISTRY_AUTH` to a pull-only
+`USERNAME:PASSWORD` credential. Register the signing key with the `boxhaven` tag
+scope to restrict it to VMs managed by this adapter.
 
 ```bash
 bh create work --provider exedev

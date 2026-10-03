@@ -4,12 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { agentSetupScript, sanitizeResourceName } from "./cloudinit.js";
+import { exeDevSSHCommand } from "./exedev_ssh.js";
 import { MachineCreateError, defaultSSHUser } from "./types.js";
 import type { CreateMachineRequest, ListProviderMachinesRequest, MachinePlan, MachineProvider, MachineProviderInfo, RemoteMachine, SSHAccess } from "./types.js";
 
 const exec = promisify(execFile);
 type VM = { vm_name: string; status?: string; region?: string; image?: string; created_at?: string; tags?: string[] };
-type Config = { signingKey: string; image: string; fetch?: typeof fetch };
+type Config = { signingKey: string; image: string; registryAuth?: string; fetch?: typeof fetch; ssh?: (command: string, setup: string) => Promise<string> };
 const sizes = { small: "c2-m4", medium: "c4-m8", large: "c8-m16" };
 
 /** Implements exe.dev's documented SSHSIG tokens, without registering a key per attachment. */
@@ -57,11 +58,15 @@ export class ExeDevProvider implements MachineProvider {
     } catch (error) { throw new MachineCreateError((error as Error).message, "not_created"); }
     let created: VM;
     try {
-      created = await this.command<VM>([
-        "new", `--name=${name}`, `--image=${JSON.stringify(this.config.image)}`,
+      const command = [
+        "new", "--json", `--name=${name}`, `--image=${JSON.stringify(this.config.image)}`,
+        ...(this.config.registryAuth ? [`--registry-auth=${JSON.stringify(this.config.registryAuth)}`] : []),
         `--cpu=${plan.vcpus}`, `--memory=${plan.memory_mb/1024}GB`, `--disk=${plan.disk_gb}GB`,
-        "--tag=boxhaven", "--no-email", `--setup-script=${JSON.stringify(setup)}`,
-      ].join(" "));
+        "--tag=boxhaven", "--no-email", "--setup-script=/dev/stdin",
+      ].join(" ");
+      const output = await (this.config.ssh || ((command, setup) => exeDevSSHCommand(this.config.signingKey, command, setup)))(command, setup);
+      try { created = JSON.parse(output) as VM; }
+      catch { throw new Error("exe.dev returned invalid creation metadata"); }
       if (created.vm_name !== name) throw new Error("exe.dev returned an unexpected VM identity");
       // Change only the destination port. Keep the provider's default private visibility.
       await this.command(`share port ${name} 80`);
@@ -115,7 +120,7 @@ export class ExeDevProvider implements MachineProvider {
     return result.vms;
   }
   private async command<T>(command: string): Promise<T> {
-    const token = await exeDevToken(this.config.signingKey, "v0@exe.dev", { exp: Math.floor(Date.now()/1000)+60, cmds: ["ls", "new", "rm", "share port"] });
+    const token = await exeDevToken(this.config.signingKey, "v0@exe.dev", { exp: Math.floor(Date.now()/1000)+60, cmds: ["ls", "rm", "share port"] });
     const response = await (this.config.fetch || fetch)("https://exe.dev/exec", {
       method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "text/plain" }, body: command, redirect: "error", signal: AbortSignal.timeout(35000),
     }).catch(() => { throw new Error("exe.dev API connection failed or timed out"); });
@@ -140,5 +145,5 @@ export function exeDevResourceName(value: string): string {
   return `boxhaven-${stem.slice(0, 54-suffix.length).replace(/-+$/, "")}${suffix}`;
 }
 export function exeDevProviderFromEnv(env = process.env): ExeDevProvider {
-  return new ExeDevProvider({ signingKey: env.EXE_DEV_SIGNING_KEY?.trim() || "", image: env.BOXHAVEN_REMOTE_IMAGE_EXEDEV?.trim() || "" });
+  return new ExeDevProvider({ signingKey: env.EXE_DEV_SIGNING_KEY?.trim() || "", image: env.BOXHAVEN_REMOTE_IMAGE_EXEDEV?.trim() || "", registryAuth: env.EXE_DEV_REGISTRY_AUTH });
 }

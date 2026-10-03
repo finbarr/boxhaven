@@ -9,8 +9,9 @@ The shared SSH transport now supports TCP and scoped direct WebSockets, with a
 guest bridge and a real OpenSSH/TLS conformance smoke. Runtime grants expire
 existing streams; active membership revocation and seamless renewal remain open.
 The exe.dev lifecycle adapter, scoped provider token minting, and OCI image recipe
-are implemented locally. Local contract/transport tests pass; the image and hosted
-proxy still need live validation. The shared resource layer now includes live team
+are implemented locally. Local contract/transport tests and the actual OCI image's
+runtime checks pass. Hosted creation, guest boot/callback, and deletion are verified;
+the authenticated proxy still needs live validation. The shared resource layer now includes live team
 authorization, viewer/operator grants, stable console URLs, idempotent session
 requests, restart recovery, and a Fleet console using snapshot/SSE synchronization.
 The existing CLI routes also enforce membership, and resources remain team-owned
@@ -133,7 +134,7 @@ evidence of an API contract, not proof of our implementation or account entitlem
 | **E2B** | TypeScript SDK with commands, files, and reconnectable PTYs. Its SSH guide builds OpenSSH plus a WebSocket bridge into a template. Controller and preview access use different tokens. | Pause can preserve memory and filesystem; disk-only pause also exists. Snapshots and forks are documented. Templates supply prepared environments. Continuous execution has plan limits. | Native PTY/files after scoped-delegation checks; use the runtime where required. Prepared templates enable the agent workflow. Track execution deadlines independently of resource existence. |
 | **Daytona** | Native process sessions, PTYs, files, expiring SSH access tokens, and previews. | Containers retain files across stop/start but do not preserve memory. VM classes support memory pause/resume and hot snapshots. Images, snapshots, and volumes have separate roles. | Native PTY/files where safe delegation is proven; otherwise use the shared runtime. Resolve capabilities by sandbox class and use port-scoped signed preview URLs. |
 | **Blaxel** | Process/files APIs, private previews, and expiring client sessions explicitly intended for direct access without an application proxy. | Automatic standby preserves state. Unattended computation needs process keep-alive. Snapshot/fork and archive docs currently mark those features private preview. | Native files/process APIs plus the common PTY bridge unless a suitable native PTY is confirmed. Use client sessions for delegated access and explicitly manage task lifetime. |
-| **exe.dev** | SSH gateway and HTTPS proxy. HTTPS command API can provision and run bounded commands but has no stdin/PTY and a 30-second request limit. VM HTTPS tokens can be scoped and expire. | OCI images and first-boot setup scripts. Persistent VMs and a `cp` operation are documented; do not assume `cp` is a memory fork. Shared account capacity differs from per-VM billing. | Provision over HTTPS; run the common bridge behind the provider's private HTTPS proxy. First prove authenticated WebSockets and long transfers. |
+| **exe.dev** | SSH gateway and HTTPS proxy. HTTPS command API can run bounded commands but has no stdin/PTY and a 30-second request limit. VM HTTPS tokens can be scoped and expire. | OCI images and first-boot setup scripts. Persistent VMs and a `cp` operation are documented; do not assume `cp` is a memory fork. Shared account capacity differs from per-VM billing. | Provision over native SSH with a pinned host key and setup on stdin; cold image pulls exceed the HTTPS deadline. Use HTTPS for bounded lifecycle commands and the private provider proxy for the common bridge. |
 | **Boat** | REST/TypeScript/Python APIs, command/file APIs, direct SSH, protected HTTPS hosting, and integrated agent APIs. Scoped API keys are documented. | Stop archives filesystem state; resume reboots and restarts enabled services. Running processes are not preserved. Forks and named snapshots exist. Snapshot exclusions and environment inheritance matter. | Native control/files plus the shared bridge for direct terminals. Build a prepared Boat template. Use safe-for-third-parties environments and explicit workload credentials. |
 
 Primary references: E2B [PTY](https://docs.e2b.dev/sandbox/pty),
@@ -741,7 +742,9 @@ underlying model key, Git token, or complete secret-bearing launch environment.
 
 ### exe.dev
 
-- `/exec` for control/bounded bootstrap, with correct quoting and error parsing.
+- Native SSH for creation and setup on stdin, with the provider's published host
+  key pinned. `/exec` for bounded inventory, deletion, and preview-port commands.
+  Cold image pulls can exceed `/exec`'s 30-second deadline.
 - Require exact command permissions. VM HTTPS access is separate: offline signing
   requires a registered signing key, not merely a command API token.
 - Keep that key in the backend vault; issue expiring VM access tokens after

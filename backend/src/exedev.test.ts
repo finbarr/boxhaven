@@ -42,14 +42,16 @@ test("exe.dev tokens use verified SSHSIG namespaces and exact expiry", async t =
 
 test("exe.dev lifecycle uses prepared images, private ports, safe discovery, and confirmed deletion", async t => {
   const {key}=await fixture(t); const commands:string[]=[]; let created=false;
-  const provider=new ExeDevProvider({signingKey:key,image:"registry.test/boxhaven@sha256:123",fetch:async (url,init)=>{
+  const vm={vm_name:"boxhaven-work-0123456789",status:"running",region:"lax",tags:["boxhaven"],https_url:"https://untrusted.example"};
+  const provider=new ExeDevProvider({signingKey:key,image:"registry.test/boxhaven@sha256:123",registryAuth:"reader:private-registry-password",ssh:async (command,setup)=>{
+    commands.push(command); assert.match(setup,/private-agent-token/); assert.doesNotMatch(command,/private-agent-token/);
+    created=true; return JSON.stringify(vm);
+  },fetch:async (url,init)=>{
     assert.equal(url,"https://exe.dev/exec");assert.equal(init?.redirect,"error");
     const authorization=(init?.headers as Record<string,string>).Authorization;
     assert.match(authorization,/^Bearer exe0\./);
     const command=String(init?.body);commands.push(command);
-    const vm={vm_name:"boxhaven-work-0123456789",status:"running",region:"lax",tags:["boxhaven"],https_url:"https://untrusted.example"};
     if(command==="ls -l") return Response.json({vms:created?[vm,{vm_name:"personal",tags:["boxhaven"]},{vm_name:"boxhaven-private-9876543210",tags:["boxhaven"]}]:[]});
-    if(command.startsWith("new ")) {created=true;return Response.json(vm);}
     if(command.startsWith("rm ")) created=false;
     return Response.json({});
   }});
@@ -58,6 +60,8 @@ test("exe.dev lifecycle uses prepared images, private ports, safe discovery, and
   assert.equal(createdVM.machine.preview_url,"https://boxhaven-work-0123456789.exe.xyz");
   assert.equal(createdVM.machine.preview_transport,"provider");
   assert.match(commands.find(c=>c.startsWith("new "))!,/--setup-script=/);
+  assert.ok(commands.find(c=>c.startsWith("new "))!.includes('--registry-auth="reader:private-registry-password"'));
+  assert.doesNotMatch(JSON.stringify(createdVM),/private-registry-password/);
   assert.ok(commands.includes("share port boxhaven-work-0123456789 80"));
   assert.ok(commands.every(c=>!c.includes("set-public")&&!c.includes("set-region")));
   const list=await provider.listMachines({provider_name_suffix:"0123456789"});
@@ -73,13 +77,15 @@ test("exe.dev lifecycle uses prepared images, private ports, safe discovery, and
 
 test("exe.dev failures preserve unknown create outcomes without retrying or exposing credentials", async t => {
   const {key}=await fixture(t);let creates=0;
-  const provider=new ExeDevProvider({signingKey:key,image:"prepared",fetch:async (_url,init)=>{
+  const provider=new ExeDevProvider({signingKey:key,image:"prepared",registryAuth:"reader:private-registry-password",ssh:async()=>{
+    creates++; return JSON.stringify({vm_name:"boxhaven-work-0123456789"});
+  },fetch:async (_url,init)=>{
     if(init?.body==="ls -l") return Response.json({vms:[]});
-    creates++;return new Response("echoed private-agent-token",{status:504});
+    return new Response("echoed private-agent-token private-registry-password",{status:504});
   }});
   await assert.rejects(provider.createMachine({...request,region:"lax"}), e=>e instanceof MachineCreateError&&e.outcome==="not_created");
   assert.equal(creates,0);
-  await assert.rejects(provider.createMachine(request),e=>e instanceof MachineCreateError&&e.outcome==="unknown"&&!e.message.includes("private-agent-token"));
+  await assert.rejects(provider.createMachine(request),e=>e instanceof MachineCreateError&&e.outcome==="unknown"&&!/private-agent-token|private-registry-password/.test(e.message));
   assert.equal(creates,1);
 });
 

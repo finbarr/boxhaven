@@ -332,7 +332,8 @@ Environment:
 - `HETZNER_IMAGE`: Hetzner image fallback, default `ubuntu-24.04`.
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
 - `EXE_DEV_SIGNING_KEY`: backend path to a dedicated registered exe.dev signing key. Configures the exe.dev adapter; the key must be unencrypted and restricted to the backend user.
-- `BOXHAVEN_REMOTE_IMAGE_EXEDEV`: required prepared OCI image for exe.dev. See [image setup and validation limits](../deploy/exedev/README.md). The adapter uses the account's default region, private provider previews, and direct WebSocket SSH.
+- `EXE_DEV_REGISTRY_AUTH`: optional pull-only `USERNAME:PASSWORD` for the prepared exe.dev image's private registry. This credential is sent only in provider creation requests and is excluded from resource metadata.
+- `BOXHAVEN_REMOTE_IMAGE_EXEDEV`: required prepared OCI image for exe.dev. See [image setup and validation limits](../deploy/exedev/README.md). Provisioning requires outbound SSH to `exe.dev:22` with a pinned provider host key; inventory and deletion use HTTPS. The adapter uses the account's default region, private provider previews, and direct WebSocket SSH.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event, reconciliation, and policy-requested machine cleanup retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: full active-machine reconciliation and lifecycle-policy evaluation interval, default `300000`.
 - `BOXHAVEN_MAX_TEAMS_PER_USER`: optional positive cap on teams a user owns. Pending creates reserve a slot so concurrent requests cannot exceed it.

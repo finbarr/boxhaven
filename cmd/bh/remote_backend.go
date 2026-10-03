@@ -18,7 +18,9 @@ const (
 	remoteBackendURLEnv           = "BOXHAVEN_BACKEND_URL"
 	remoteAuthTokenEnv            = "BOXHAVEN_TOKEN"
 	remoteBackendDefaultTimeout   = 30 * time.Second
-	remoteBackendProvisionTimeout = 5 * time.Minute
+	// Allow cold provider image pulls (15 minutes), guest readiness (5 minutes),
+	// and control-plane setup to finish before abandoning the creation response.
+	remoteBackendProvisionTimeout = 25 * time.Minute
 )
 
 var remoteBackendHTTPClient = &http.Client{
