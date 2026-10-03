@@ -25,6 +25,7 @@ export type RemoteMachine = {
   ssh_user?: string;
   preview_hostname?: string;
   preview_url?: string;
+  preview_transport?: "provider";
   source_path?: string;
   project_path?: string;
   repo_url?: string;

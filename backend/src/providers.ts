@@ -1,3 +1,4 @@
+import { exeDevProviderFromEnv } from "./exedev.js";
 import { digitalOceanProviderFromEnv } from "./digitalocean.js";
 import { hetznerProviderFromEnv } from "./hetzner.js";
 import { MachineProvider, MachineProviderInfo, RemoteMachine } from "./types.js";
@@ -65,9 +66,10 @@ export function providerRegistryFromEnv(env = process.env): ProviderRegistry {
   if (env.HCLOUD_TOKEN || env.HETZNER_API_TOKEN) {
     providers.push(hetznerProviderFromEnv(env));
   }
+  if (env.EXE_DEV_SIGNING_KEY) providers.push(exeDevProviderFromEnv(env));
   if (providers.length === 0) {
     throw new Error(
-      "no machine provider is configured; set DIGITALOCEAN_ACCESS_TOKEN for DigitalOcean or HCLOUD_TOKEN for Hetzner Cloud",
+      "no machine provider is configured; set DIGITALOCEAN_ACCESS_TOKEN for DigitalOcean HCLOUD_TOKEN for Hetzner Cloud, or EXE_DEV_SIGNING_KEY with BOXHAVEN_REMOTE_IMAGE_EXEDEV for exe.dev",
     );
   }
   const requested = env.BOXHAVEN_BACKEND_PROVIDER?.trim().toLowerCase();

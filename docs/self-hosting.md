@@ -115,7 +115,7 @@ can reuse the core API, auth, provider, SSH, and CLI implementations.
 - `BOXHAVEN_BACKEND_PROVIDER`: default provider for creates that do not request one explicitly. When unset, the first configured provider is the default (DigitalOcean when both are configured).
 
 Provider credentials and image variables (`DIGITALOCEAN_*`, `HCLOUD_TOKEN`,
-`HETZNER_*`, `BOXHAVEN_REMOTE_IMAGE*`) are documented on the
+`HETZNER_*`, `EXE_DEV_SIGNING_KEY`, `BOXHAVEN_REMOTE_IMAGE*`) are documented on the
 [Cloud Providers](/providers) page.
 The [backend modules](/operator-policy) page documents the build-time extension
 boundary for distributions that add custom models, routes, or policy.

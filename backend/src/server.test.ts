@@ -560,12 +560,57 @@ test("team owners create, use, and delete provider size shortcuts", async () => 
   assert.equal(missing.statusCode, 400, missing.body);
 });
 
+test("WebSocket machines receive scoped grants without public IPv4 and preserve private provider previews", async () => {
+  const { app, provider, store, token } = await createTestBackend("sandbox-owner@example.com");
+  const headers = { authorization: `Bearer ${token}` };
+  const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "sandbox" } });
+  assert.equal(created.statusCode, 201, created.body);
+  const machine = (await store.getResource(created.json().machine.resource_id))!;
+  await store.putMachine({ ...machine, public_ipv4: undefined, ssh_transport: "websocket", preview_transport: "provider", preview_url: "https://boxhaven-sandbox.exe.xyz", preview_hostname: undefined });
+  provider.publicIPv4 = "";
+  let accesses = 0;
+  (provider as MachineProvider).issueSSHAccess = async (_machine, expiresAt) => {
+    accesses++;
+    return { kind: "websocket", url: "wss://boxhaven-sandbox.exe.xyz:9898/ssh", headers: { "X-Exedev-Authorization": "Bearer vm-scoped-token" }, expires_at: expiresAt };
+  };
+  const cert = await app.inject({ method: "POST", url: "/v1/machines/sandbox/ssh-cert", headers, payload: { public_key: testSSHUserPublicKey } });
+  assert.equal(cert.statusCode, 200, cert.body);
+  assert.equal(cert.headers["cache-control"], "no-store");
+  assert.equal(cert.json().access.kind, "websocket");
+  assert.match(cert.json().certificate, /^ssh-ed25519-cert-v01@openssh.com /);
+  assert.ok(cert.json().access.headers["X-BoxHaven-Access"]);
+  const connected = await app.inject({ method: "GET", url: "/v1/machines/sandbox/connect", headers });
+  assert.equal(connected.json().machine.preview_url, "https://boxhaven-sandbox.exe.xyz");
+  assert.equal(connected.json().connect.transport, "ssh_websocket_certificate");
+  assert.doesNotMatch(connected.body, /vm-scoped-token|X-BoxHaven-Access/);
+  const otherToken = await signUp(app, "sandbox-outsider@example.com");
+  const denied = await app.inject({ method: "POST", url: "/v1/machines/sandbox/ssh-cert", headers: { authorization: `Bearer ${otherToken}` }, payload: { public_key: testSSHUserPublicKey } });
+  assert.equal(denied.statusCode, 404);
+  assert.equal(accesses, 1);
+});
+
+test("subscription plans preserve unknown provider prices instead of quoting zero", async () => {
+  const seen: Array<number | undefined> = [];
+  const commercialPolicy: CommercialPolicy = {
+    async checkCreate() { return { allowed: true }; },
+    async quoteMachine(input) { seen.push(input.machine.provider_hourly_price); return {}; },
+    async emitMachineFact() {}, async reconcile() {},
+  };
+  const { app, provider, token } = await createTestBackend("pool-pricing@example.com", "password123", { commercialPolicy });
+  for (const plan of provider.plans) plan.prices = [];
+  const response = await app.inject({ method: "GET", url: "/v1/sizes", headers: { authorization: `Bearer ${token}` } });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.ok(seen.length > 0);
+  assert.ok(seen.every(price => price === undefined));
+  assert.ok(response.json().sizes.every((size: { hourly_price_cents?: number }) => size.hourly_price_cents === undefined));
+});
+
 test("size discovery quotes every provider plan available in the selected region", async () => {
   const commercialPolicy: CommercialPolicy = {
     lifecycleEventsEnabled: true,
     async checkCreate() { return { allowed: true }; },
     async quoteMachine(input) {
-      return { hourly_price_cents: Math.round(input.machine.provider_hourly_price * 100 * 2.4) };
+      return { hourly_price_cents: Math.round((input.machine.provider_hourly_price ?? 0) * 100 * 2.4) };
     },
     async emitMachineFact() {},
     async reconcile() {},

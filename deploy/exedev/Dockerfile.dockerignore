@@ -1,0 +1,8 @@
+**
+!cmd/
+!cmd/bh/
+!cmd/bh/assets/
+!cmd/bh/assets/remote-vm-install.sh
+!deploy/
+!deploy/exedev/
+!deploy/exedev/Dockerfile

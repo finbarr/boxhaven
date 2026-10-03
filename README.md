@@ -134,7 +134,8 @@ device key stored under `~/.boxhaven/ssh`. Remove the managed include with
 - GitHub HTTPS credential forwarding from local `GH_TOKEN` or `GITHUB_TOKEN`.
 - Git safe-directory configuration for the synced project path.
 - Optional preview hostnames for HTTP services running on the box.
-- Multiple cloud providers per backend: DigitalOcean and Hetzner Cloud.
+- Multiple cloud providers per backend: DigitalOcean and Hetzner Cloud, plus an
+  [exe.dev connector awaiting live validation](deploy/exedev/README.md).
 - Provider plan discovery with team-owned size shortcuts.
 - Team-owned boxes with roles, shareable invite links, and per-team visibility.
 - Admin-managed golden images that become the default for new boxes.

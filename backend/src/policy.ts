@@ -14,7 +14,8 @@ export type PolicyMachine = {
   size: string;
   provider: string;
   provider_plan: string;
-  provider_hourly_price: number;
+  /** Absent for subscription/pool capacity or unknown pricing; never assume free. */
+  provider_hourly_price?: number;
   hourly_price_cents?: number;
 };
 
@@ -107,7 +108,7 @@ export function policyMachineIdentity(machine: {
     size: machine.size_shortcut || machine.size || "small",
     provider: machine.provider || "provider",
     provider_plan: machine.size || "small",
-    provider_hourly_price: machine.provider_hourly_price || 0,
+    provider_hourly_price: machine.provider_hourly_price,
     ...(machine.hourly_price_cents !== undefined ? { hourly_price_cents: machine.hourly_price_cents } : {}),
   };
 }

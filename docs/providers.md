@@ -7,6 +7,10 @@ Hetzner Cloud are implemented: each is enabled by its credentials
 request one. When unset, the first configured provider is the default
 (DigitalOcean when both are configured).
 
+An exe.dev adapter is also implemented, with live provider validation still
+pending. It uses a prepared OCI image and direct WebSocket transport. E2B,
+Daytona, Blaxel, and Boat remain planned.
+
 `GET /v1/providers` lists what a backend has configured, and `bh create`
 picks the backend default unless a provider is requested explicitly:
 
@@ -57,6 +61,36 @@ Built-in sizes map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large).
 Availability is validated against the selected location. Use `bh size plans`
 to compare hardware and effective prices before creating a team shortcut for
 any other server type.
+
+## exe.dev
+
+Set `EXE_DEV_SIGNING_KEY` to the backend's dedicated registered SSH signing key
+and `BOXHAVEN_REMOTE_IMAGE_EXEDEV` to a prepared OCI image. Set
+`BOXHAVEN_BACKEND_PROVIDER=exedev` to make it the default.
+
+```bash
+bh create work --provider exedev
+bh run work codex
+# Disconnect: Ctrl-b, then d.
+bh connect work
+```
+
+The backend manages lifecycle, authorization, and shared team metadata. Terminal
+and file traffic goes directly through exe.dev's authenticated WebSocket proxy
+to the guest's certificate-authenticated SSH service. No public IPv4 is needed.
+The account key stays on the backend. Expiring grants close active connections
+after 15 minutes by default; reconnect to reattach the persistent session.
+
+The built-in sizes request 2/4/8 CPUs and 4/8/16 GB RAM with 20 GB disks. Billing
+depends on the account's capacity; hourly estimates are unavailable. exe.dev uses
+the account's default region, so per-machine `--region` is rejected. Previews keep
+exe.dev's private login flow. Image snapshots, pause, desktop preview delegation,
+and team-specific provider-account connections are not yet implemented.
+
+The adapter and direct transport have local test coverage; the prepared image and
+hosted proxy require live verification before release. See the repository's
+[image recipe and live smoke](https://github.com/finbarr/boxhaven/tree/master/deploy/exedev)
+for operator setup and the current validation limits.
 
 ## Golden Snapshots
 

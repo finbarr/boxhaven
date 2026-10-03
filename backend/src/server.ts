@@ -1470,7 +1470,7 @@ function normalizeMachine(options: BackendOptions, machine: RemoteMachine): Remo
   const now = new Date().toISOString();
   const name = machine.name.trim().toLowerCase();
   const preview = previewOptions(options);
-  const previewHostname = preview && machine.user_id
+  const previewHostname = machine.preview_transport === "provider" ? "" : preview && machine.user_id
     ? normalizeHostname(machine.preview_hostname || generatedPreviewHostname(machine.user_id, name, preview.baseDomain))
     : normalizeHostname(machine.preview_hostname || "");
   const provider = options.providers.get(machine.provider);
@@ -1517,7 +1517,7 @@ function machineCreateRecoveryReply(
 }
 
 async function warmMachinePreviewTLS(options: BackendOptions, machine: RemoteMachine): Promise<void> {
-  if (!options.previewTLSWarmup || !machine.preview_url) return;
+  if (!options.previewTLSWarmup || !machine.preview_url || machine.preview_transport === "provider") return;
   try {
     await options.previewTLSWarmup(machine.preview_url);
   } catch (error) {
@@ -1917,11 +1917,11 @@ async function quotePlansForProvider(
   }));
 }
 
-function providerPlanHourlyPrice(plan: MachinePlan, region = ""): number {
+function providerPlanHourlyPrice(plan: MachinePlan, region = ""): number | undefined {
   const price = (region ? plan.prices.find((candidate) => candidate.region === region) : undefined)
     || plan.prices.find((candidate) => !candidate.region)
     || plan.prices[0];
-  return price?.hourly || 0;
+  return price?.hourly;
 }
 
 function policyActor(auth: AuthContext, canManage: boolean): PolicyActor {

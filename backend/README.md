@@ -53,6 +53,11 @@ terminal access, and desktop event subscriptions are separate implementation wor
 
 ## Direct sandbox transports
 
+Provider price data may be absent for shared subscription capacity such as
+exe.dev. `PolicyMachine.provider_hourly_price` is optional; commercial modules
+must supply an explicit rate or decline an unsupported plan instead of treating
+an absent provider quote as free.
+
 Providers can implement `issueSSHAccess` to return a resource-scoped WebSocket
 destination instead of a public TCP address. The backend's `ssh-cert` response
 includes that transport and a signed grant for the guest bridge. The CLI passes
@@ -271,6 +276,8 @@ Environment:
 - `HETZNER_SERVER_TYPE`: provider plan behind the built-in `small` size, default `cpx22`. Built-in sizes map to `cpx22` (small), `cpx32` (medium), and `cpx42` (large); use a team size shortcut for other plans.
 - `HETZNER_IMAGE`: Hetzner image fallback, default `ubuntu-24.04`.
 - `BOXHAVEN_REMOTE_IMAGE_HETZNER`: Hetzner snapshot id for a prebuilt BoxHaven VM image. Machines created from it are treated as backend-bootstrapped.
+- `EXE_DEV_SIGNING_KEY`: backend path to a dedicated registered exe.dev signing key. Configures the exe.dev adapter; the key must be unencrypted and restricted to the backend user.
+- `BOXHAVEN_REMOTE_IMAGE_EXEDEV`: required prepared OCI image for exe.dev. See [image setup and validation limits](../deploy/exedev/README.md). The adapter uses the account's default region, private provider previews, and direct WebSocket SSH.
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event, reconciliation, and policy-requested machine cleanup retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: full active-machine reconciliation and lifecycle-policy evaluation interval, default `300000`.
 - `BOXHAVEN_MAX_TEAMS_PER_USER`: optional positive cap on teams a user owns. Pending creates reserve a slot so concurrent requests cannot exceed it.

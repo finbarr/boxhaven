@@ -60,6 +60,7 @@ export type Machine = {
   provider_label?: string;
   provider_id?: string;
   public_ipv4?: string;
+  ssh_transport?: "websocket";
   region?: string;
   size?: string;
   size_shortcut?: string;
@@ -69,6 +70,7 @@ export type Machine = {
   ssh_user?: string;
   preview_hostname?: string;
   preview_url?: string;
+  preview_transport?: "provider";
   source_path?: string;
   project_path?: string;
   repo_url?: string;
