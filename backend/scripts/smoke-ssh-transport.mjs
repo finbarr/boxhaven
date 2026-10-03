@@ -2,15 +2,19 @@
 // server, and the compiled bh ProxyCommand. No cloud account or backend relay.
 import assert from "node:assert/strict";
 import { spawn, execFile } from "node:child_process";
-import { createHash } from "node:crypto";
 import { mkdtemp, readFile, writeFile, symlink, rm } from "node:fs/promises";
 import { createServer as netServer, connect } from "node:net";
 import { tmpdir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer as tlsServer } from "node:tls";
 import { promisify } from "node:util";
-import { SignJWT } from "jose";
+import { tsImport } from "tsx/esm/api";
 import { WebSocket } from "ws";
+
+// Use the real backend derivation and issuer so this test catches drift between
+// the deployed guest and the control plane, rather than copying either formula.
+const { hashAgentToken } = await tsImport("../src/server.ts", import.meta.url);
+const { bridgeAccessToken } = await tsImport("../src/ssh_access.ts", import.meta.url);
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "../..");
@@ -61,7 +65,7 @@ try {
   });
   await new Promise(r=>tls.listen(0,"127.0.0.1",r));
   const expires=Math.floor(Date.now()/1000)+60;
-  const token=await new SignJWT({}).setProtectedHeader({alg:"HS256"}).setAudience("boxhaven-ssh-bridge").setSubject("smoke-user").setIssuedAt().setExpirationTime(expires).sign(createHash("sha256").update(agentToken).digest());
+  const token=await bridgeAccessToken(hashAgentToken(agentToken), "smoke-user", new Date(expires*1000).toISOString());
   const grant={kind:"websocket",url:`wss://127.0.0.1:${tls.address().port}/ssh`,headers:{"X-BoxHaven-Access":token},expires_at:new Date(expires*1000).toISOString()};
   await writeFile(join(temp,"access.json"),JSON.stringify(grant),{mode:0o600});
   const quote=s=>"'"+s.replaceAll("'","'\"'\"'")+"'";
@@ -77,7 +81,7 @@ try {
   // A grant for another VM never gets as far as SSH.
   await new Promise((resolve,reject)=>{const ws=new WebSocket(`ws://127.0.0.1:${bridgePort}/ssh`,{headers:{"X-BoxHaven-Access":"invalid"}});ws.on("open",()=>{ws.terminate();reject(new Error("invalid grant accepted"));});ws.on("error",()=>resolve());});
   // Expiry closes an already established stream, not just future handshakes.
-  const short=await new SignJWT({}).setProtectedHeader({alg:"HS256"}).setAudience("boxhaven-ssh-bridge").setSubject("smoke-user").setIssuedAt().setExpirationTime(Math.floor(Date.now()/1000)+2).sign(createHash("sha256").update(agentToken).digest());
+  const short=await bridgeAccessToken(hashAgentToken(agentToken), "smoke-user", new Date(Date.now()+2000).toISOString());
   await new Promise((resolve,reject)=>{const ws=new WebSocket(`ws://127.0.0.1:${bridgePort}/ssh`,{headers:{"X-BoxHaven-Access":short}});const timeout=setTimeout(()=>{ws.terminate();reject(new Error("expired stream remained open"));},4000);ws.on("error",reject);ws.on("close",()=>{clearTimeout(timeout);resolve();});});
   console.log("PASS: real SSH certificate authentication, pinned host key, direct TLS WebSocket transport, invalid-key/grant rejection, established-stream expiry");
 } finally {

@@ -46,7 +46,9 @@ export function agentSetupScript(request: CreateMachineRequest): string {
     "test -f /etc/boxhaven/ssh_host_ed25519_key || ssh-keygen -q -t ed25519 -N '' -f /etc/boxhaven/ssh_host_ed25519_key",
     sshCertificateTrustCommand(request.ssh_user_ca_public_key, request.ssh_authorized_principal, request.ssh_user),
     "systemctl daemon-reload", "systemctl enable boxhaven-agent boxhaven-ssh-bridge boxhaven-sshd",
-    "systemctl restart boxhaven-sshd boxhaven-ssh-bridge boxhaven-agent", "BOXHAVEN_SETUP", "",
+    "sshd -t -f /etc/boxhaven/sshd_config",
+    "systemctl restart boxhaven-sshd boxhaven-ssh-bridge",
+    "systemctl restart boxhaven-agent", "BOXHAVEN_SETUP", "",
   ].join("\n");
   if (Buffer.byteLength(script) > 10 * 1024) throw new Error("Machine setup script exceeds exe.dev's 10 KiB limit");
   return script;

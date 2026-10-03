@@ -29,9 +29,10 @@ RUN printf '%s\n' \
     'PermitRootLogin no' 'UsePAM yes' 'AllowUsers boxhaven' \
     > /etc/boxhaven/sshd_config \
     && printf '%s\n' '[Unit]' 'Description=BoxHaven certificate SSH' \
-    'After=network.target' '[Service]' 'Type=simple' \
+    'After=network.target' 'ConditionPathExists=/etc/boxhaven/ssh_host_ed25519_key' \
+    '[Service]' 'Type=simple' \
     'ExecStart=/usr/sbin/sshd -D -e -f /etc/boxhaven/sshd_config' \
-    'Restart=on-failure' '[Install]' 'WantedBy=multi-user.target' \
+    'Restart=always' 'RestartSec=1' '[Install]' 'WantedBy=multi-user.target' \
     > /etc/systemd/system/boxhaven-sshd.service \
     && systemctl enable boxhaven-sshd
 

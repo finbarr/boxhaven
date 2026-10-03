@@ -578,7 +578,8 @@ import { jwtVerify } from "jose";
 // a backend-signed user certificate and pins the guest's host key end to end.
 const token = process.env.BOXHAVEN_AGENT_TOKEN;
 if (!token) throw new Error("SSH bridge requires a machine agent token");
-const key = createHash("sha256").update(token).digest();
+// Match the control plane's hashAgentToken domain separation exactly.
+const key = createHash("sha256").update("boxhaven-agent-token:v1\0").update(token).digest();
 const server = createServer((_request, response) => { response.writeHead(404); response.end(); });
 const sockets = new WebSocketServer({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
 let pending = 0;
@@ -623,6 +624,7 @@ EOF
 [Unit]
 Description=BoxHaven direct SSH WebSocket transport
 After=network-online.target ssh.service
+ConditionFileNotEmpty=/etc/boxhaven/agent.env
 [Service]
 Type=simple
 User=boxhaven
@@ -981,6 +983,7 @@ EOF
 Description=BoxHaven machine agent
 After=network-online.target
 Wants=network-online.target
+ConditionFileNotEmpty=/etc/boxhaven/agent.env
 
 [Service]
 Type=simple

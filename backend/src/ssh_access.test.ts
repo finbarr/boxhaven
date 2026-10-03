@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import test from "node:test";
 import { jwtVerify } from "jose";
 import { bridgeAccessToken, machineSSHAccess } from "./ssh_access.js";
+import { hashAgentToken } from "./server.js";
 import type { MachineProvider } from "./types.js";
 
-const hash = createHash("sha256").update("guest-secret").digest("hex");
+const hash = hashAgentToken("guest-secret");
 const expiry = () => new Date(Date.now() + 60000).toISOString();
 
 test("SSH grants are signed for one guest, user, purpose, and bounded lifetime", async () => {
