@@ -8,6 +8,14 @@ RUN rm -f /opt/boxhaven/remote/ready \
     && bash /tmp/boxhaven-install.sh \
     && rm /tmp/boxhaven-install.sh
 
+# exeuntu ships native agent binaries in /usr/local/bin. Prefer the versions
+# installed by BoxHaven when npm's global prefix is elsewhere (for example /usr).
+RUN npm_bin="$(NPM_CONFIG_PREFIX='' npm prefix -g)/bin" \
+    && for tool in codex gemini opencode copilot pi; do \
+      test -x "$npm_bin/$tool"; \
+      if [ "$npm_bin" != /usr/local/bin ]; then ln -sf "$npm_bin/$tool" "/usr/local/bin/$tool"; fi; \
+    done
+
 # exe.dev owns gateway SSH. The direct WebSocket transport uses this separate
 # loopback listener, with only BoxHaven certificates authorized.
 RUN printf '%s\n' \
