@@ -6,9 +6,10 @@ This file is the working agreement for changes in this repository.
 
 1. Make the requested code or docs change directly.
 2. Verify it thoroughly.
-3. Commit and push each independently verified piece of work before moving to
-   the next one. Keep commits small enough that they can be reviewed or reverted
-   on their own.
+3. Keep changes local and ready for review. Commit or push only when Finbarr
+   explicitly requests it. Publishing releases or tags and deploying also require
+   explicit authorization. When commits are requested, keep them small enough to
+   review or revert independently.
 
 When behavior, commands, defaults, docs, backend contracts, deployment scripts,
 or VM runtime behavior change, check EVERY user-facing surface and update the
@@ -39,7 +40,7 @@ When creating production or browser smoke tests, keep them as reusable scripts
 checked into the repo instead of one-off local commands.
 
 When verification inside a BoxHaven remote box exposes a reusable environment
-problem, fix that environment issue as a separate committed change instead of
+problem, fix that environment issue as a separate change instead of
 working around it locally. Examples include missing Go cache paths, stale
 platform-specific Node dependencies, missing runtime tools, or other box setup
 drift that would make future agents hit the same failure. Keep the environment
@@ -49,8 +50,9 @@ The laptop agent skill is maintained in `skills/boxhaven`. When its contents
 change, update `metadata.version`, keep `metadata.minimum-bh-version` and
 `compatibility` accurate, and update the version pin in `docs/agent-skill.md`.
 Verify with `make skill-test` and `python3 scripts/smoke-skill-install.py`.
-After pushing the verified commit, publish the matching
-`boxhaven-skill-v<version>` Git tag; never move an existing skill release tag.
+When a skill release is explicitly authorized, push the verified commit and
+publish the matching `boxhaven-skill-v<version>` Git tag; never move an existing
+skill release tag.
 CLI release tags also include the skill from the same source revision.
 
 ## Build Commands
