@@ -10,7 +10,7 @@ import { chromium } from "playwright-core";
 import { createServer as createViteServer } from "vite";
 import { createBackendAuth, migrateBackendAuth } from "../src/auth.ts";
 import { ProviderRegistry } from "../src/providers.ts";
-import { createBackend } from "../src/server.ts";
+import { createBackend, hashAgentToken } from "../src/server.ts";
 import { SSHCertificateAuthority } from "../src/ssh_ca.ts";
 import { StateStore } from "../src/state.ts";
 
@@ -58,6 +58,7 @@ try {
     const gettingStartedFacts = await checkGettingStarted(page);
     const recoveryFacts = await checkRecoveryBox(page, disabledAccountBackend.store, disabledAccountBackend.whoami);
     const previewFacts = await checkBoxPreviews(page, disabledAccountBackend.store, disabledAccountBackend.whoami);
+    const fleetFacts = await checkFleet(page, disabledAccountBackend.store, disabledAccountBackend.whoami, backend);
     const teamMenuFacts = await checkTeamMenu(page);
     const membersFacts = await checkMembersPage(page);
     const teamsFacts = await checkTeamsPage(page);
@@ -118,6 +119,7 @@ try {
         accountEnabledMobile: join(outDir, "account-enabled-mobile.png"),
       },
       accessFacts,
+      fleetFacts,
       deviceFacts,
       gettingStartedFacts,
       recoveryFacts,
@@ -212,7 +214,7 @@ async function startSeededBackend({ accountLabel } = {}) {
     lifecycleEventsEnabled: false,
     accountCapability: { label: accountLabel },
     async checkCreate() { return { allowed: true }; },
-    async quoteMachine(input) { return { hourly_price_cents: Math.round(input.machine.provider_hourly_price * 100 * 2.4) }; },
+    async quoteMachine(input) { return { hourly_price_cents: Math.round((input.machine.provider_hourly_price ?? 0) * 100 * 2.4) }; },
     async emitMachineFact() {},
     async reconcile() {},
     async getAccountSummary() {
@@ -625,6 +627,65 @@ async function checkBoxPreviews(page, store, whoami) {
   return { previewURL: href, distinctAvatars: new Set(avatars).size, renameStable: true, opensNewTab: true };
 }
 
+async function checkFleet(page, store, whoami, app) {
+  const agentToken = `console-smoke-agent-${runID}`;
+  const machines = [
+    { name: "research-agent", provider: "digitalocean", provider_label: "DigitalOcean", region: "nyc3", public_ipv4: "127.0.0.1" },
+    { name: "review-agent", provider: "hetzner", provider_label: "Hetzner Cloud", region: "fsn1", public_ipv4: "127.0.0.1" },
+    { name: "sandbox-agent", provider: "exedev", provider_label: "exe.dev", ssh_transport: "websocket", preview_transport: "provider", preview_url: "https://sandbox-agent.exe.xyz" },
+  ].map(machine => ({ ...machine, user_id: whoami.user.id, org_id: whoami.team.id, bootstrap_complete: true, size: "small", ...(machine.name === "sandbox-agent" ? { agent_token_hash: hashAgentToken(agentToken) } : {}) }));
+  for (const machine of machines) await store.putMachine(machine);
+  const resource = await store.getMachine(whoami.user.id, "sandbox-agent");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${appURL}/fleet`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { name: "sandbox-agent", exact: true }).waitFor();
+  assert.equal(await page.locator(".fleet-card").count(), 3);
+  await page.screenshot({ path: join(outDir, "fleet-desktop.png"), fullPage: true });
+  const second = await page.context().newPage();
+  await second.goto(`${appURL}/fleet`, { waitUntil: "domcontentloaded" });
+  await second.getByRole("heading", { name: "sandbox-agent", exact: true }).waitFor();
+  await page.locator(`a[href='/resources/${resource.resource_id}']`).click();
+  await page.getByRole("heading", { name: "Resource access", exact: true }).waitFor();
+  await page.getByLabel("Team default access").selectOption("operator");
+  await page.waitForResponse(response => response.url().endsWith("/sharing") && response.request().method() === "PUT" && response.status() === 200);
+  assert.equal(store.resourceSharing(resource.resource_id).team_role, "operator");
+  const updatedName = "shared-sandbox-agent";
+  await store.renameMachine(whoami.user.id, "sandbox-agent", { ...resource, name: updatedName });
+  await page.getByRole("heading", { name: updatedName, exact: true }).waitFor();
+  await second.getByRole("heading", { name: updatedName, exact: true }).waitFor();
+  assert.equal(new URL(page.url()).pathname, `/resources/${resource.resource_id}`);
+  await page.getByRole("button", { name: "Get preview link", exact: true }).click();
+  await page.getByRole("link", { name: "Open preview", exact: true }).waitFor();
+  assert.equal(await page.getByRole("link", { name: "Open preview", exact: true }).getAttribute("href"), "https://sandbox-agent.exe.xyz");
+  assert.equal(await page.getByRole("button", { name: "Start Codex", exact: true }).isDisabled(), true);
+  // A deterministic runtime fixture exercises real auth/RPC/journal/browser paths.
+  const agent = await app.injectWS("/v1/agent/connect", { headers: { authorization: `Bearer ${agentToken}`, host: "127.0.0.1" } });
+  let requests = 0;
+  agent.on("message", raw => {
+    const message = JSON.parse(raw.toString());
+    if (message.action !== "prepare_session") return;
+    requests++;
+    agent.send(JSON.stringify({ type: "rpc_result", rpc_id: message.rpc_id, ok: true, result: { status: "started_detached", attach_command: "", record_command: true } }));
+  });
+  await page.getByRole("button", { name: "Start Codex", exact: true }).click();
+  await page.getByText("Session prepared", { exact: true }).waitFor();
+  assert.equal(requests, 1);
+  agent.terminate();
+  await page.waitForFunction(() => [...document.querySelectorAll("button")].find(button => button.textContent === "Start Codex")?.disabled === true);
+  await page.screenshot({ path: join(outDir, "resource-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: join(outDir, "resource-mobile.png"), fullPage: true });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "Resource page should fit a phone");
+  await page.goto(`${appURL}/fleet`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { name: updatedName, exact: true }).waitFor();
+  await page.screenshot({ path: join(outDir, "fleet-mobile.png"), fullPage: true });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "Fleet should fit a phone");
+  await second.close();
+  await page.goto(appURL, { waitUntil: "domcontentloaded" });
+  for (const name of ["research-agent", "review-agent", updatedName]) await store.deleteMachine(whoami.user.id, name);
+  return { providers: 3, liveRenameOnTwoPages: true, stableURL: true, savedSharing: true, runtimePresenceAndSessionRequest: true };
+}
+
 async function checkTeamMenu(page) {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(appURL, { waitUntil: "domcontentloaded" });
@@ -764,7 +825,7 @@ async function checkMembersPage(page) {
   assert.equal(facts.newTeamButtonPresent, false);
   assert.deepEqual(facts.panelHeadings, []);
   assert.equal(facts.removeCellAlign, "right");
-  assert.deepEqual(facts.teamNav, ["Boxes", "Members", "Images"]);
+  assert.deepEqual(facts.teamNav, ["Boxes", "Members", "Fleet", "Images"]);
   assert.deepEqual(facts.globalNav, ["Teams", "Security"]);
   for (const heading of ["Email", "Name", "Role"]) {
     assert.ok(facts.tableHeadings.includes(heading), `members table missing ${heading}`);
@@ -934,7 +995,7 @@ async function checkBoxCreateDrawer(page) {
 }
 
 async function checkAccountCapability(page, { label, screenshotPrefix }) {
-  const expectedNavigation = ["Boxes", "Members", "Images", "Teams", "Security", ...(label ? [label] : [])];
+  const expectedNavigation = ["Boxes", "Members", "Fleet", "Images", "Teams", "Security", ...(label ? [label] : [])];
   const facts = {};
   for (const [viewportName, viewport] of Object.entries({
     desktop: { width: 1440, height: 1000 },

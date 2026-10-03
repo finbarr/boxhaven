@@ -8,9 +8,66 @@ events, authenticated snapshot/SSE APIs, bounded replay, and membership checks.
 The shared SSH transport now supports TCP and scoped direct WebSockets, with a
 guest bridge and a real OpenSSH/TLS conformance smoke. Runtime grants expire
 existing streams; active membership revocation and seamless renewal remain open.
-Provider adapters, connection management, and desktop
-integration remain in progress; the provider research below is not a claim of
-shipped support.
+The exe.dev lifecycle adapter, scoped provider token minting, and OCI image recipe
+are implemented locally. Local contract/transport tests pass; the image and hosted
+proxy still need live validation. The shared resource layer now includes live team
+authorization, viewer/operator grants, stable console URLs, idempotent session
+requests, restart recovery, and a Fleet console using snapshot/SSE synchronization.
+The existing CLI routes also enforce membership, and resources remain team-owned
+when their creator leaves.
+E2B, Daytona, Blaxel, and Boat adapters, team connection management, and desktop
+integration remain unimplemented. The provider research below is not a claim of
+shipped support. The implementation is committed locally and has not been pushed.
+
+### Implementation direction — October 2, 2026
+
+The product is a shared control plane for a fleet of agents across providers.
+exe.dev is the first sandbox integration used to exercise it. Platform features
+belong above the adapter boundary: team identity, permissions, sharing, stable
+resource links, operation records, and synchronization have one implementation.
+Provider adapters own native lifecycle semantics and scoped transport access.
+
+The current slice works over the existing DigitalOcean, Hetzner, and exe.dev
+machine contract. The new [resource control routes](backend/src/resource_control.ts)
+contain no provider-name branches. [Shared types](backend/src/resource_types.ts)
+and the [event client](backend/src/fleet_client.ts) are also used by the Fleet
+console. Migration 9 adds sharing, operation, and audit records; it extends the
+existing database and Better Auth identities.
+
+What this slice does **not** complete: provider account connections/vaults,
+independent agent conversations and live attention states, continuous provider
+reconciliation, native PTY/files transports, active access revocation, private
+BoxHaven preview grants, or desktop fleet integration. A prepared session is not
+evidence that an agent is still executing or has finished its task.
+
+The remaining implementation order is:
+
+1. **Team provider connections and the control adapter contract.** Allow multiple
+   accounts/projects per provider per team, encrypt account credentials outside
+   the database's trust boundary, and bind each resource to a connection and
+   runtime generation. Use validated capabilities with explicit limitations.
+   Route current providers through that connection-aware registry before adding
+   account SDKs. Add reconciliation once per connection, with durable operations,
+   bounded concurrency, and no provider calls from fleet reads.
+2. **Complete exe.dev and add E2B.** Certify the prepared exe.dev image/private
+   WebSocket path. E2B supplies the first native PTY/files transport and tests that
+   the shared contract accommodates templates, timeouts, and preserved memory.
+   Extract the guest runtime from its systemd wrapper for sandbox entrypoints.
+3. **Daytona, Blaxel, and Boat.** Reuse the same team/resource/grant APIs. Daytona
+   resolves capabilities by sandbox class; Blaxel uses scoped client sessions
+   and explicit unattended-work lifetimes; Boat needs clean templates, safe
+   workload credentials, and identity reconciliation after resume. Run each
+   provider's full conformance suite before advertising support.
+4. **Desktop and agent fleet.** Use stable resource IDs and team events in the
+   desktop; keep grant handling and direct transports in privileged processes.
+   Add independent run/conversation identities and observed agent events for
+   Working, Needs you, and Ready for review. Closing an attachment leaves work
+   alive. Team-authorized preview URLs must be designed with their direct-access
+   authentication path; a redirect alone does not enforce preview permissions.
+
+All five sandbox providers are in scope. Adding another should require a
+connection schema, adapter, capability declaration, environment recipe where
+needed, and conformance tests—not another permission system or fleet UI.
 
 ## 1. Recommendation
 

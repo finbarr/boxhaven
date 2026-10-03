@@ -48,6 +48,11 @@ Run `node --import tsx --test src/team_sync.test.ts` for real HTTP stream covera
 with two clients, restart/rename identity, team isolation, and retention checks.
 The backend suite also checks these routes with real Better Auth membership.
 
+The console's **Fleet** page consumes these APIs through `src/fleet_client.ts`.
+It displays the team's resources across providers and updates from events rather
+than polling each provider. The desktop's existing box list still uses the CLI;
+migrating its inventory and terminal attachment to resource IDs is separate work.
+
 ## Shared resource control
 
 These routes work with every configured provider through the same authorization
@@ -98,7 +103,8 @@ sharing, an operation journal, and credential-free access/sharing audit records.
 
 Verification: `npm test` covers authorization across TCP/WebSocket transports,
 membership removal/rejoin, duplicate requests, lost responses, and restart/move
-recovery.
+recovery. `npm run smoke:console` checks two live browser pages plus desktop/mobile
+Fleet and sharing screenshots. `npm run build` includes console TypeScript checks.
 
 ## Direct sandbox transports
 

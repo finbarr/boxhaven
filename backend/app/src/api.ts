@@ -11,6 +11,7 @@ export type {
   Machine,
   MachineImage,
   MachinePlan,
+  MachinePlanPrice,
   MachineResponse,
   MachineSizeOption,
   MachineSizeShortcut,

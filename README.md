@@ -138,6 +138,8 @@ device key stored under `~/.boxhaven/ssh`. Remove the managed include with
   [exe.dev connector awaiting live validation](deploy/exedev/README.md).
 - Provider plan discovery with team-owned size shortcuts.
 - Team-owned boxes with roles, shareable invite links, and per-team visibility.
+- A shared Fleet console with stable resource links, viewer/operator permissions,
+  and durable session requests across configured providers.
 - Admin-managed golden images that become the default for new boxes.
 - An open-source Fastify/Better Auth backend.
 

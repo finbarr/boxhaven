@@ -139,7 +139,7 @@ function TeamSettingsDrawer({ open, token, user, org, onClose }: {
   const isOwner = callerRoles.includes("owner");
   const currentSlug = org?.slug || (org ? teamSlug(org.name) : "");
   const nextSlug = teamSlug(teamSlugValue);
-  const teamFormDirty = Boolean(org) && (teamName !== org.name || nextSlug !== currentSlug);
+  const teamFormDirty = org !== undefined && (teamName !== org.name || nextSlug !== currentSlug);
 
   useEffect(() => {
     setTeamName(org?.name || "");

@@ -11,6 +11,24 @@ An exe.dev adapter is also implemented, with live provider validation still
 pending. It uses a prepared OCI image and direct WebSocket transport. E2B,
 Daytona, Blaxel, and Boat remain planned.
 
+## One team fleet
+
+Open **Fleet** in the web console to see your team's resources across configured
+providers. Updates sync between browsers through the backend. Each resource has
+a stable link that survives renames, plus the same sharing controls regardless
+of provider. The owner and team administrators can grant operator access to the
+whole team or individual members. Viewers can see metadata; operators can run
+commands and access files on the resource.
+Resources remain with the team when their creator leaves; the creator loses
+access through both Fleet and the CLI until they are a team member again.
+
+The resource link requires team membership. Preview access remains controlled
+by the existing preview transport: VM previews are public, and exe.dev previews
+require provider login. Resource sharing does not change those preview settings.
+Session request history records what the backend confirmed; it does not report
+live agent activity. Desktop fleet subscriptions and the additional sandbox
+adapters are still being implemented.
+
 `GET /v1/providers` lists what a backend has configured, and `bh create`
 picks the backend default unless a provider is requested explicitly:
 
