@@ -179,8 +179,13 @@ try {
   await new Promise((resolve, reject) => {
     const ws = new WebSocket(short.url, { headers: short.headers }); let opened = false;
     const timeout = setTimeout(() => { ws.terminate(); reject(new Error("Hosted stream remained open after expiry")); }, 15000);
-    ws.on("open", () => { opened = true; }); ws.on("error", reject);
-    ws.on("close", () => { clearTimeout(timeout); opened ? resolve() : reject(new Error("Hosted stream failed to open")); });
+    ws.on("open", () => { opened = true; }); ws.on("error", error => { clearTimeout(timeout); reject(error); });
+    ws.on("close", () => {
+      clearTimeout(timeout);
+      if (!opened) reject(new Error("Hosted stream failed to open"));
+      else if (Date.now() < Date.parse(short.expires_at) - 1000) reject(new Error("Hosted stream closed before grant expiry"));
+      else resolve();
+    });
   });
   const preview = ok(await api("GET", `/v1/resources/${resourceID}/preview`));
   const anonymous = await fetch(preview.url, { redirect: "manual", signal: AbortSignal.timeout(15000) });

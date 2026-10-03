@@ -33,11 +33,15 @@ try {
         await page.locator("h2#one-team-fleet").scrollIntoViewIfNeeded();
         await page.screenshot({path:resolve(out,`fleet-${size}.png`)});
         const heading=page.locator("h2#exe-dev");await heading.scrollIntoViewIfNeeded();
-        assert.match(await page.locator(".vp-doc").innerText(),/live verification before release/);
+        assert.match(await page.locator(".vp-doc").innerText(),/live smoke verifies creation/);
       } else if(name==="self-hosting") await page.getByText("EXE_DEV_SIGNING_KEY",{exact:false}).first().scrollIntoViewIfNeeded();
       else { const link=page.getByRole("link",{name:"Cloud providers",exact:true}); await link.last().scrollIntoViewIfNeeded(); }
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${name}/${size} overflow`);
       await page.screenshot({path:resolve(out,`${name}-${size}.png`)});
+      if(name==="providers") {
+        await page.getByText("The live smoke verifies creation",{exact:false}).scrollIntoViewIfNeeded();
+        await page.screenshot({path:resolve(out,`provider-validation-${size}.png`)});
+      }
       console.log(`PASS ${name}/${size}`);await page.close();
     }
   }

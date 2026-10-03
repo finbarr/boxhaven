@@ -7,8 +7,8 @@ Hetzner Cloud are implemented: each is enabled by its credentials
 request one. When unset, the first configured provider is the default
 (DigitalOcean when both are configured).
 
-An exe.dev adapter is also implemented, with live provider validation still
-pending. It uses a prepared OCI image and direct WebSocket transport. E2B,
+An exe.dev adapter is also implemented and has passed the live provider smoke.
+It uses a prepared OCI image and direct WebSocket transport. E2B,
 Daytona, Blaxel, and Boat remain planned.
 
 ## One team fleet
@@ -108,8 +108,9 @@ the account's default region, so per-machine `--region` is rejected. Previews ke
 exe.dev's private login flow. Image snapshots, pause, desktop preview delegation,
 and team-specific provider-account connections are not yet implemented.
 
-The adapter and direct transport have local test coverage; the prepared image and
-hosted proxy require live verification before release. See the repository's
+The live smoke verifies creation, guest readiness, direct certificate SSH and
+file transfer, detached session recovery, active grant expiry, private previews,
+and confirmed deletion. See the repository's
 [image recipe and live smoke](https://github.com/finbarr/boxhaven/tree/master/deploy/exedev)
 for operator setup and the current validation limits.
 

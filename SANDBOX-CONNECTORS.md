@@ -10,8 +10,9 @@ guest bridge and a real OpenSSH/TLS conformance smoke. Runtime grants expire
 existing streams; active membership revocation and seamless renewal remain open.
 The exe.dev lifecycle adapter, scoped provider token minting, and OCI image recipe
 are implemented locally. Local contract/transport tests and the actual OCI image's
-runtime checks pass. Hosted creation, guest boot/callback, and deletion are verified;
-the authenticated proxy still needs live validation. The shared resource layer now includes live team
+runtime checks pass. The live exe.dev smoke verifies creation, guest boot/callback,
+direct certificate SSH and files, detached work/reconnect, grant expiry, private
+previews, and deletion. The shared resource layer now includes live team
 authorization, viewer/operator grants, stable console URLs, idempotent session
 requests, restart recovery, and a Fleet console using snapshot/SSE synchronization.
 The existing CLI routes also enforce membership, and resources remain team-owned
@@ -50,8 +51,8 @@ The remaining implementation order is:
    Route current providers through that connection-aware registry before adding
    account SDKs. Add reconciliation once per connection, with durable operations,
    bounded concurrency, and no provider calls from fleet reads.
-2. **Complete exe.dev and add E2B.** Certify the prepared exe.dev image/private
-   WebSocket path. E2B supplies the first native PTY/files transport and tests that
+2. **Add E2B.** exe.dev now exercises the prepared image and private WebSocket
+   path. E2B supplies the first native PTY/files transport and tests that
    the shared contract accommodates templates, timeouts, and preserved memory.
    Extract the guest runtime from its systemd wrapper for sandbox entrypoints.
 3. **Daytona, Blaxel, and Boat.** Reuse the same team/resource/grant APIs. Daytona
@@ -959,8 +960,9 @@ UI pages. This proposal changes no supported commands, defaults, UI, or runtime.
 
 1. The backend is the shared authority for every connection, including a solo
    user's own provider account. Team synchronization is a foundation requirement.
-2. Prove exe.dev and Boat private WebSockets. If they cannot sustain the bridge,
-   work with the vendor on direct access; do not quietly add a central bulk relay.
+2. exe.dev's private WebSocket path passes the live conformance smoke. Extend
+   duration/idle coverage and prove Boat's path. If a provider cannot sustain the
+   bridge, work with the vendor on direct access; do not add a central bulk relay.
 3. Check the pinned Blaxel SDK for suitable native PTY support; use the bridge
    only if necessary. Process/log documentation alone does not establish PTY semantics.
 4. Prove scoped access provider by provider before release. Account/organization

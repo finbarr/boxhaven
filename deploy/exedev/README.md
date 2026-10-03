@@ -5,11 +5,12 @@ access. The CLI and desktop reuse the direct WebSocket SSH transport. The backen
 retains lifecycle state, teams, and authorization; terminal and file bytes go
 straight to exe.dev. No public IPv4 address is needed.
 
-**Validation status:** lifecycle fixtures, real OpenSSH/TLS transport tests, and
-the built OCI image's runtime/tool/identity checks pass locally. Live exe.dev
-creation, prepared-image boot, authenticated agent callback, and deletion are
-verified. Hosted authenticated WebSockets still require live validation before
-a release. E2B, Daytona, Blaxel, and Boat
+**Validation status (October 2, 2026):** the live exe.dev smoke passes creation,
+prepared-image boot, authenticated agent callback, certificate SSH through the
+private provider WebSocket, pinned host identity, 2 MiB upload/download, detached
+session recovery, established-stream grant expiry, private previews, and confirmed
+deletion. The actual OCI artifact also passes runtime/tool/identity checks.
+E2B, Daytona, Blaxel, and Boat
 adapters remain separate work in [the proposal](../../SANDBOX-CONNECTORS.md).
 
 ## Backend credentials
