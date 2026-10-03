@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## v0.5.0 - 2026-10-03
+
+### Added
+
+- exe.dev provider adapter with a prepared, verified OCI runtime, account-scoped
+  provisioning, private previews, and certificate-authenticated SSH.
+- Shared box identities, team synchronization, viewer/operator permissions,
+  stable links, and durable agent-session requests across configured providers.
+- Backend relay for CLI and desktop terminal/file traffic, with short-lived
+  access, live permission checks, bounded buffers, and usage logging.
+
+### Changed
+
+- All providers appear in Boxes, with provider selection during creation,
+  sharing controls, and private preview access in the box drawer.
+- Desktop 0.1.5 opens fresh preview grants through the backend and bundles the
+  matching CLI. Upgrade clients together with the backend.
+
+### Fixed
+
+- CI propagates lint failures and checks SSH proxy cleanup errors.
+
 ## v0.4.0 - 2026-09-26
 
 ### Added

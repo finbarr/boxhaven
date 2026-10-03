@@ -173,9 +173,37 @@ jobs:
           path: release-manifest.json
           if-no-files-found: error
 
+  exedev-image:
+    name: Verified exe.dev Runtime Image
+    needs: verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build, verify, and publish the prepared runtime
+        env:
+          EXEUNTU_IMAGE: ghcr.io/boldsoftware/exeuntu@sha256:b613464bffe5ccbeab2b2eacd887823171c5b3f90d5f114108af20f668efb039
+          BOXHAVEN_EXEDEV_IMAGE_TAG: ghcr.io/finbarr/boxhaven-exedev:${{ github.ref_name }}
+        run: |
+          if docker manifest inspect "$BOXHAVEN_EXEDEV_IMAGE_TAG" >/dev/null 2>&1; then
+            echo "Runtime image tag already exists; choose a new version." >&2
+            exit 1
+          fi
+          deploy/exedev/build-image.sh
+          deploy/exedev/verify-image.sh "$BOXHAVEN_EXEDEV_IMAGE_TAG"
+          docker push "$BOXHAVEN_EXEDEV_IMAGE_TAG"
+
   publish:
     name: Publish Verified Draft
-    needs: [package, backend-image]
+    needs: [package, backend-image, exedev-image]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

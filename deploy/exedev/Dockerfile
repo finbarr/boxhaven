@@ -45,5 +45,6 @@ RUN rm -f /etc/ssh/ssh_host_* /etc/boxhaven/ssh_host_* \
     && rm -f /var/lib/dbus/machine-id \
     && ln -s /etc/machine-id /var/lib/dbus/machine-id
 
+LABEL org.opencontainers.image.source="https://github.com/finbarr/boxhaven"
 LABEL exe.dev/login-user="exedev" exe.dev/install-shelley="false"
 EXPOSE 80 9898
