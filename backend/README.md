@@ -75,6 +75,10 @@ It requires OpenSSH, Node, and OpenSSL. It does not certify any provider's proxy
 
 ## Run Locally
 
+Repository Go checks use `make lint`, which requires `golangci-lint` (CI uses
+v2.12.2) and propagates its errors. For a separate installation, use
+`make lint GOLANGCI_LINT=/path/to/golangci-lint`.
+
 ```bash
 npm ci
 BETTER_AUTH_SECRET=replace-with-a-random-secret-at-least-32-bytes \

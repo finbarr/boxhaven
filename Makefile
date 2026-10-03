@@ -1,4 +1,5 @@
 BINARY ?= bh
+GOLANGCI_LINT ?= golangci-lint
 CMD_DIR := ./cmd/bh
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
@@ -31,7 +32,8 @@ backend-build:
 
 lint:
 	go vet ./...
-	@which golangci-lint > /dev/null && golangci-lint run || echo "golangci-lint not installed, skipping"
+	@command -v $(GOLANGCI_LINT) >/dev/null || { echo "golangci-lint is required; install CI version v2.12.2 or set GOLANGCI_LINT to its path" >&2; exit 1; }
+	$(GOLANGCI_LINT) run
 
 release-test:
 	scripts/test-version-tags.sh

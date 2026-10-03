@@ -43,7 +43,7 @@ func runSSHProxy(args []string) error {
 	if err != nil {
 		return fmt.Errorf("open SSH access grant: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil {
 		return err
@@ -92,7 +92,7 @@ func proxySSHWebSocket(ctx context.Context, access sshAccess, input io.Reader, o
 	if err != nil {
 		return fmt.Errorf("could not connect to sandbox SSH WebSocket")
 	}
-	defer socket.CloseNow()
+	defer func() { _ = socket.CloseNow() }()
 	conn := websocket.NetConn(ctx, socket, websocket.MessageBinary)
 	socket.SetReadLimit(64 * 1024)
 	done := make(chan error, 2)

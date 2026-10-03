@@ -61,7 +61,7 @@ CLI release tags also include the skill from the same source revision.
 make build          # Build the bh binary
 make test           # Run Go, backend, backup, and skill launcher tests
 make backup-test    # Run the application-backup integrity tests
-make lint           # Run go vet and golangci-lint when available
+make lint           # Run go vet and required golangci-lint (CI uses v2.12.2)
 make backend-build  # Build the TypeScript backend and web app
 make smoke-remote   # Run the fast one-box production/prod-equivalent remote smoke
 make smoke-remote-full  # Run the remote smoke with backend restart/reconnect

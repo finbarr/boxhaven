@@ -26,7 +26,7 @@ func TestSSHWebSocketStreamsBinaryData(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		defer socket.CloseNow()
+		defer func() { _ = socket.CloseNow() }()
 		conn := websocket.NetConn(r.Context(), socket, websocket.MessageBinary)
 		read := make([]byte, len(payload))
 		if _, err := io.ReadFull(conn, read); err != nil {
@@ -43,14 +43,16 @@ func TestSSHWebSocketStreamsBinaryData(t *testing.T) {
 			}
 			read = read[n:]
 		}
-		socket.Close(websocket.StatusNormalClosure, "")
+		if err := socket.Close(websocket.StatusNormalClosure, ""); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// Keep stdin open as an SSH process does while receiving stdout.
 	input, writer := io.Pipe()
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 	go func() { _, _ = writer.Write(payload) }()
 	var output bytes.Buffer
 	err := proxySSHWebSocket(ctx, sshAccess{URL: server.URL, Headers: map[string]string{"X-BoxHaven-Access": "scoped-secret"}}, input, &output, server.Client())
