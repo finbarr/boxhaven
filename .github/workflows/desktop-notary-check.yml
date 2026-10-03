@@ -1,0 +1,42 @@
+name: Desktop Notarization Credentials
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 5
+    environment: desktop-release
+    steps:
+      - name: Validate notarization account and report a redacted error
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, re, secrets, subprocess, tempfile
+          def run(args):
+              return subprocess.run(args, capture_output=True, text=True)
+          with tempfile.TemporaryDirectory() as temp:
+              keychain = str(pathlib.Path(temp) / 'verify.keychain-db')
+              password = secrets.token_urlsafe(32)
+              result = run(['security', 'create-keychain', '-p', password, keychain])
+              if result.returncode:
+                  raise SystemExit('Could not create temporary keychain')
+              try:
+                  result = run(['xcrun', 'notarytool', 'store-credentials', 'boxhaven-check', '--keychain', keychain,
+                      '--apple-id', os.environ['APPLE_ID'], '--password', os.environ['APPLE_ID_PASSWORD'],
+                      '--team-id', os.environ['APPLE_TEAM_ID']])
+                  if result.returncode:
+                      message = result.stdout + result.stderr
+                      for secret in [password, *(os.environ[name] for name in ('APPLE_ID', 'APPLE_ID_PASSWORD', 'APPLE_TEAM_ID'))]:
+                          if secret: message = message.replace(secret, '[redacted]')
+                      message = re.sub(r'[\w.+-]+@[\w.-]+', '[redacted-email]', message)
+                      print(message[:2500])
+                      raise SystemExit('Notarization credential validation failed')
+                  print('PASS: Apple accepted the configured notarization account and team')
+              finally:
+                  run(['security', 'delete-keychain', keychain])
+          PY
