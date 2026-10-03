@@ -19,7 +19,18 @@ def quiet(*args):
     # Apple's commands can echo credential inputs on failure. Do not forward output.
     result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode:
-        raise RuntimeError(f'{args[0]} {args[1]} failed (output withheld to protect credentials)')
+        output = (result.stdout + result.stderr).decode(errors='replace').lower()
+        # Emit only fixed categories; Apple's full output can contain secrets.
+        category = 'unclassified error'
+        if '401' in output or 'invalid credentials' in output or 'unauthorized' in output:
+            category = 'Apple rejected notarization credentials'
+        elif '403' in output or 'forbidden' in output:
+            category = 'Apple denied access for this account or team'
+        elif 'timed out' in output or 'timeout' in output:
+            category = 'Apple service request timed out'
+        elif '503' in output or 'service unavailable' in output:
+            category = 'Apple service unavailable'
+        raise RuntimeError(f'{args[0]} {args[1]} failed: {category} (raw output withheld)')
     return result.stdout.decode()
 
 previous = shlex.split(quiet('security', 'list-keychains', '-d', 'user'))

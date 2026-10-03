@@ -1,7 +1,9 @@
-# BoxHaven Desktop 0.1.4
+# BoxHaven Desktop 0.1.6
 
-- Flat classic smiling-box mark with a pale-sage face throughout the app.
-- Larger Dock artwork with a 10% white border on each side.
-- Removed logo depth, gradients, and baked-in icon shadows.
+- Terminal sessions and file access route through the BoxHaven backend, with
+  short-lived access and live team permission checks.
+- Private previews obtain a fresh access link from the backend.
+- Includes the matching CLI and exe.dev provider support when configured on
+  your backend, alongside DigitalOcean and Hetzner.
 
 Remote tmux sessions keep running while the desktop app restarts.

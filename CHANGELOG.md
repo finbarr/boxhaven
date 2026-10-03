@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v0.5.0 - 2026-10-03
+## v0.5.1 - 2026-10-03
 
 ### Added
 
@@ -17,11 +17,13 @@
 
 - All providers appear in Boxes, with provider selection during creation,
   sharing controls, and private preview access in the box drawer.
-- Desktop 0.1.5 opens fresh preview grants through the backend and bundles the
+- Desktop 0.1.6 opens fresh preview grants through the backend and bundles the
   matching CLI. Upgrade clients together with the backend.
 
 ### Fixed
 
+- Runtime image verification runs in release CI. The unpublished v0.5.0 and
+  desktop 0.1.5 attempts are superseded by this release.
 - CI propagates lint failures and checks SSH proxy cleanup errors.
 
 ## v0.4.0 - 2026-09-26
