@@ -9,7 +9,7 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY tsconfig.json vite.config.ts ./
+COPY tsconfig.json tsconfig.app.json vite.config.ts ./
 COPY src ./src
 COPY app ./app
 
