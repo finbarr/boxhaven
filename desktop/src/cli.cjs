@@ -38,6 +38,7 @@ function parseMachines(output) {
       identity: JSON.stringify([machine.provider, machine.provider_id, machine.created_at]),
       previewURL: previewURL(machine.preview_url),
       team: machine.team_slug || machine.team_name || 'Personal',
+      providerExpiresAt: typeof machine.provider_expires_at === 'string' && Number.isFinite(Date.parse(machine.provider_expires_at)) ? machine.provider_expires_at : '',
       provider: machine.provider || '', region: machine.region || '', size: machine.size || '',
       ready: machine.bootstrap_complete === true && machine.create_state !== 'recovery_required',
     };

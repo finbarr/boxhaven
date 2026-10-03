@@ -1,0 +1,15 @@
+name = "boxhaven-runtime-v051"
+type = "sandbox"
+
+[runtime]
+memory = 4096
+
+[[runtime.ports]]
+name = "preview"
+target = 8081
+protocol = "HTTP"
+
+[[runtime.ports]]
+name = "ssh-bridge"
+target = 9898
+protocol = "HTTP"

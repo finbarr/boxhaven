@@ -13,6 +13,7 @@ export function registerResourceControl(app: FastifyInstance, options: {
   preview(machine: RemoteMachine, actorID: string): Promise<{ url: string; authentication: string }>;
   runtimeConnected(machine: RemoteMachine): boolean;
   issueSSH(machine: RemoteMachine, actorID: string, publicKey: string, ttl?: number): Promise<unknown>;
+  ensureRuntime(machine: RemoteMachine): Promise<void>;
   prepareSession(machine: RemoteMachine, command: string[], attach: boolean): Promise<unknown>;
 }) {
   const { context } = options;
@@ -141,6 +142,8 @@ export function registerResourceControl(app: FastifyInstance, options: {
     const operation = await store.reserveResourceOperation(resourceID, auth.machine.org_id!, auth.user.userID, key, requestHash);
     if (!operation) return replay();
     try {
+      await options.ensureRuntime(auth.machine);
+      // Resuming a sandbox can take a minute. Recheck access before any work starts.
       const latest = await authorize(request, reply, "operator", auth.machine.org_id);
       if (!latest) {
         await store.finishResourceOperation({ ...operation, state: "failed", error_code: "access_changed", updated_at: new Date().toISOString() });

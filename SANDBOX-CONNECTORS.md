@@ -1,6 +1,6 @@
 # Sandbox connectors for BoxHaven Desktop
 
-Status: implementation in progress. Architecture revised October 2, 2026 (Pacific).
+Status: implementation in progress. Implementation updated October 3, 2026 (Pacific).
 Provider research below was checked September 27; it is not a claim of shipped support.
 
 ## 1. Decision: route interactive traffic through BoxHaven
@@ -31,10 +31,16 @@ plans, and payment collection are separate product work; this change adds none.
   interrupted operations. Remote work survives closing its local attachment.
 - exe.dev create/list/destroy, a prepared OCI image, pinned native SSH provisioning,
   and short-lived provider tokens. DigitalOcean and Hetzner remain supported.
+- E2B, Daytona, and Blaxel share a sandbox adapter for ownership, provisioning,
+  runtime setup, recovery, and private transport. Provider drivers retain their
+  own authentication and lifecycle rules. All appear in the existing Boxes flow.
+- Prepared E2B templates and Blaxel images have reusable build recipes. E2B leases
+  renew from agent heartbeats and paused memory resumes on access. Blaxel uses
+  runtime keep-alive and exposes the deletion deadline imposed by account tiers.
 - All CLI/desktop SSH attachments connect to a backend WebSocket relay. The backend
   opens either TCP SSH or a provider WebSocket through the common adapter contract.
   The client's SSH certificate and host-key verification remain end to end.
-- Private exe.dev previews use the backend's provider hook and team-scoped browser
+- Private sandbox previews use the backend's provider hook and team-scoped browser
   leases on isolated preview hostnames. Existing public VM previews stay public.
 - Active SSH relays check membership, role, team, runtime identity, and expiry.
   Removal, downgrade, move, replacement, and expiry close streams. Per-process
@@ -48,14 +54,23 @@ cookie exchange, membership revocation, and confirmed deletion. The browser test
 routes a test hostname to the local backend; production wildcard DNS/TLS was not
 changed. No release or deployment is implied by this local implementation.
 
+E2B and Blaxel also passed the full live smoke, including backend restart,
+access revocation, private previews, and confirmed cleanup. E2B passed memory
+pause/resume with existing sessions and host-key pinning intact. Daytona can
+create the prepared runtime, but this test account's Tier 1 firewall blocks the
+backend domain. Its actionable setup error and recovery deletion passed; the
+complete relay/session smoke requires Daytona to permit backend egress. See
+[runtime setup and validation](deploy/sandboxes/README.md).
+
 ### Remaining product work
 
-E2B, Daytona, Blaxel, and Boat adapters; multiple provider accounts per team;
+Daytona's remaining live validation; the Boat adapter; multiple provider accounts per team;
 encrypted credential storage; continuous reconciliation; native PTY/files
 transports; desktop Boxes subscriptions; independent agent conversations and
 observed agent status; seamless access renewal; durable usage accounting and
-commercial access policy. Current exe.dev credentials configure one operator
-account. The screenshot fixtures do not represent additional working adapters.
+commercial access policy. Each provider currently configures one operator
+account per backend. Browser screenshots use fixtures; live provider validation
+is reported separately above.
 
 ## 2. Provider research
 
@@ -245,9 +260,9 @@ its source files. Guest services start only after credentials and host keys exis
 | Provider | Implementation work |
 | --- | --- |
 | exe.dev | Maintain prepared exeuntu OCI image, pinned SSH provisioning, scoped provider signing key, guest bridge, and backend preview hook. Account-region and subscription-pool semantics stay explicit. |
-| E2B | Add team connections, templates, timeout/lifetime handling, memory preservation, and native PTY/files relay. This tests that the common interface does not assume SSH. |
-| Daytona | Add connection/workspace scope, capabilities by sandbox class, session persistence, and preview upstream authorization. |
-| Blaxel | Add lifecycle/files/processes, scoped backend sessions, explicit unattended-work keep-alive, and validated snapshot/archive support. |
+| E2B | Prepared templates, renewable leases, memory resume, and private runtime relay are implemented. Add per-team accounts and native PTY/files transport. |
+| Daytona | Prepared OCI runtime, lifecycle operations, and private upstream authorization are implemented. Complete live transport validation with backend egress permitted; add sandbox-class capabilities and per-team accounts. |
+| Blaxel | Prepared images, lifecycle operations, private runtime relay, keep-alive, and expiry notices are implemented. Add per-team accounts and validated snapshot/archive support. |
 | Boat | Add prepared templates, protected preview upstreams, workload credential isolation, and identity reconciliation after resume. |
 | Other providers | Supply connection schema, lifecycle adapter, transport adapter, capability declaration, artifact recipe where needed, and conformance tests. Reuse team policy and Boxes UI. |
 
@@ -307,7 +322,7 @@ quotes explicit for provider pools instead of treating missing prices as free.
    access, image hygiene, and recovery conformance checks pass.
 6. Publish and deploy only after explicit authorization. Current work stays local.
 
-Implementation order: relay conformance; connection-aware account registry and
-vault; E2B native transport; Daytona/Blaxel/Boat; desktop Boxes and agent events;
+Remaining order: Daytona live conformance; connection-aware account registry and
+vault; native transports and Boat; desktop Boxes and agent events;
 durable commercial metering and capacity scaling. No feature flags or silently
 selected direct-access fallback paths.

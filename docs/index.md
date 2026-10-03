@@ -42,7 +42,7 @@ then invoke `$boxhaven` in Codex or `/boxhaven` in Claude.
 
 - [Teams](/teams): team-owned boxes, roles, invitations, and moving boxes between teams.
 - [Golden images](/images): save, select, and remove team VM images by name.
-- [Cloud providers](/providers): configure DigitalOcean, Hetzner Cloud, and the exe.dev connector.
+- [Cloud providers](/providers): configure DigitalOcean, Hetzner Cloud, exe.dev, E2B, Daytona, and Blaxel.
 
 ## Security and operation
 

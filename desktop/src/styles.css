@@ -448,3 +448,6 @@ dialog input, dialog select {
 @media(max-height:600px) { dialog { padding:16px; } dialog label { margin-top:12px; } #create-size { max-height:120px; } }
 
 .size-choice strong { overflow-wrap:anywhere; }
+
+#provider-expiry { margin: 0; padding: 12px 25px; color: #754e17; background: #fcf1d9; font-size: 12px; overflow-wrap: anywhere; }
+#size-description { color: #6a776f; font-size: 12px; line-height: 1.5; }

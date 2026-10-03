@@ -7,9 +7,8 @@ Hetzner Cloud are implemented: each is enabled by its credentials
 request one. When unset, the first configured provider is the default
 (DigitalOcean when both are configured).
 
-An exe.dev adapter is also implemented and has passed the live provider smoke.
-It uses a prepared OCI image and backend WebSocket transport. E2B,
-Daytona, Blaxel, and Boat remain planned.
+Sandbox adapters for exe.dev, E2B, Daytona, and Blaxel use prepared runtime
+images and backend WebSocket transport. Boat remains planned.
 
 ## All providers in Boxes
 
@@ -25,12 +24,11 @@ Resources remain with the team when their creator leaves; the creator loses
 access through both Boxes and the CLI until they are a team member again.
 
 The resource link requires team membership. Preview access remains controlled
-by the existing preview transport: VM previews are public, and exe.dev previews
+by the existing preview transport: VM previews are public, and sandbox previews
 use BoxHaven team access through the backend relay. Obtain a private preview
 link in Boxes or with `bh preview work`; the desktop requests one automatically.
 Session request history records what the backend confirmed; it does not report
-live agent activity. Desktop team subscriptions and the additional sandbox
-adapters are still being implemented.
+live agent activity. Desktop team subscriptions are still being implemented.
 
 `GET /v1/providers` lists what a backend has configured, and `bh create`
 picks the backend default unless a provider is requested explicitly:
@@ -116,6 +114,51 @@ file transfer, detached session recovery, active grant expiry, private previews,
 and confirmed deletion. See the repository's
 [image recipe and live smoke](https://github.com/finbarr/boxhaven/tree/master/deploy/exedev)
 for operator setup and the current validation limits.
+
+## E2B, Daytona, and Blaxel
+
+Configure an account credential and a prepared BoxHaven runtime on your backend:
+
+| Provider | Credentials | Prepared runtime | Region |
+| --- | --- | --- | --- |
+| E2B | `E2B_API_KEY` | `BOXHAVEN_REMOTE_IMAGE_E2B` template ID | Project region |
+| Daytona | `DAYTONA_API_KEY` | `BOXHAVEN_REMOTE_IMAGE_DAYTONA` OCI image | `DAYTONA_TARGET` |
+| Blaxel | `BL_API_KEY`, `BL_WORKSPACE` | `BOXHAVEN_REMOTE_IMAGE_BLAXEL` image ID | `BL_REGION` |
+
+```bash
+bh create work --provider e2b
+bh run work codex
+# Disconnect: Ctrl-b, then d.
+bh connect work
+# Use --provider daytona or --provider blaxel for the same workflow.
+bh destroy work
+```
+
+These boxes use the same team permissions, resource links, file transfer,
+terminal relay, and private preview flow. Account credentials stay on the
+backend. Your application should bind to `$HOST:$PORT`; these adapters set
+the preview port to 8081. Provider preview URLs require private credentials
+held by the backend. Provider accounts are configured per backend; connecting
+a separate account for each team is not yet supported.
+
+E2B resources are fixed by its template. BoxHaven renews its one-hour lease
+from agent heartbeats every 15 minutes. If the backend is unavailable long
+enough for the lease to expire, E2B pauses with memory preserved; accessing
+the box resumes it. Daytona disables automatic stopping and deletion. Its
+organization must allow outbound access to the BoxHaven backend. Tier 1 and
+Tier 2 restrict this access; ask Daytona support to allow your backend domain.
+See [Daytona network limits](https://www.daytona.io/docs/en/network-limits/).
+Blaxel keeps the runtime awake so detached agents can continue working. Its
+lower account tiers enforce a deletion deadline (seven days on Tier 0 and
+30 days on Tier 1); Boxes and `bh status` show the returned expiry. Save work
+before that date. See [Blaxel expiration policies](https://docs.blaxel.ai/Sandboxes/Expiration).
+Destroy unused boxes to stop compute charges. Provider quotas still apply;
+BoxHaven does not estimate these providers' usage-based bills.
+
+These adapters require prepared images; they do not install runtime tools
+during box creation. Snapshot management and manual pause controls are not
+exposed. Follow the repository's
+[sandbox image and verification guide](https://github.com/finbarr/boxhaven/tree/master/deploy/sandboxes).
 
 ## Golden Snapshots
 

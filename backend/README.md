@@ -97,7 +97,7 @@ observations, not ongoing agent activity or task-completion signals.
 
 The stable console URL is `/boxes/<UUID>` and requires team membership.
 It is a resource-sharing link, not a public preview grant. Existing public VM
-previews remain public; exe.dev previews use short-lived BoxHaven team access
+previews remain public; sandbox previews use short-lived BoxHaven team access
 through isolated preview hostnames. Native provider transports remain work
 in the [connector proposal](../SANDBOX-CONNECTORS.md).
 
@@ -352,6 +352,10 @@ Environment:
 - `EXE_DEV_SIGNING_KEY`: backend path to a dedicated registered exe.dev signing key. Configures the exe.dev adapter; the key must be unencrypted and restricted to the backend user.
 - `EXE_DEV_REGISTRY_AUTH`: optional pull-only `USERNAME:PASSWORD` for the prepared exe.dev image's private registry. This credential is sent only in provider creation requests and is excluded from resource metadata.
 - `BOXHAVEN_REMOTE_IMAGE_EXEDEV`: required prepared OCI image for exe.dev. See [image setup and validation limits](../deploy/exedev/README.md). Provisioning requires outbound SSH to `exe.dev:22` with a pinned provider host key; inventory and deletion use HTTPS. The adapter uses the account's default region, private provider previews, and backend WebSocket SSH.
+- `E2B_API_KEY` and `BOXHAVEN_REMOTE_IMAGE_E2B`: E2B project key and prepared template ID. Template resources are configured with `BOXHAVEN_E2B_TEMPLATE_CPU` (default 2), `BOXHAVEN_E2B_TEMPLATE_MEMORY_MB` (4096), and `BOXHAVEN_E2B_TEMPLATE_DISK_GB` (0 means unspecified). They must match the template build.
+- `DAYTONA_API_KEY` and `BOXHAVEN_REMOTE_IMAGE_DAYTONA`: Daytona key and prepared OCI image. `DAYTONA_TARGET` selects the backend's region. Automatic stop, pause, and deletion are disabled. The organization network policy must allow outbound access to the backend domain; Tier 1/2 require a policy adjustment from Daytona support.
+- `BL_API_KEY`, `BL_WORKSPACE`, and `BOXHAVEN_REMOTE_IMAGE_BLAXEL`: Blaxel credentials and prepared image ID. Optional `BL_REGION` selects the region. The runtime uses a process with `keepAlive: true` and no command timeout. Blaxel account tiers can still impose a sandbox deletion deadline; Boxes and `bh status` show that expiry.
+- All sandbox adapters use the same backend team control plane and relay. E2B leases renew from runtime heartbeats; a paused E2B runtime resumes on access. Private previews use port 8081 for E2B, Daytona, and Blaxel. See [image preparation and the reusable live smoke](../deploy/sandboxes/README.md).
 - `BOXHAVEN_COMMERCIAL_POLICY_RETRY_MS`: failed event, reconciliation, and policy-requested machine cleanup retry delay, default `30000`.
 - `BOXHAVEN_COMMERCIAL_POLICY_RECONCILE_INTERVAL_MS`: full active-machine reconciliation and lifecycle-policy evaluation interval, default `300000`.
 - `BOXHAVEN_MAX_TEAMS_PER_USER`: optional positive cap on teams a user owns. Pending creates reserve a slot so concurrent requests cannot exceed it.

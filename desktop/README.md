@@ -39,7 +39,10 @@ with `bh login --backend-url https://api.example.com`, or use Connection setting
 inside the app. First-time in-app login requires a backend URL.
 
 Click **New box** in the sidebar, enter a name, and choose a provider, region,
-and size. Available sizes include hardware details and hourly/monthly estimates
+and size. E2B, Daytona, and Blaxel appear when the backend has their credentials
+and prepared runtime images configured. Their terminal, file, and preview
+traffic uses the backend relay. Provider deletion deadlines appear above the
+terminal. Available sizes include hardware details and hourly/monthly estimates
 from your backend's catalog for the CLI's active team. Backend billing quotes
 take precedence over provider prices; monthly estimates use 730 hours when no
 monthly price is supplied. Click **Create box** to provision it. New

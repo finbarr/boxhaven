@@ -670,7 +670,12 @@ a.secondary-button {
   align-items: center;
 }
 
+.plan-description {
+  flex-basis: 100%;
+}
+
 .plan-summary {
+  flex-wrap: wrap;
   min-height: 38px;
   justify-content: space-between;
   gap: 12px;

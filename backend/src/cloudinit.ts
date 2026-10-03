@@ -54,6 +54,44 @@ export function agentSetupScript(request: CreateMachineRequest): string {
   return script;
 }
 
+/** Configure the prepared runtime without assuming systemd is PID 1. No package installs. */
+export function sandboxSetupScript(request: CreateMachineRequest): string {
+  if (!request.agent_token || !request.agent_backend_url || !request.ssh_user_ca_public_key || !request.ssh_authorized_principal) {
+    throw new Error("Machine agent credentials and SSH trust are required");
+  }
+  const supervisor = [
+    "#!/bin/bash", "set -eu", "exec 9>/run/boxhaven-runtime.lock", "flock -n 9 || exit 0",
+    "set -a; . /etc/boxhaven/agent.env; set +a",
+    "trap 'kill $(jobs -pr) 2>/dev/null || true; wait' EXIT",
+    "(while :; do install -d -m 0755 /run/sshd; /usr/sbin/sshd -D -e -f /etc/boxhaven/sshd_config || true; sleep 1; done) &",
+    "(while :; do node /usr/local/lib/boxhaven/ssh-bridge.mjs || true; sleep 1; done) &",
+    "(while :; do node /usr/local/lib/boxhaven/agent.mjs || true; sleep 1; done) &", "wait", "",
+  ].join("\n");
+  return [
+    "#!/bin/bash", "set -eu", "umask 077", "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "test -f /opt/boxhaven/remote/ready", "test -f /usr/local/lib/boxhaven/ssh-bridge.mjs", "test -f /usr/local/lib/boxhaven/agent.mjs",
+    "command -v node; command -v tmux; command -v rsync; command -v flock; command -v sshd",
+    "install -d -m 0755 /etc/boxhaven /run/sshd",
+    `printf '%s\\n' ${shellSingleQuote([
+      shellEnvAssignment("BOXHAVEN_AGENT_TOKEN", request.agent_token),
+      shellEnvAssignment("BOXHAVEN_AGENT_BACKEND_URL", request.agent_backend_url.replace(/\/+$/, "")),
+      "BOXHAVEN_SSH_PORT=2222", "BOXHAVEN_SSH_BRIDGE_PORT=9898",
+    ].join("\n"))} > /etc/boxhaven/agent.env`,
+    "chmod 0600 /etc/boxhaven/agent.env", ensureSudoUserCommand(request.ssh_user), "ssh-keygen -A",
+    "test -f /etc/boxhaven/ssh_host_ed25519_key || ssh-keygen -q -t ed25519 -N '' -f /etc/boxhaven/ssh_host_ed25519_key",
+    sshCertificateTrustCommand(request.ssh_user_ca_public_key, request.ssh_authorized_principal, request.ssh_user, false),
+    `printf '%s\\n' ${shellSingleQuote([
+      "Port 2222", "ListenAddress 127.0.0.1", "HostKey /etc/boxhaven/ssh_host_ed25519_key", "PidFile /run/boxhaven-sshd.pid",
+      "TrustedUserCAKeys /etc/ssh/boxhaven_user_ca_keys", "AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u",
+      "AuthorizedKeysFile none", "AuthenticationMethods publickey", "PasswordAuthentication no", "KbdInteractiveAuthentication no",
+      "PermitRootLogin no", "UsePAM yes", "AllowUsers boxhaven", "Subsystem sftp internal-sftp",
+    ].join("\n"))} > /etc/boxhaven/sshd_config`,
+    "install -d -m 0755 /run/sshd", "sshd -t -f /etc/boxhaven/sshd_config",
+    `printf '%s\\n' ${shellSingleQuote(supervisor)} > /etc/boxhaven/run-sandbox.sh`,
+    "chmod 0700 /etc/boxhaven/run-sandbox.sh", "",
+  ].join("\n");
+}
+
 function shellEnvAssignment(name: string, value: string): string {
   return `${name}='${value.replace(/'/g, "'\"'\"'")}'`;
 }
@@ -72,7 +110,7 @@ function ensureSudoUserCommand(sshUser: string | undefined): string {
   ].join(" && ");
 }
 
-function sshCertificateTrustCommand(userCA: string | undefined, principal: string | undefined, sshUser: string | undefined): string {
+function sshCertificateTrustCommand(userCA: string | undefined, principal: string | undefined, sshUser: string | undefined, reload = true): string {
   if (!userCA || !principal) return "true";
   const user = safeLinuxUser(sshUser || defaultSSHUser);
   return [
@@ -82,8 +120,7 @@ function sshCertificateTrustCommand(userCA: string | undefined, principal: strin
     `printf '%s\\n' ${shellSingleQuote(principal)} > /etc/ssh/auth_principals/${shellSingleQuote(user)}`,
     `chmod 0644 /etc/ssh/auth_principals/${shellSingleQuote(user)}`,
     "printf '%s\\n' 'TrustedUserCAKeys /etc/ssh/boxhaven_user_ca_keys' 'AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u' 'PasswordAuthentication no' 'KbdInteractiveAuthentication no' > /etc/ssh/sshd_config.d/90-boxhaven-user-ca.conf",
-    "sshd -t",
-    "(systemctl reload ssh >/dev/null 2>&1 || systemctl reload sshd >/dev/null 2>&1 || systemctl restart ssh >/dev/null 2>&1 || systemctl restart sshd >/dev/null 2>&1 || pkill -HUP sshd >/dev/null 2>&1 || true)",
+    ...(reload ? ["sshd -t", "(systemctl reload ssh >/dev/null 2>&1 || systemctl reload sshd >/dev/null 2>&1 || systemctl restart ssh >/dev/null 2>&1 || systemctl restart sshd >/dev/null 2>&1 || pkill -HUP sshd >/dev/null 2>&1 || true)"] : []),
   ].join(" && ");
 }
 

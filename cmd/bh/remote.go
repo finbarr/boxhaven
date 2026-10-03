@@ -62,6 +62,7 @@ type remoteMachine struct {
 	TeamName           string    `json:"team_name,omitempty"`
 	Provider           string    `json:"provider,omitempty"`
 	ProviderID         string    `json:"provider_id,omitempty"`
+	ProviderExpiresAt  string    `json:"provider_expires_at,omitempty"`
 	PublicIPv4         string    `json:"public_ipv4,omitempty"`
 	Region             string    `json:"region,omitempty"`
 	Size               string    `json:"size,omitempty"`
@@ -552,6 +553,9 @@ func runRemoteStatus(args []string, projectDir string) error {
 	fmt.Printf("%steam:%s %s\n", colorBold, colorReset, remoteMachineTeamLabel(machine))
 	fmt.Printf("%sprovider:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.Provider))
 	fmt.Printf("%sprovider_id:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.ProviderID))
+	if machine.ProviderExpiresAt != "" {
+		fmt.Printf("%sprovider_expires_at:%s %s (provider will delete this box)\n", colorBold, colorReset, machine.ProviderExpiresAt)
+	}
 	fmt.Printf("%spublic_ipv4:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.PublicIPv4))
 	fmt.Printf("%ssize:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.Size))
 	fmt.Printf("%sregion:%s %s\n", colorBold, colorReset, configValueOrNotSet(machine.Region))

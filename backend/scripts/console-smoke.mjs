@@ -9,6 +9,9 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { createServer as createViteServer } from "vite";
 import { createBackendAuth, migrateBackendAuth } from "../src/auth.ts";
+import { E2BProvider } from "../src/e2b.ts";
+import { DaytonaProvider } from "../src/daytona.ts";
+import { BlaxelProvider } from "../src/blaxel.ts";
 import { ProviderRegistry } from "../src/providers.ts";
 import { createBackend, hashAgentToken } from "../src/server.ts";
 import { SSHCertificateAuthority } from "../src/ssh_ca.ts";
@@ -206,17 +209,25 @@ async function startSeededBackend({ accountLabel } = {}) {
       ];
     },
   };
+  const catalogProviders = {
+    e2b: new E2BProvider({ apiKey: "fixture", template: "prepared" }),
+    daytona: new DaytonaProvider({ apiKey: "fixture", image: "prepared" }),
+    blaxel: new BlaxelProvider({ apiKey: "fixture", workspace: "fixture", image: "prepared" }),
+  };
   const sandboxProviders = [
     { name: "digitalocean", label: "DigitalOcean" },
     { name: "hetzner", label: "Hetzner Cloud" },
     { name: "exedev", label: "exe.dev" },
+    { name: "e2b", label: "E2B" },
+    { name: "daytona", label: "Daytona" },
+    { name: "blaxel", label: "Blaxel" },
   ].map(({ name, label }) => ({
-    ...fakeProvider, name, label,
+    ...fakeProvider, name, label, info: catalogProviders[name]?.info,
     async createMachine(request) {
       const result = await fakeProvider.createMachine(request);
       return { ...result, machine: { ...result.machine, provider: name, provider_label: label } };
     },
-    async listPlans() { return (await fakeProvider.listPlans()).map(plan => ({ ...plan, provider: name })); },
+    async listPlans() { return catalogProviders[name] ? catalogProviders[name].listPlans() : (await fakeProvider.listPlans()).map(plan => ({ ...plan, provider: name })); },
     async listImages() { return []; },
   }));
   const providers = new ProviderRegistry([fakeProvider, ...sandboxProviders], fakeProvider.name);
@@ -649,6 +660,9 @@ async function checkSharedBoxes(page, { store, whoami, app, memberToken, memberI
     { name: "research-agent", provider: "digitalocean", provider_label: "DigitalOcean", region: "nyc3", public_ipv4: "127.0.0.1" },
     { name: "review-agent", provider: "hetzner", provider_label: "Hetzner Cloud", region: "fsn1", public_ipv4: "127.0.0.1" },
     { name: "sandbox-agent", provider: "exedev", provider_label: "exe.dev", ssh_transport: "websocket", preview_transport: "provider", preview_url: "https://sandbox-agent.exe.xyz" },
+    { name: "e2b-agent", provider: "e2b", provider_label: "E2B", ssh_transport: "websocket", preview_transport: "provider" },
+    { name: "daytona-agent", provider: "daytona", provider_label: "Daytona", ssh_transport: "websocket", preview_transport: "provider" },
+    { name: "blaxel-agent", provider: "blaxel", provider_label: "Blaxel", ssh_transport: "websocket", preview_transport: "provider", provider_expires_at: new Date(Date.now() + 7 * 86400000).toISOString() },
   ].map(machine => ({ ...machine, user_id: whoami.user.id, org_id: whoami.team.id, bootstrap_complete: true, size: "small", ...(machine.name === "sandbox-agent" ? { agent_token_hash: hashAgentToken(agentToken) } : {}) }));
   for (const machine of machines) await store.putMachine(machine);
   const resource = await store.getMachine(whoami.user.id, "sandbox-agent");
@@ -658,7 +672,7 @@ async function checkSharedBoxes(page, { store, whoami, app, memberToken, memberI
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(appURL, { waitUntil: "domcontentloaded" });
   await page.getByRole("link", { name: "sandbox-agent", exact: true }).waitFor();
-  assert.equal(await page.locator(".boxes-table tbody tr").count(), 4);
+  assert.equal(await page.locator(".boxes-table tbody tr").count(), 7);
   assert.equal(await page.getByRole("link", { name: "Fleet", exact: true }).count(), 0);
   assert.equal(await page.getByRole("link", { name: "research-agent", exact: true }).count(), 2);
   await page.locator(`a.box-name[href='/boxes/${teammateBox.resource_id}']`).click();
@@ -668,6 +682,10 @@ async function checkSharedBoxes(page, { store, whoami, app, memberToken, memberI
   assert.equal(await teammateDrawer.getByRole("button", { name: "Copy Connect", exact: true }).count(), 0, "owner-scoped CLI commands cannot identify teammate boxes");
   await teammateDrawer.getByRole("button", { name: "Close", exact: true }).click();
   await page.screenshot({ path: join(outDir, "shared-boxes-desktop.png"), fullPage: true });
+  await page.getByRole("link", { name: "blaxel-agent", exact: true }).click();
+  await page.getByRole("status").filter({ hasText: "will delete this sandbox" }).waitFor();
+  await page.screenshot({ path: join(outDir, "blaxel-retention-desktop.png"), fullPage: true });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   const second = await page.context().newPage();
   await second.goto(appURL, { waitUntil: "domcontentloaded" });
   await second.getByRole("link", { name: "sandbox-agent", exact: true }).waitFor();
@@ -747,8 +765,8 @@ async function checkSharedBoxes(page, { store, whoami, app, memberToken, memberI
   await memberContext.close();
   await store.deleteMachine(memberID, "research-agent");
   await page.goto(appURL, { waitUntil: "domcontentloaded" });
-  for (const name of ["research-agent", "review-agent", updatedName]) await store.deleteMachine(whoami.user.id, name);
-  return { providers: 3, sharedOwnership: true, duplicateNames: true, viewerAndRevocation: true, liveRenameOnTwoPages: true, stableURL: true, savedSharing: true, runtimePresenceAndSessionRequest: true };
+  for (const name of ["research-agent", "review-agent", "e2b-agent", "daytona-agent", "blaxel-agent", updatedName]) await store.deleteMachine(whoami.user.id, name);
+  return { providers: 6, sharedOwnership: true, duplicateNames: true, viewerAndRevocation: true, liveRenameOnTwoPages: true, stableURL: true, savedSharing: true, runtimePresenceAndSessionRequest: true };
 }
 
 async function checkTeamMenu(page) {
@@ -1058,7 +1076,7 @@ async function checkBoxCreateDrawer(page, { store, whoami }) {
   assert.ok(facts.bodyScrollWidth <= facts.viewport, `create drawer overflows: ${facts.bodyScrollWidth} > ${facts.viewport}`);
   await page.getByRole("button", { name: "Close", exact: true }).click();
   const created = [];
-  for (const provider of ["fake", "digitalocean", "hetzner", "exedev"]) {
+  for (const provider of ["fake", "digitalocean", "hetzner", "exedev", "e2b", "daytona", "blaxel"]) {
     await page.getByRole("button", { name: "New box", exact: true }).click();
     const drawer = page.getByRole("dialog");
     await drawer.getByLabel("Machine name", { exact: true }).fill(`created-${provider}`);
@@ -1070,6 +1088,10 @@ async function checkBoxCreateDrawer(page, { store, whoami }) {
       await drawer.getByLabel("Image", { exact: true }).selectOption("img-acme");
       await drawer.getByLabel("Provider", { exact: true }).selectOption("exedev");
       await page.screenshot({ path: join(outDir, "create-exedev-desktop.png"), animations: "disabled" });
+    }
+    if (["e2b", "daytona", "blaxel"].includes(provider)) {
+      await drawer.locator(".plan-description").first().waitFor();
+      await page.screenshot({ path: join(outDir, `create-${provider}-desktop.png`), animations: "disabled" });
     }
     const requestPromise = page.waitForRequest(request => request.url() === `${apiURL}/v1/machines` && request.method() === "POST");
     await drawer.getByRole("button", { name: "Create box", exact: true }).click();
@@ -1097,7 +1119,12 @@ async function checkBoxCreateDrawer(page, { store, whoami }) {
   await mobile.getByRole("dialog").getByLabel("Machine name", { exact: true }).fill("work");
   await mobile.getByRole("dialog").getByRole("button", { name: "Create box", exact: true }).waitFor();
   await mobile.screenshot({ path: join(outDir, "create-exedev-mobile.png"), animations: "disabled" });
-  assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "create drawer fits a phone");
+  for (const provider of ["e2b", "daytona", "blaxel"]) {
+    await mobile.getByRole("dialog").getByLabel("Provider", { exact: true }).selectOption(provider);
+    await mobile.locator(".plan-description").first().waitFor();
+    await mobile.screenshot({ path: join(outDir, `create-${provider}-mobile.png`), animations: "disabled" });
+    assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "create drawer fits a phone");
+  }
   await mobile.close();
   return { ...facts, created };
 

@@ -49,10 +49,13 @@
     "test": "node --import tsx --test src/*.test.ts"
   },
   "dependencies": {
+    "@daytona/api-client": "0.220.0",
+    "@daytona/toolbox-api-client": "0.220.0",
     "@fastify/cors": "^11.2.0",
     "@fastify/websocket": "^11.2.0",
     "better-auth": "~1.6.13",
     "better-sqlite3": "^12.10.0",
+    "e2b": "2.52.0",
     "fastify": "^5.12.3",
     "jose": "6.2.3",
     "ssh2": "1.17.0",

@@ -423,6 +423,7 @@ function BoxDrawer({ open, machine, onRename, error, teams, resource, isOwner, a
       >
         <div className="box-detail-actions"><CreatorBadge machine={machine} /><BoxStatus machine={machine} />{isOwner && <button className="secondary-button" onClick={() => { setNextName(machine.name); setRenaming(true); }}>Rename</button>}</div>
         {actionError && <p className="error" role="alert">{actionError}</p>}
+        {machine.provider_expires_at ? <p className="recovery-notice" role="status">{machine.provider_label || machine.provider} will delete this sandbox on {formatDate(machine.provider_expires_at)} under your provider account's retention limit. Download work you need to keep before then.</p> : null}
         {isOwner && renaming ? <form className="rename-form" onSubmit={async event => { event.preventDefault(); setSaving(true); setRenameError(""); try { await onRename(machine.name, nextName); setRenaming(false); } catch (error) { setRenameError((error as Error).message); } finally { setSaving(false); } }}><label>Box name<input required maxLength={63} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={nextName} onChange={event => setNextName(event.target.value)} /></label><button className="primary-button" disabled={saving}>Save</button><button type="button" className="secondary-button" onClick={() => setRenaming(false)}>Cancel</button>{renameError ? <p role="alert">{renameError}</p> : null}</form> : null}
         {machine.create_state === "recovery_required" ? (
           <div className="recovery-notice" role="alert">
@@ -543,6 +544,7 @@ function PlanSummary({ plan, hourlyPriceCents }: { plan: MachinePlan; hourlyPric
     <div className="plan-summary">
       <span>{planHardware(plan)}</span>
       {hourly !== undefined ? <PriceEstimate hourly={hourly} currency={currency} /> : null}
+      {plan.description ? <span className="plan-description">{plan.description}</span> : null}
     </div>
   );
 }
@@ -565,5 +567,6 @@ function planPrice(plan: MachinePlan): MachinePlanPrice | undefined {
 function planHardware(plan: MachinePlan): string {
   const memory = plan.memory_mb >= 1024 ? `${plan.memory_mb / 1024} GB` : `${plan.memory_mb} MB`;
   const gpu = plan.gpu ? ` / ${plan.gpu.count}x ${plan.gpu.model}` : "";
-  return `${plan.vcpus} vCPU / ${memory} / ${plan.disk_gb} GB${gpu}`;
+  const disk = plan.disk_gb > 0 ? ` / ${plan.disk_gb} GB` : " / provider-managed storage";
+  return `${plan.vcpus} vCPU / ${memory}${disk}${gpu}`;
 }

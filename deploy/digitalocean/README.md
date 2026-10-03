@@ -1,5 +1,11 @@
 # DigitalOcean deployment
 
+The backend can also provision E2B, Daytona, and Blaxel boxes alongside its
+DigitalOcean machines. Configure their credentials and prepared images in the
+deployment environment; the Compose file passes them to the backend. See
+[sandbox setup](../sandboxes/README.md). Credentials are shared by this backend's
+provider adapter and remain on the server.
+
 This bundle runs the BoxHaven console/auth app, API, and documentation site on
 a single DigitalOcean Droplet. Caddy terminates TLS for `app.example.com`,
 `api.example.com`, `docs.example.com`, and generated preview hostnames under

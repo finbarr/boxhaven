@@ -12,6 +12,7 @@ export function teamResource(machine: RemoteMachine): SharedResource {
     resource_id: machine.resource_id!, name: machine.name, team_id: machine.org_id,
     owner_id: machine.user_id, provider: machine.provider, provider_id: machine.provider_id,
     provider_label: machine.provider_label, region: machine.region, size: machine.size, size_shortcut: machine.size_shortcut,
+    provider_expires_at: machine.provider_expires_at,
     image: machine.image, image_name: machine.image_name, created_at: machine.created_at,
     updated_at: machine.updated_at,
     agent_last_seen_at: machine.agent_last_seen_at, last_synced_at: machine.last_synced_at,

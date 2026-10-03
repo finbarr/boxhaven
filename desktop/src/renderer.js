@@ -78,6 +78,8 @@ function renderHeader() {
   const session = terminals.get(selected);
   const showTerminal = Boolean(box && session);
   $('session-header').hidden = !box;
+  $('provider-expiry').hidden = !box?.providerExpiresAt;
+  $('provider-expiry').textContent = box?.providerExpiresAt ? `${box.provider} will delete this sandbox on ${new Date(box.providerExpiresAt).toLocaleString()}. Save work you need to keep before then.` : '';
   $('terminals').hidden = !showTerminal;
   $('welcome').hidden = showTerminal;
   $('empty-guide').hidden = Boolean(box) || !loaded || boxes.length > 0 || Boolean(listError);
@@ -240,8 +242,10 @@ function selectedSize() {
   for (const radio of $('create-size').querySelectorAll('input')) radio.checked = radio.value === $('create-size').value;
   const choice = catalog?.choices.find(choice => choice.value === $('create-size').value);
   $('size-summary').hidden = !choice;
+  $('size-description').hidden = !choice?.description;
+  $('size-description').textContent = choice?.description || '';
   if (choice) {
-    $('size-hardware').textContent = [choice.cpus == null ? '' : `${choice.cpus} vCPU`, choice.memoryGB == null ? '' : `${choice.memoryGB} GB RAM`, choice.diskGB == null ? '' : `${choice.diskGB} GB disk`].filter(Boolean).join(' · ');
+    $('size-hardware').textContent = [choice.cpus == null ? '' : `${choice.cpus} vCPU`, choice.memoryGB == null ? '' : `${choice.memoryGB} GB RAM`, choice.diskGB == null || choice.diskGB === 0 ? 'provider-managed storage' : `${choice.diskGB} GB disk`].filter(Boolean).join(' · ');
     const money = (value, digits) => new Intl.NumberFormat(undefined, { style: 'currency', currency: choice.currency, minimumFractionDigits: 2, maximumFractionDigits: digits }).format(value);
     $('size-price').textContent = choice.hourly === null ? 'Price unavailable' : `${money(choice.hourly, 4)}/hr · ~${money(choice.monthly, 2)}/mo`;
   }

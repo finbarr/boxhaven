@@ -24,6 +24,7 @@
         <div class="session-heading"><span id="box-portrait"></span><div><div class="box-title"><h2 id="box-name"></h2><span id="box-creator"></span></div><p id="box-meta"></p></div></div>
         <div class="session-actions"><span id="connection-state" role="status"></span><button id="open-preview">Open preview ↗</button><button id="reconnect" hidden>Reconnect</button><button id="box-actions" aria-label="Box actions" aria-expanded="false" popovertarget="box-menu">•••</button></div>
       </header>
+      <p id="provider-expiry" role="status" hidden></p>
       <p id="action-error" role="alert" hidden></p>
       <section id="welcome" class="welcome">
         <img src="logo.png" alt="A smiling BoxHaven box">
@@ -44,6 +45,7 @@
       </div>
       <fieldset id="size-options"><legend>Size</legend><div id="create-size"></div></fieldset>
       <div id="size-summary" hidden><span id="size-hardware"></span><strong id="size-price"></strong></div>
+      <p id="size-description" hidden></p>
       <p id="catalog-status" role="status"></p><button id="retry-catalog" type="button" hidden>Retry</button>
       <p id="create-status" role="status" aria-live="polite"></p>
       <button id="create-box" class="primary" type="submit" disabled>Create box</button>

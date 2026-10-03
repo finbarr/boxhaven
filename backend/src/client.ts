@@ -74,6 +74,7 @@ export type Machine = {
   preview_hostname?: string;
   preview_url?: string;
   preview_transport?: "provider";
+  provider_expires_at?: string;
   source_path?: string;
   project_path?: string;
   repo_url?: string;

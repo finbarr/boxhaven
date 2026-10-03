@@ -29,7 +29,7 @@ function parseCatalog(output, requestedRegion) {
       hourly = price.hourly; monthly = Number.isFinite(price.monthly) && price.monthly > 0 ? price.monthly : hourly * 730; currency = price.currency;
     }
     const number = value => Number.isFinite(value) && value >= 0 ? value : null;
-    if (!choices.has(value)) choices.set(value, { value, cpus: number(plan.vcpus), memoryGB: plan.memory_mb > 0 ? plan.memory_mb / 1024 : null, diskGB: number(plan.disk_gb), regions, hourly, monthly, currency });
+    if (!choices.has(value)) choices.set(value, { value, cpus: number(plan.vcpus), memoryGB: plan.memory_mb > 0 ? plan.memory_mb / 1024 : null, diskGB: number(plan.disk_gb), description: typeof plan.description === 'string' ? plan.description : '', regions, hourly, monthly, currency });
   }
   for (const size of data.sizes) add(size.name, size.plan, size.hourly_price_cents);
   return { provider, region, providers, regions: [...new Set([region, ...[...choices.values()].flatMap(choice => choice.regions)].filter(Boolean))].sort(), choices: [...choices.values()] };

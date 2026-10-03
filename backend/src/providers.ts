@@ -1,6 +1,9 @@
 import { exeDevProviderFromEnv } from "./exedev.js";
 import { digitalOceanProviderFromEnv } from "./digitalocean.js";
 import { hetznerProviderFromEnv } from "./hetzner.js";
+import { e2bProviderFromEnv } from "./e2b.js";
+import { daytonaProviderFromEnv } from "./daytona.js";
+import { blaxelProviderFromEnv } from "./blaxel.js";
 import { MachineProvider, MachineProviderInfo, RemoteMachine } from "./types.js";
 
 export class ProviderRegistry {
@@ -67,9 +70,12 @@ export function providerRegistryFromEnv(env = process.env): ProviderRegistry {
     providers.push(hetznerProviderFromEnv(env));
   }
   if (env.EXE_DEV_SIGNING_KEY) providers.push(exeDevProviderFromEnv(env));
+  if (env.E2B_API_KEY) providers.push(e2bProviderFromEnv(env));
+  if (env.DAYTONA_API_KEY) providers.push(daytonaProviderFromEnv(env));
+  if (env.BL_API_KEY) providers.push(blaxelProviderFromEnv(env));
   if (providers.length === 0) {
     throw new Error(
-      "no machine provider is configured; set DIGITALOCEAN_ACCESS_TOKEN for DigitalOcean HCLOUD_TOKEN for Hetzner Cloud, or EXE_DEV_SIGNING_KEY with BOXHAVEN_REMOTE_IMAGE_EXEDEV for exe.dev",
+      "no machine provider is configured; configure DigitalOcean, Hetzner, exe.dev, E2B, Daytona, or Blaxel credentials and the provider's prepared runtime image",
     );
   }
   const requested = env.BOXHAVEN_BACKEND_PROVIDER?.trim().toLowerCase();

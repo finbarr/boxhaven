@@ -26,6 +26,8 @@ export type RemoteMachine = {
   preview_hostname?: string;
   preview_url?: string;
   preview_transport?: "provider";
+  preview_target_port?: number;
+  provider_expires_at?: string;
   source_path?: string;
   project_path?: string;
   repo_url?: string;
@@ -163,6 +165,10 @@ export type MachineProvider = {
   getMachine(machine: RemoteMachine): Promise<{ machine: RemoteMachine; status?: string }>;
   listMachines(request: ListProviderMachinesRequest): Promise<Array<{ machine: RemoteMachine; status?: string }>>;
   releaseMachine(machine: RemoteMachine): Promise<void>;
+  /** Renew provider leases from agent heartbeats, independently of connected clients. */
+  maintainMachine?(machine: RemoteMachine): Promise<void>;
+  /** Resume a memory-preserving paused runtime before an authenticated operation. */
+  ensureMachineRunning?(machine: RemoteMachine): Promise<void>;
   /** Returns resource-scoped credentials only. Account credentials stay here. */
   issuePreviewAccess?(machine: RemoteMachine, expiresAt: string): Promise<{ url: string; headers: Record<string, string> }>;
   issueSSHAccess?(machine: RemoteMachine, expiresAt: string): Promise<SSHAccess>;

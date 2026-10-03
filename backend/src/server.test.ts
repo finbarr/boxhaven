@@ -778,6 +778,7 @@ test("private previews require scoped team access and keep provider credentials 
     const forwarded = new Headers(options?.headers);
     assert.equal(forwarded.get("X-Exedev-Authorization"), "provider-secret");
     assert.equal(forwarded.get("authorization"), null);
+    for (const name of ["E2B-Traffic-Access-Token", "X-Daytona-Preview-Token", "X-Blaxel-Preview-Token"]) assert.equal(forwarded.get(name), null);
     assert.doesNotMatch(forwarded.get("cookie") || "", /boxhaven_preview/);
     requests++;
     return new Response("private-app", { headers: { "cache-control": "public, max-age=3600" } });
@@ -797,7 +798,7 @@ test("private previews require scoped team access and keep provider credentials 
   assert.equal(session.statusCode, 200, session.body);
   assert.match(String(session.headers["set-cookie"]), /Secure; HttpOnly; SameSite=Strict/);
   const cookie = String(session.headers["set-cookie"]).split(";")[0];
-  const result = await app.inject({ url: `${base}/`, headers: { ...host, cookie, authorization: "Bearer do-not-forward" } });
+  const result = await app.inject({ url: `${base}/`, headers: { ...host, cookie, authorization: "Bearer do-not-forward", "E2B-Traffic-Access-Token": "untrusted", "X-Daytona-Preview-Token": "untrusted", "X-Blaxel-Preview-Token": "untrusted" } });
   assert.equal(result.statusCode, 200, result.body); assert.equal(result.body, "private-app");
   assert.equal(result.headers["cache-control"], "private, no-store");
   assert.equal((await app.inject({ url: `${base}/`, headers: { cookie, host: "app.hosted.test" } })).statusCode, 403);
@@ -813,6 +814,7 @@ test("backend proxies preview websocket upgrades to the machine", async () => {
   upstream.on("connection", (socket, request) => {
     assert.equal(request.headers["x-forwarded-host"], previewHost);
     assert.equal(request.headers["x-forwarded-proto"], "https");
+    for (const name of ["e2b-traffic-access-token", "x-daytona-preview-token", "x-blaxel-preview-token"]) assert.equal(request.headers[name], undefined);
     assert.equal(request.url, "/hmr?token=1");
     socket.send("ready");
     socket.on("message", (message) => socket.send(`echo:${message.toString()}`));
@@ -832,7 +834,7 @@ test("backend proxies preview websocket upgrades to the machine", async () => {
     assert.equal(created.statusCode, 201, created.body);
     previewHost = created.json().machine.preview_hostname;
 
-    const client = await app.injectWS(`/v1/preview/proxy/${previewHost}/hmr?token=1`);
+    const client = await app.injectWS(`/v1/preview/proxy/${previewHost}/hmr?token=1`, { headers: { "E2B-Traffic-Access-Token": "untrusted", "X-Daytona-Preview-Token": "untrusted", "X-Blaxel-Preview-Token": "untrusted" } });
     assert.equal((await nextWSMessageWithTimeout(client)).toString(), "ready");
     client.send("ping");
     assert.equal((await nextWSMessageWithTimeout(client)).toString(), "echo:ping");
@@ -2519,6 +2521,30 @@ test("resource session operations survive retries and report disconnected RPCs a
   assert.equal(operations.length, 2);
   assert.doesNotMatch(JSON.stringify(operations), /codex|idempotency|request_hash|agent_token/);
 });
+
+for (const route of ["resource", "owner"] as const) {
+  test(`${route} runtime access is checked again after sandbox resume`, async t => {
+    const { app, store, provider, token } = await createTestBackend(`resume-${route}@example.com`);
+    t.after(() => app.close());
+    const headers = { authorization: `Bearer ${token}`, "idempotency-key": "resume-revoked-request" };
+    const created = await app.inject({ method: "POST", url: "/v1/machines", headers, payload: { name: "resume-test" } });
+    assert.equal(created.statusCode, 201, created.body);
+    const machine = created.json().machine;
+    let rpcCount = 0;
+    Object.assign(provider, { ensureMachineRunning: async () => {
+      const agent = await app.injectWS("/v1/agent/connect", { headers: { authorization: `Bearer ${provider.created[0].agent_token}`, host: "127.0.0.1" } });
+      t.after(() => agent.terminate());
+      agent.send(JSON.stringify({ type: "ping" }));
+      await nextWSMessage(agent);
+      agent.on("message", raw => { if (JSON.parse(raw.toString()).type === "rpc") rpcCount++; });
+      store.db.prepare("DELETE FROM member WHERE organizationId = ? AND userId = ?").run(machine.team_id, machine.user_id);
+    } });
+    const path = route === "resource" ? `/v1/resources/${machine.resource_id}/sessions/prepare` : "/v1/machines/resume-test/sessions/boxhaven/prepare";
+    const result = await app.inject({ method: "POST", url: path, headers, payload: { command: ["codex"], attach: false } });
+    assert.equal(result.statusCode, 404, result.body);
+    assert.equal(rpcCount, 0, "a revoked member must not start work after a delayed resume");
+  });
+}
 
 async function createTestBackend(
   email = "user@example.com",

@@ -31,6 +31,7 @@ export type SharedResource = {
   provider?: string;
   provider_id?: string;
   provider_label?: string;
+  provider_expires_at?: string;
   region?: string;
   size?: string;
   size_shortcut?: string;

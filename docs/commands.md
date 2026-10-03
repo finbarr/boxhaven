@@ -351,6 +351,6 @@ bh preview work
 bh preview work --json
 ```
 
-Returns a preview launch URL. Private exe.dev previews use a 15-minute BoxHaven
+Returns a preview launch URL. Private sandbox previews use a 15-minute BoxHaven
 team lease; reopen the link through this command after expiry. The desktop
 requests a fresh link automatically. Provider credentials stay on the backend.

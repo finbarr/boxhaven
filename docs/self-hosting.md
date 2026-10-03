@@ -378,5 +378,5 @@ Terminals and file transfers pass through the backend over WebSockets. Allow
 WebSocket upgrades on the API proxy and outbound TCP 22 / HTTPS to providers.
 Budget bandwidth and connections for this traffic. SSH contents remain encrypted
 between the client and guest. A backend restart disconnects attachments; remote
-work continues and users can reconnect. Private exe.dev previews also use the
+work continues and users can reconnect. Private sandbox previews also use the
 backend and require `BOXHAVEN_PREVIEW_BASE_DOMAIN` with wildcard DNS/TLS.

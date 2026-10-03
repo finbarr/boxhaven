@@ -193,8 +193,9 @@ export function createBackend(options: BackendOptions): FastifyInstance {
     describe: describeResource,
     context: moduleContext,
     preview: (machine, actorID) => relay.preview(normalizeMachine(options, machine), actorID),
-    runtimeConnected: machine => !!connectedAgent(agents, machine),
+    runtimeConnected: machine => !!connectedAgent(agents, machine) || !!options.providers.forMachine(machine).ensureMachineRunning,
     issueSSH: (machine, actorID, publicKey, ttl) => issueMachineSSHCertificate(options, relay, machine, actorID, publicKey, ttl),
+    ensureRuntime: async machine => { await connectedOrResumedAgent(options, agents, machine); },
     prepareSession: async (machine, command, attach) => {
       const agent = connectedAgent(agents, machine);
       if (!agent) throw new AgentRPCError("Resource runtime disconnected", "agent_disconnected");
@@ -458,6 +459,7 @@ export function createBackend(options: BackendOptions): FastifyInstance {
       updated_at: new Date().toISOString(),
     };
     await options.store.putMachine(updated);
+    maintainProviderLease(options, updated);
     return { machine: publicMachine(normalizeMachine(options, updated)) };
   });
 
@@ -2069,6 +2071,7 @@ async function ensureMachineSSHCertificateTrust(
   const user = safeLinuxUser(normalized.ssh_user || defaultSSHUser);
   const caPublicKey = await options.sshCA.publicKey();
   const principalPath = `/etc/ssh/auth_principals/${user}`;
+  const sshd = normalized.ssh_transport === "websocket" ? "sshd -f /etc/boxhaven/sshd_config" : "sshd";
   const command = [
     ensureSudoUserCommand(user),
     "install -d -m 0755 /run/sshd /etc/ssh/auth_principals /etc/ssh/sshd_config.d",
@@ -2077,10 +2080,10 @@ async function ensureMachineSSHCertificateTrust(
     `printf '%s\\n' ${shellQuote(principal)} > ${shellQuote(principalPath)}`,
     `chmod 0644 ${shellQuote(principalPath)}`,
     "printf '%s\\n' 'TrustedUserCAKeys /etc/ssh/boxhaven_user_ca_keys' 'AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u' 'PasswordAuthentication no' 'KbdInteractiveAuthentication no' > /etc/ssh/sshd_config.d/90-boxhaven-user-ca.conf",
-    "sshd -t",
-    "(systemctl reload ssh >/dev/null 2>&1 || systemctl reload sshd >/dev/null 2>&1 || systemctl restart ssh >/dev/null 2>&1 || systemctl restart sshd >/dev/null 2>&1 || pkill -HUP sshd >/dev/null 2>&1 || true)",
-    "sshd -T | grep -Fx 'trustedusercakeys /etc/ssh/boxhaven_user_ca_keys' >/dev/null",
-    "sshd -T | grep -Fx 'authorizedprincipalsfile /etc/ssh/auth_principals/%u' >/dev/null",
+    `${sshd} -t`,
+    ...(normalized.ssh_transport === "websocket" ? [] : ["(systemctl reload ssh >/dev/null 2>&1 || systemctl reload sshd >/dev/null 2>&1 || systemctl restart ssh >/dev/null 2>&1 || systemctl restart sshd >/dev/null 2>&1 || pkill -HUP sshd >/dev/null 2>&1 || true)"]),
+    `${sshd} -T | grep -Fx 'trustedusercakeys /etc/ssh/boxhaven_user_ca_keys' >/dev/null`,
+    `${sshd} -T | grep -Fx 'authorizedprincipalsfile /etc/ssh/auth_principals/%u' >/dev/null`,
     `grep -Fx -- ${shellQuote(principal)} ${shellQuote(principalPath)} >/dev/null`,
   ].join(" && ");
 
@@ -2135,12 +2138,24 @@ async function requireMachineAgentContext(
     reply.code(409).send({ id: "not_bootstrapped", message: "remote machine is not bootstrapped" });
     return undefined;
   }
-  const agent = connectedAgent(agents, machine);
+  let agent: AgentConnection | undefined;
+  try { agent = await connectedOrResumedAgent(options, agents, machine); }
+  catch {
+    reply.code(503).send({ id: "provider_unavailable", message: "The sandbox provider could not resume this box. Try again shortly." });
+    return undefined;
+  }
   if (!agent) {
     reply.code(409).send({ id: "agent_disconnected", message: "remote machine agent is not connected" });
     return undefined;
   }
-  return { auth, machine: normalizeMachine(options, machine), agent };
+  const refreshed = await requireAuth(options, request, reply);
+  if (!refreshed) return undefined;
+  const latest = await ownedMachine(options, refreshed, name);
+  if (!latest || latest.resource_id !== machine.resource_id || latest.org_id !== machine.org_id) {
+    reply.code(404).send({ id: "not_found", message: "machine does not exist" });
+    return undefined;
+  }
+  return { auth: refreshed, machine: normalizeMachine(options, latest), agent };
 }
 
 function normalizeAbsoluteRemotePath(value: string): string {
@@ -2154,10 +2169,39 @@ function normalizeStringArray(value: unknown): string[] {
   return value.map((item) => String(item).trim()).filter(Boolean);
 }
 
+async function connectedOrResumedAgent(options: BackendOptions, agents: Map<string, AgentConnection>, machine: RemoteMachine): Promise<AgentConnection | undefined> {
+  const current = connectedAgent(agents, machine);
+  if (current) return current;
+  const provider = options.providers.forMachine(machine);
+  if (!provider.ensureMachineRunning) return undefined;
+  await provider.ensureMachineRunning(machine);
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    const agent = connectedAgent(agents, machine);
+    if (agent) return agent;
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  return undefined;
+}
+
+function maintainProviderLease(options: BackendOptions, machine: RemoteMachine): void {
+  // Provider adapters coalesce these calls and renew infrequently. Agent pongs
+  // and client requests never wait for a provider's control plane.
+  const provider = options.providers.forMachine(machine);
+  void provider.maintainMachine?.(machine).catch(() => {
+    console.warn(`${provider.name} sandbox lease renewal failed for ${machine.resource_id}`);
+  });
+}
+
+function providerCredentialHeader(name: string): boolean {
+  return name === "authorization" || name.startsWith("x-exedev-") || name.startsWith("x-boxhaven-")
+    || name.startsWith("x-blaxel-") || name.startsWith("e2b-") || name.startsWith("x-daytona-");
+}
+
 function machineRuntimePayload(options: BackendOptions, machine: RemoteMachine): Record<string, unknown> {
   const projectPath = normalizeAbsoluteRemotePath(machine.project_path || defaultProjectPath) || defaultProjectPath;
   const preview = previewOptions(options);
-  const previewTargetPort = preview?.targetPort || 80;
+  const previewTargetPort = machine.preview_target_port || preview?.targetPort || 80;
   return {
     name: machine.name,
     ssh_user: machine.ssh_user || defaultSSHUser,
@@ -2439,6 +2483,7 @@ async function handleAgentMessage(options: BackendOptions, agent: AgentConnectio
   if (message.type === "ping") {
     agent.machine = await markAgentSeen(options, agent.machine);
     sendAgentJSON(agent.socket, { type: "pong" });
+    maintainProviderLease(options, agent.machine);
     return;
   }
   if (message.type === "rpc_result") {
@@ -2871,7 +2916,7 @@ function previewProxyWebSocketHeaders(input: Record<string, string | string[] | 
   const headers: Record<string, string> = {};
   for (const [name, rawValue] of Object.entries(input)) {
     const lower = name.toLowerCase();
-    if (lower === "authorization" || lower.startsWith("x-exedev-") || lower.startsWith("x-boxhaven-") || hopByHopHeaders.has(lower) || lower === "host" || lower.startsWith("sec-websocket-")) continue;
+    if (providerCredentialHeader(lower) || hopByHopHeaders.has(lower) || lower === "host" || lower.startsWith("sec-websocket-")) continue;
     const value = name.toLowerCase() === "cookie" ? String(rawValue || "").split(";").filter(part => !part.trim().startsWith("__Host-boxhaven_preview=")).join(";") : rawValue;
     const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
     if (values.length > 0) headers[name] = values.join(", ");
@@ -2914,7 +2959,7 @@ function previewProxyHeaders(input: Record<string, string | string[] | undefined
   const headers = new Headers();
   for (const [name, rawValue] of Object.entries(input)) {
     const lower = name.toLowerCase();
-    if (lower === "authorization" || lower.startsWith("x-exedev-") || lower.startsWith("x-boxhaven-") || hopByHopHeaders.has(lower) || lower === "host") continue;
+    if (providerCredentialHeader(lower) || hopByHopHeaders.has(lower) || lower === "host") continue;
     const value = name.toLowerCase() === "cookie" ? String(rawValue || "").split(";").filter(part => !part.trim().startsWith("__Host-boxhaven_preview=")).join(";") : rawValue;
     const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
     for (const value of values) headers.append(name, value);

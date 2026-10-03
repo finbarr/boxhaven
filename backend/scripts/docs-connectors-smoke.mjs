@@ -46,6 +46,9 @@ try {
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${name}/${size} overflow`);
       await page.screenshot({path:resolve(out,`${name}-${size}.png`)});
       if(name==="providers") {
+        const sandboxHeading=page.locator("h2#e2b-daytona-and-blaxel");
+        await sandboxHeading.scrollIntoViewIfNeeded();
+        await page.screenshot({path:resolve(out,`sandbox-providers-${size}.png`)});
         await page.getByText("The live smoke verifies creation",{exact:false}).scrollIntoViewIfNeeded();
         await page.screenshot({path:resolve(out,`provider-validation-${size}.png`)});
       }

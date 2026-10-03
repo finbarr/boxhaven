@@ -47,6 +47,11 @@ try {
   await expect(terminal).toContainText('Received: first-session-marker');
   await page.getByRole('button', { name: 'dashboard-redesign, online', exact: true }).click();
   await expect(terminal).toContainText('dashboard-redesign');
+  state.machines[1].provider = 'blaxel';
+  state.machines[1].provider_expires_at = new Date(Date.now() + 7 * 86400000).toISOString(); save();
+  await page.getByRole('button', { name: 'Refresh boxes', exact: true }).click();
+  await expect(page.locator('#provider-expiry')).toContainText('blaxel will delete this sandbox');
+  await page.screenshot({ path: join(out, 'desktop-sandbox-expiry.png') });
   await expect(page.getByRole('button', { name: 'Open preview' })).toBeDisabled();
   await page.getByRole('button', { name: 'api-cleanup, online', exact: true }).click();
   await expect(terminal).toContainText('Received: first-session-marker');
